@@ -61,7 +61,18 @@ impl ToolRuntime {
                         descriptor.name = metadata.name;
                     }
                     if let Some(remote_desc) = metadata.description {
-                        descriptor.description = Some(remote_desc);
+                        descriptor.description = match descriptor.description {
+                            Some(existing)
+                                if existing.trim().is_empty()
+                                    || existing.trim() == remote_desc.trim() =>
+                            {
+                                Some(remote_desc)
+                            }
+                            Some(existing) => {
+                                Some(format!("{} {}", remote_desc.trim(), existing.trim()))
+                            }
+                            None => Some(remote_desc),
+                        };
                     }
                     descriptor.input_schema = metadata.input_schema;
                 }

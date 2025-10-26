@@ -181,7 +181,16 @@ impl McpProcessInner {
         while let Ok(item) = lines.next_line().await {
             match item {
                 Some(raw) => {
-                    if raw.trim().is_empty() {
+                    let trimmed = raw.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if trimmed.starts_with('\u{1b}') {
+                        debug!(
+                            server = %self.server.name,
+                            line = trimmed,
+                            "skipping non-JSON ANSI log line from MCP server"
+                        );
                         continue;
                     }
                     match serde_json::from_str::<Value>(&raw) {
