@@ -1,9 +1,10 @@
+use super::tooling::{ToolServerInterface, ToolInvokeError};
 use crate::client::{ChatRequest, McpClient, McpError};
 use crate::config::ToolConfig;
 use crate::model::ModelProvider;
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -79,9 +80,10 @@ pub struct Agent<P: ModelProvider> {
 impl<P: ModelProvider> Agent<P> {
     pub fn new(client: Arc<McpClient<P>>) -> Self {
         let tools = client.tools().to_vec();
+        let bridge = client.server_bridge();
         Self {
             client,
-            runtime: ToolRuntime::new(tools),
+            runtime: ToolRuntime::new(tools, bridge),
         }
     }
 
@@ -94,7 +96,7 @@ impl<P: ModelProvider> Agent<P> {
         let mut session_id = options.session_id.clone();
         let mut steps = Vec::new();
         let model_override = options.model.clone();
-        let instructions = self.runtime.protocol_instruction();
+        let instructions = self.runtime.protocol_instruction().await;
         let system_prompt = match options.system_prompt.take() {
             Some(existing) if !existing.trim().is_empty() => {
                 format!("{existing}\n\n{instructions}")
@@ -148,7 +150,7 @@ impl<P: ModelProvider> Agent<P> {
                     }
                     remaining_steps -= 1;
                     info!(tool = %tool, "Agent requested tool execution");
-                    let execution = self.runtime.execute(&tool, input)?;
+                    let execution = self.runtime.execute(&tool, input).await?;
 
                     steps.push(AgentStep {
                         tool: execution.tool.clone(),
@@ -187,6 +189,14 @@ struct ToolExecution {
 pub enum ToolError {
     #[error("unknown tool requested: {0}")]
     UnknownTool(String),
+    #[error("tool '{0}' is not bound to any MCP server")]
+    UnboundTool(String),
+    #[error("failed to execute tool '{tool}': {source}")]
+    Execution {
+        tool: String,
+        #[source]
+        source: ToolInvokeError,
+    },
 }
 
 impl ToolError {
@@ -195,6 +205,17 @@ impl ToolError {
             ToolError::UnknownTool(name) => {
                 format!("Tool \"{name}\" belum tersedia di server.")
             }
+            ToolError::UnboundTool(name) => {
+                format!(
+                    "Tool \"{name}\" belum terhubung ke MCP server apa pun. Mohon periksa konfigurasi client."
+                )
+            }
+            ToolError::Execution { tool, source } => {
+                format!(
+                    "Eksekusi tool \"{tool}\" gagal: {message}",
+                    message = source.to_string()
+                )
+            }
         }
     }
 }
@@ -202,19 +223,24 @@ impl ToolError {
 struct ToolRuntime {
     configs: Vec<ToolConfig>,
     index: HashMap<String, ToolConfig>,
+    bridge: Arc<dyn ToolServerInterface>,
 }
 
 impl ToolRuntime {
-    fn new(configs: Vec<ToolConfig>) -> Self {
+    fn new(configs: Vec<ToolConfig>, bridge: Arc<dyn ToolServerInterface>) -> Self {
         let index = configs
             .iter()
             .cloned()
             .map(|cfg| (cfg.name.to_lowercase(), cfg))
             .collect();
-        Self { configs, index }
+        Self {
+            configs,
+            index,
+            bridge,
+        }
     }
 
-    fn protocol_instruction(&self) -> String {
+    async fn protocol_instruction(&self) -> String {
         let mut lines = vec![
             "You are an autonomous assistant that can call tools to solve user requests.".to_string(),
             "All responses must be valid JSON without commentary or code fences.".to_string(),
@@ -227,15 +253,59 @@ impl ToolRuntime {
 
         if self.configs.is_empty() {
             lines.push("No additional tools are currently configured.".to_string());
-        } else {
-            lines.push("Configured tools:".to_string());
-            for tool in &self.configs {
-                let description = tool
-                    .description
-                    .as_deref()
-                    .unwrap_or("No description provided.");
-                lines.push(format!("- {}: {}", tool.name, description));
+            return lines.join(" ");
+        }
+
+        let mut instructions_added = HashSet::new();
+        let mut tool_lines = Vec::new();
+
+        for tool in &self.configs {
+            let mut description = tool
+                .description
+                .as_deref()
+                .unwrap_or("No description provided.")
+                .to_string();
+
+            if let Some(server) = tool.server.as_deref() {
+                if instructions_added.insert(server.to_string()) {
+                    if let Some(server_instr) =
+                        self.bridge.server_instructions(server).await
+                    {
+                        lines.push(format!(
+                            "Server '{server}' guidance: {server_instr}"
+                        ));
+                    }
+                }
+
+                if let Some(metadata) =
+                    self.bridge.tool_metadata(server, &tool.name).await
+                {
+                    if let Some(remote_desc) = metadata.description {
+                        description = remote_desc;
+                    }
+                    if let Some(schema) = metadata.input_schema {
+                        let compact =
+                            serde_json::to_string(&schema).unwrap_or_default();
+                        tool_lines.push(format!(
+                            "- {} (server: {}): {}. Input schema: {}",
+                            tool.name, server, description, compact
+                        ));
+                        continue;
+                    }
+                }
+
+                tool_lines.push(format!(
+                    "- {} (server: {}): {}",
+                    tool.name, server, description
+                ));
+            } else {
+                tool_lines.push(format!("- {}: {}", tool.name, description));
             }
+        }
+
+        if !tool_lines.is_empty() {
+            lines.push("Configured tools:".to_string());
+            lines.extend(tool_lines);
         }
 
         lines.join(" ")
@@ -310,7 +380,7 @@ impl ToolRuntime {
         }
     }
 
-    fn execute(&self, tool_name: &str, input: Value) -> Result<ToolExecution, ToolError> {
+    async fn execute(&self, tool_name: &str, input: Value) -> Result<ToolExecution, ToolError> {
         if tool_name.eq_ignore_ascii_case("list_tools") {
             let tools: Vec<Value> = self
                 .configs
@@ -346,21 +416,56 @@ impl ToolRuntime {
         }
 
         let key = tool_name.to_lowercase();
-        if let Some(tool) = self.index.get(&key) {
-            warn!(
-                tool = %tool.name,
-                "Tool execution requested but not implemented"
-            );
-            Ok(ToolExecution {
-                tool: tool.name.clone(),
-                success: false,
-                input,
-                output: Value::Null,
-                message: Some("Tool execution is not yet implemented.".to_string()),
-            })
-        } else {
+        let Some(tool) = self.index.get(&key).cloned() else {
             warn!(requested_tool = %tool_name, "Unknown tool requested by agent");
-            Err(ToolError::UnknownTool(tool_name.to_string()))
+            return Err(ToolError::UnknownTool(tool_name.to_string()));
+        };
+
+        let tool_name = tool.name.clone();
+
+        let server_name = match tool.server.as_deref() {
+            Some(name) => name,
+            None => {
+                warn!(tool = %tool_name, "Tool configured without server binding");
+                return Err(ToolError::UnboundTool(tool_name));
+            }
+        };
+
+        let arguments = match input.clone() {
+            Value::Null => Value::Object(Default::default()),
+            other => other,
+        };
+
+        debug!(tool = %tool_name, server = %server_name, "Dispatching tool via MCP");
+        match self
+            .bridge
+            .invoke_tool(server_name, &tool_name, arguments)
+            .await
+        {
+            Ok(result) => {
+                let is_error = result
+                    .get("isError")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let message = extract_tool_message(&result);
+                Ok(ToolExecution {
+                    tool: tool_name,
+                    success: !is_error,
+                    input,
+                    output: result,
+                    message,
+                })
+            }
+            Err(ToolInvokeError::NotConfigured { .. }) => {
+                Err(ToolError::UnboundTool(tool_name))
+            }
+            Err(source) => {
+                warn!(tool = %tool_name, server = %server_name, %source, "Tool execution failed");
+                Err(ToolError::Execution {
+                    tool: tool_name,
+                    source,
+                })
+            }
         }
     }
 
@@ -399,6 +504,42 @@ impl ToolRuntime {
     }
 }
 
+fn extract_tool_message(result: &Value) -> Option<String> {
+    if let Some(array) = result.get("content").and_then(Value::as_array) {
+        for block in array {
+            if block
+                .get("type")
+                .and_then(Value::as_str)
+                .map(|value| value.eq_ignore_ascii_case("text"))
+                .unwrap_or(false)
+            {
+                if let Some(text) = block.get("text").and_then(Value::as_str) {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(structured) = result
+        .get("structuredContent")
+        .and_then(Value::as_object)
+    {
+        if let Some(error) = structured.get("error").and_then(Value::as_object) {
+            if let Some(message) = error.get("message").and_then(Value::as_str) {
+                let trimmed = message.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
 #[derive(Debug)]
 enum AgentDirective {
     Final { response: String },
@@ -408,12 +549,44 @@ enum AgentDirective {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::tooling::{ServerToolInfo, ToolServerInterface, ToolInvokeError};
     use crate::client::ClientConfig;
     use crate::model::{ModelError, ModelRequest, ModelResponse};
     use crate::types::{ChatMessage, MessageRole};
     use async_trait::async_trait;
     use std::sync::Arc;
     use tokio::sync::Mutex;
+
+    #[derive(Clone)]
+    struct StubBridge {
+        result: Value,
+        instruction: Option<String>,
+        metadata: Option<ServerToolInfo>,
+    }
+
+    #[async_trait]
+    impl ToolServerInterface for StubBridge {
+        async fn invoke_tool(
+            &self,
+            _server: &str,
+            _tool: &str,
+            _arguments: Value,
+        ) -> Result<Value, ToolInvokeError> {
+            Ok(self.result.clone())
+        }
+
+        async fn server_instructions(&self, _server: &str) -> Option<String> {
+            self.instruction.clone()
+        }
+
+        async fn tool_metadata(
+            &self,
+            _server: &str,
+            _tool: &str,
+        ) -> Option<ServerToolInfo> {
+            self.metadata.clone()
+        }
+    }
 
     #[derive(Clone)]
     struct ScriptedProvider {
@@ -485,10 +658,12 @@ mod tests {
             ToolConfig {
                 name: "weather".into(),
                 description: Some("Fetch weather.".into()),
+                server: None,
             },
             ToolConfig {
                 name: "search".into(),
                 description: None,
+                server: None,
             },
         ]);
         let client = McpClient::new(provider.clone(), cfg);
@@ -518,5 +693,42 @@ mod tests {
                 .iter()
                 .any(|msg| msg.content.contains("tool_result"))
         );
+    }
+
+    #[tokio::test]
+    async fn tool_runtime_invokes_executor_and_extracts_message() {
+        let configs = vec![ToolConfig {
+            name: "get_current_time".into(),
+            description: Some("Fetch current time".into()),
+            server: Some("time".into()),
+        }];
+
+        let payload = json!({
+            "content": [
+                { "type": "text", "text": "Waktu saat ini 10:00" }
+            ],
+            "isError": false
+        });
+
+        let bridge = Arc::new(StubBridge {
+            result: payload.clone(),
+            instruction: Some("Selalu gunakan tool untuk memastikan waktu akurat".into()),
+            metadata: Some(ServerToolInfo {
+                name: "get_current_time".into(),
+                description: Some("Ambil waktu terkini".into()),
+                input_schema: Some(json!({"type":"object"})),
+            }),
+        });
+        let runtime = ToolRuntime::new(configs, bridge);
+
+        let execution = runtime
+            .execute("get_current_time", Value::Null)
+            .await
+            .expect("tool execution succeeds");
+
+        assert!(execution.success);
+        assert_eq!(execution.tool, "get_current_time");
+        assert_eq!(execution.output, payload);
+        assert_eq!(execution.message.as_deref(), Some("Waktu saat ini 10:00"));
     }
 }

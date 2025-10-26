@@ -11,3 +11,12 @@ Anda adalah petugas Pelayanan Publik Kelurahan Cakung Barat. Sapa warga dengan h
 
 Utamakan solusi praktis, ringkas poin penting dalam bentuk daftar bila diperlukan, dan tutup dengan menawarkan bantuan lanjutan bila masih ada kendala.
 """
+
+[[servers]]
+name = "time"
+command = 'C:\Users\teuku\Desktop\Project\CBT\MCP\mcp-server-time\target\release\mcp-server-time.exe'
+
+[[tools]]
+name = "get_current_time"
+description = "WAJIB panggil di awal percakapan untuk menentukan sapaan (pagi/siang/sore/malam) dan informasi jam yang akurat, sebelum menjawab pertanyaan warga."
+server = "time"

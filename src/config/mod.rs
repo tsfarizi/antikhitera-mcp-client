@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -26,6 +27,7 @@ pub struct AppConfig {
     pub model: String,
     pub system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
+    pub servers: Vec<ServerConfig>,
     pub prompt_template: Option<String>,
 }
 
@@ -51,6 +53,8 @@ struct RawConfig {
     system_prompt: Option<String>,
     #[serde(default)]
     tools: Vec<RawTool>,
+    #[serde(default)]
+    servers: Vec<RawServer>,
     prompt_template: Option<String>,
 }
 
@@ -58,6 +62,17 @@ struct RawConfig {
 pub struct ToolConfig {
     pub name: String,
     pub description: Option<String>,
+    #[serde(default)]
+    pub server: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ServerConfig {
+    pub name: String,
+    pub command: PathBuf,
+    pub args: Vec<String>,
+    pub env: HashMap<String, String>,
+    pub workdir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -67,7 +82,20 @@ enum RawTool {
     Detailed {
         name: String,
         description: Option<String>,
+        #[serde(default)]
+        server: Option<String>,
     },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawServer {
+    name: String,
+    command: String,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default)]
+    env: HashMap<String, String>,
+    workdir: Option<String>,
 }
 
 impl AppConfig {
@@ -91,6 +119,7 @@ impl AppConfig {
             model: DEFAULT_MODEL.to_string(),
             system_prompt: None,
             tools: Vec::new(),
+            servers: Vec::new(),
             prompt_template: Some(DEFAULT_PROMPT_TEMPLATE.to_string()),
         }
     }
@@ -110,6 +139,7 @@ fn read_config(path: &Path) -> Result<AppConfig, ConfigError> {
         model: parsed.model.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
         system_prompt: parsed.system_prompt,
         tools: parsed.tools.into_iter().map(ToolConfig::from).collect(),
+        servers: parsed.servers.into_iter().map(ServerConfig::from).collect(),
         prompt_template: Some(
             parsed
                 .prompt_template
@@ -124,8 +154,31 @@ impl From<RawTool> for ToolConfig {
             RawTool::Name(name) => Self {
                 name,
                 description: None,
+                server: None,
             },
-            RawTool::Detailed { name, description } => Self { name, description },
+            RawTool::Detailed {
+                name,
+                description,
+                server,
+            } => Self {
+                name,
+                description,
+                server,
+            },
+        }
+    }
+}
+
+impl From<RawServer> for ServerConfig {
+    fn from(raw: RawServer) -> Self {
+        let command = PathBuf::from(raw.command);
+        let workdir = raw.workdir.map(PathBuf::from);
+        Self {
+            name: raw.name,
+            command,
+            args: raw.args,
+            env: raw.env,
+            workdir,
         }
     }
 }
@@ -136,6 +189,7 @@ mod tests {
     use std::env;
     use std::fs::File;
     use std::io::Write;
+    use std::path::Path;
     use std::sync::Mutex;
 
     static WORKDIR_GUARD: Mutex<()> = Mutex::new(());
@@ -151,6 +205,7 @@ mod tests {
         assert_eq!(config.model, DEFAULT_MODEL);
         assert!(config.system_prompt.is_none());
         assert!(config.tools.is_empty());
+        assert!(config.servers.is_empty());
         assert_eq!(
             config.prompt_template.as_deref(),
             Some(DEFAULT_PROMPT_TEMPLATE)
@@ -177,6 +232,7 @@ system_prompt = "keep short"
         assert_eq!(config.model, "mistral");
         assert_eq!(config.system_prompt.as_deref(), Some("keep short"));
         assert!(config.tools.is_empty());
+        assert!(config.servers.is_empty());
         assert_eq!(
             config.prompt_template.as_deref(),
             Some(DEFAULT_PROMPT_TEMPLATE)
@@ -193,6 +249,7 @@ system_prompt = "keep short"
         assert_eq!(config.model, DEFAULT_MODEL);
         assert_eq!(config.system_prompt.as_deref(), Some("only system"));
         assert!(config.tools.is_empty());
+        assert!(config.servers.is_empty());
         assert_eq!(
             config.prompt_template.as_deref(),
             Some(DEFAULT_PROMPT_TEMPLATE)
@@ -220,11 +277,58 @@ tools = [
         assert_eq!(config.tools.len(), 2);
         assert_eq!(config.tools[0].name, "tool-a");
         assert!(config.tools[0].description.is_none());
+        assert!(config.tools[0].server.is_none());
         assert_eq!(config.tools[1].name, "tool-b");
         assert_eq!(config.tools[1].description.as_deref(), Some("Second tool"));
+        assert!(config.tools[1].server.is_none());
         assert_eq!(
             config.prompt_template.as_deref(),
             Some(DEFAULT_PROMPT_TEMPLATE)
         );
+        assert!(config.servers.is_empty());
+    }
+
+    #[test]
+    fn reads_server_definitions_and_tool_bindings() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        fs::write(
+            &path,
+            r#"
+model = "mistral"
+
+[[servers]]
+name = "time"
+command = "server.exe"
+args = ["--flag"]
+workdir = "C:/work"
+
+[[servers]]
+name = "other"
+command = "other.exe"
+
+[[tools]]
+name = "get_time"
+description = "Fetch time"
+server = "time"
+"#,
+        )
+        .expect("write servers config");
+
+        let config = AppConfig::load(Some(&path)).expect("load config");
+        assert_eq!(config.servers.len(), 2);
+        assert_eq!(config.servers[0].name, "time");
+        assert_eq!(config.servers[0].command, PathBuf::from("server.exe"));
+        assert_eq!(config.servers[0].args, vec!["--flag"]);
+        assert_eq!(
+            config.servers[0].workdir.as_deref(),
+            Some(Path::new("C:/work"))
+        );
+        assert_eq!(config.servers[1].name, "other");
+        assert!(config.servers[1].workdir.is_none());
+
+        assert_eq!(config.tools.len(), 1);
+        assert_eq!(config.tools[0].name, "get_time");
+        assert_eq!(config.tools[0].server.as_deref(), Some("time"));
     }
 }
