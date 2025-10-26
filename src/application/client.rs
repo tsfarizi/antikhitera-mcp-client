@@ -1,7 +1,9 @@
-use crate::config::{DEFAULT_PROMPT_TEMPLATE, ToolConfig};
+use super::tooling::{ServerManager, ToolServerInterface};
+use crate::config::{DEFAULT_PROMPT_TEMPLATE, ServerConfig, ToolConfig};
 use crate::model::{ModelError, ModelProvider, ModelRequest};
 use crate::types::{ChatMessage, MessageRole};
 use std::collections::HashMap;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{debug, info};
@@ -13,6 +15,7 @@ pub struct ClientConfig {
     pub default_model: String,
     pub default_system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
+    pub servers: Vec<ServerConfig>,
     pub prompt_template: Option<String>,
 }
 
@@ -22,6 +25,7 @@ impl ClientConfig {
             default_model: default_model.into(),
             default_system_prompt: None,
             tools: Vec::new(),
+            servers: Vec::new(),
             prompt_template: None,
         }
     }
@@ -33,6 +37,11 @@ impl ClientConfig {
 
     pub fn with_tools(mut self, tools: Vec<ToolConfig>) -> Self {
         self.tools = tools;
+        self
+    }
+
+    pub fn with_servers(mut self, servers: Vec<ServerConfig>) -> Self {
+        self.servers = servers;
         self
     }
 
@@ -74,19 +83,27 @@ pub struct McpClient<P: ModelProvider> {
     provider: P,
     config: ClientConfig,
     sessions: Mutex<HashMap<String, Vec<ChatMessage>>>,
+    server_bridge: Arc<dyn ToolServerInterface>,
 }
 
 impl<P: ModelProvider> McpClient<P> {
     pub fn new(provider: P, config: ClientConfig) -> Self {
+        let server_manager = Arc::new(ServerManager::new(config.servers.clone()));
+        let bridge: Arc<dyn ToolServerInterface> = server_manager;
         Self {
             provider,
             config,
             sessions: Mutex::new(HashMap::new()),
+            server_bridge: bridge,
         }
     }
 
     pub fn tools(&self) -> &[ToolConfig] {
         &self.config.tools
+    }
+
+    pub fn server_bridge(&self) -> Arc<dyn ToolServerInterface> {
+        self.server_bridge.clone()
     }
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {

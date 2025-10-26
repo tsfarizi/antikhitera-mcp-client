@@ -72,6 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let provider = OllamaClient::new(cli.ollama_url.clone());
     let mut client_config = ClientConfig::new(file_config.model.clone())
         .with_tools(file_config.tools.clone())
+        .with_servers(file_config.servers.clone())
         .with_prompt_template(file_config.prompt_template.clone());
     if let Some(system_prompt) = cli.system.clone().or(file_config.system_prompt.clone()) {
         client_config = client_config.with_system_prompt(system_prompt);
