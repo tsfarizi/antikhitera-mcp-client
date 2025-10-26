@@ -8,6 +8,8 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+const TOOL_RESULT_GUIDANCE: &str = "Berikan respons JSON valid sesuai format instruksi: gunakan {\"action\":\"call_tool\",\"tool\":\"...\",\"input\":{...}} untuk pemanggilan berikutnya atau {\"action\":\"final\",\"response\":\"...\"} untuk jawaban akhir. Jangan sertakan teks lain di luar struktur JSON.";
+
 pub struct Agent<P: ModelProvider> {
     client: Arc<McpClient<P>>,
     runtime: ToolRuntime,
@@ -105,7 +107,8 @@ impl<P: ModelProvider> Agent<P> {
                             "success": execution.success,
                             "output": execution.output,
                             "message": execution.message,
-                        }
+                        },
+                        "instruction": TOOL_RESULT_GUIDANCE,
                     })
                     .to_string();
                 }
