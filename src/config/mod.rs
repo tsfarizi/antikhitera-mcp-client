@@ -73,6 +73,8 @@ pub struct ServerConfig {
     pub args: Vec<String>,
     pub env: HashMap<String, String>,
     pub workdir: Option<PathBuf>,
+    pub default_timezone: Option<String>,
+    pub default_city: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -96,6 +98,10 @@ struct RawServer {
     #[serde(default)]
     env: HashMap<String, String>,
     workdir: Option<String>,
+    #[serde(default)]
+    default_timezone: Option<String>,
+    #[serde(default)]
+    default_city: Option<String>,
 }
 
 impl AppConfig {
@@ -179,6 +185,8 @@ impl From<RawServer> for ServerConfig {
             args: raw.args,
             env: raw.env,
             workdir,
+            default_timezone: raw.default_timezone,
+            default_city: raw.default_city,
         }
     }
 }
@@ -302,6 +310,8 @@ name = "time"
 command = "server.exe"
 args = ["--flag"]
 workdir = "C:/work"
+default_timezone = "Asia/Jakarta"
+default_city = "Jakarta"
 
 [[servers]]
 name = "other"
@@ -324,8 +334,15 @@ server = "time"
             config.servers[0].workdir.as_deref(),
             Some(Path::new("C:/work"))
         );
+        assert_eq!(
+            config.servers[0].default_timezone.as_deref(),
+            Some("Asia/Jakarta")
+        );
+        assert_eq!(config.servers[0].default_city.as_deref(), Some("Jakarta"));
         assert_eq!(config.servers[1].name, "other");
         assert!(config.servers[1].workdir.is_none());
+        assert!(config.servers[1].default_timezone.is_none());
+        assert!(config.servers[1].default_city.is_none());
 
         assert_eq!(config.tools.len(), 1);
         assert_eq!(config.tools[0].name, "get_time");
