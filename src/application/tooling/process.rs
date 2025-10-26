@@ -1,159 +1,18 @@
+use super::error::ToolInvokeError;
+use super::interface::ServerToolInfo;
 use crate::config::ServerConfig;
-use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde::Deserialize;
+use serde_json::{Map as JsonMap, Value, json};
 use std::collections::HashMap;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::{oneshot, Mutex as AsyncMutex};
-use tracing::{debug, error, warn};
+use tokio::sync::{Mutex as AsyncMutex, oneshot};
+use tracing::{debug, warn};
 
 const PROTOCOL_VERSION: &str = "2025-06-18";
-
-#[derive(Debug, Error)]
-pub enum ToolInvokeError {
-    #[error("MCP server '{server}' is not configured")]
-    NotConfigured { server: String },
-    #[error("failed to spawn MCP server '{server}': {source}")]
-    Spawn {
-        server: String,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("MCP server '{server}' transport error: {message}")]
-    Transport { server: String, message: String },
-    #[error("MCP server '{server}' returned invalid JSON: {source}")]
-    InvalidJson {
-        server: String,
-        #[source]
-        source: serde_json::Error,
-    },
-    #[error("MCP server '{server}' returned JSON-RPC error {code}: {message}")]
-    Rpc {
-        server: String,
-        code: i64,
-        message: String,
-    },
-    #[error("MCP server '{server}' terminated unexpectedly")]
-    Terminated { server: String },
-    #[error("MCP server '{server}' request cancelled")]
-    Cancelled { server: String },
-}
-
-#[derive(Debug, Clone)]
-pub struct ServerToolInfo {
-    pub name: String,
-    pub description: Option<String>,
-    pub input_schema: Option<Value>,
-}
-
-#[async_trait]
-pub trait ToolServerInterface: Send + Sync {
-    async fn invoke_tool(
-        &self,
-        server: &str,
-        tool: &str,
-        arguments: Value,
-    ) -> Result<Value, ToolInvokeError>;
-
-    async fn server_instructions(&self, server: &str) -> Option<String>;
-
-    async fn tool_metadata(
-        &self,
-        server: &str,
-        tool: &str,
-    ) -> Option<ServerToolInfo>;
-}
-
-pub struct ServerManager {
-    configs: HashMap<String, ServerConfig>,
-    instances: Mutex<HashMap<String, Arc<McpProcess>>>,
-}
-
-impl ServerManager {
-    pub fn new(configs: Vec<ServerConfig>) -> Self {
-        let configs = configs
-            .into_iter()
-            .map(|cfg| (cfg.name.clone(), cfg))
-            .collect();
-        Self {
-            configs,
-            instances: Mutex::new(HashMap::new()),
-        }
-    }
-
-    async fn ensure_process(
-        &self,
-        server: &str,
-    ) -> Result<Arc<McpProcess>, ToolInvokeError> {
-        if server.is_empty() {
-            return Err(ToolInvokeError::NotConfigured {
-                server: server.to_string(),
-            });
-        }
-
-        let process = {
-            let mut instances = self.instances.lock().expect("server registry lock");
-            if let Some(existing) = instances.get(server) {
-                existing.clone()
-            } else {
-                let config = self
-                    .configs
-                    .get(server)
-                    .cloned()
-                    .ok_or_else(|| ToolInvokeError::NotConfigured {
-                        server: server.to_string(),
-                    })?;
-                let process = Arc::new(McpProcess::new(config));
-                instances.insert(server.to_string(), process.clone());
-                process
-            }
-        };
-
-        process.ensure_running().await?;
-        Ok(process)
-    }
-}
-
-#[async_trait]
-impl ToolServerInterface for ServerManager {
-    async fn invoke_tool(
-        &self,
-        server: &str,
-        tool: &str,
-        arguments: Value,
-    ) -> Result<Value, ToolInvokeError> {
-        let process = self.ensure_process(server).await?;
-        process.call_tool(tool, arguments).await
-    }
-
-    async fn server_instructions(&self, server: &str) -> Option<String> {
-        match self.ensure_process(server).await {
-            Ok(process) => process.instructions().await,
-            Err(err) => {
-                warn!(server, %err, "Failed to fetch server instructions");
-                None
-            }
-        }
-    }
-
-    async fn tool_metadata(
-        &self,
-        server: &str,
-        tool: &str,
-    ) -> Option<ServerToolInfo> {
-        match self.ensure_process(server).await {
-            Ok(process) => process.tool_metadata(tool).await,
-            Err(err) => {
-                warn!(server, tool, %err, "Failed to fetch tool metadata");
-                None
-            }
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct McpProcess {
@@ -189,32 +48,25 @@ impl McpProcess {
         }
     }
 
-    async fn ensure_running(&self) -> Result<(), ToolInvokeError> {
+    pub(super) async fn ensure_running(&self) -> Result<(), ToolInvokeError> {
         self.inner.ensure_running().await
     }
 
-    async fn call_tool(
+    pub(super) async fn call_tool(
         &self,
         tool: &str,
         arguments: Value,
     ) -> Result<Value, ToolInvokeError> {
         self.ensure_running().await?;
-        self.inner
-            .call_tool(tool, arguments)
-            .await
+        self.inner.call_tool(tool, arguments).await
     }
 
-    async fn instructions(&self) -> Option<String> {
+    pub(super) async fn instructions(&self) -> Option<String> {
         self.inner.instructions.lock().await.clone()
     }
 
-    async fn tool_metadata(&self, tool: &str) -> Option<ServerToolInfo> {
-        self.inner
-            .tool_cache
-            .lock()
-            .await
-            .get(tool)
-            .cloned()
+    pub(super) async fn tool_metadata(&self, tool: &str) -> Option<ServerToolInfo> {
+        self.inner.tool_cache.lock().await.get(tool).cloned()
     }
 }
 
@@ -242,12 +94,10 @@ impl McpProcessInner {
             command.env(key, value);
         }
 
-        let mut child = command
-            .spawn()
-            .map_err(|source| ToolInvokeError::Spawn {
-                server: self.server.name.clone(),
-                source,
-            })?;
+        let mut child = command.spawn().map_err(|source| ToolInvokeError::Spawn {
+            server: self.server.name.clone(),
+            source,
+        })?;
 
         let stdin = child
             .stdin
@@ -304,7 +154,7 @@ impl McpProcessInner {
         Ok(())
     }
 
-    async fn call_tool(
+    pub(super) async fn call_tool(
         &self,
         tool: &str,
         arguments: Value,
@@ -376,11 +226,7 @@ impl McpProcessInner {
         }
     }
 
-    async fn handle_response(
-        &self,
-        id: Value,
-        value: Value,
-    ) -> Result<(), ToolInvokeError> {
+    async fn handle_response(&self, id: Value, value: Value) -> Result<(), ToolInvokeError> {
         let key = match self.response_key(&id) {
             Some(key) => key,
             None => return Ok(()),
@@ -427,11 +273,7 @@ impl McpProcessInner {
         Ok(())
     }
 
-    async fn handle_server_request(
-        &self,
-        id: Value,
-        value: Value,
-    ) -> Result<(), ToolInvokeError> {
+    async fn handle_server_request(&self, id: Value, value: Value) -> Result<(), ToolInvokeError> {
         let method = value
             .get("method")
             .and_then(Value::as_str)
@@ -439,6 +281,11 @@ impl McpProcessInner {
         match method {
             "ping" => {
                 self.send_response(id, json!({ "ok": true })).await?;
+            }
+            "elicitation/create" => {
+                let params = value.get("params").cloned().unwrap_or(Value::Null);
+                let response = self.build_elicitation_ack(params);
+                self.send_response(id, response).await?;
             }
             other => {
                 warn!(
@@ -454,6 +301,23 @@ impl McpProcessInner {
             }
         }
         Ok(())
+    }
+
+    fn build_elicitation_ack(&self, params: Value) -> Value {
+        let parsed: ElicitationCreateParams = serde_json::from_value(params).unwrap_or_default();
+
+        let mut content = JsonMap::new();
+        if let Some(message) = parsed.message {
+            let trimmed = message.trim();
+            if !trimmed.is_empty() {
+                content.insert("message".to_string(), Value::String(trimmed.to_string()));
+            }
+        }
+
+        let mut response = JsonMap::new();
+        response.insert("action".to_string(), Value::String("accept".to_string()));
+        response.insert("content".to_string(), Value::Object(content));
+        Value::Object(response)
     }
 
     async fn handle_notification(&self, value: Value) {
@@ -475,11 +339,7 @@ impl McpProcessInner {
         }
     }
 
-    async fn send_request(
-        &self,
-        method: &str,
-        params: Value,
-    ) -> Result<Value, ToolInvokeError> {
+    async fn send_request(&self, method: &str, params: Value) -> Result<Value, ToolInvokeError> {
         let id = self.next_id();
         let (tx, rx) = oneshot::channel();
         {
@@ -507,11 +367,7 @@ impl McpProcessInner {
         }
     }
 
-    async fn send_notification(
-        &self,
-        method: &str,
-        params: Value,
-    ) -> Result<(), ToolInvokeError> {
+    async fn send_notification(&self, method: &str, params: Value) -> Result<(), ToolInvokeError> {
         let payload = json!({
             "jsonrpc": "2.0",
             "method": method,
@@ -520,11 +376,7 @@ impl McpProcessInner {
         self.write_message(&payload).await
     }
 
-    async fn send_response(
-        &self,
-        id: Value,
-        result: Value,
-    ) -> Result<(), ToolInvokeError> {
+    async fn send_response(&self, id: Value, result: Value) -> Result<(), ToolInvokeError> {
         let mut payload = json!({
             "jsonrpc": "2.0",
             "result": result
@@ -535,11 +387,7 @@ impl McpProcessInner {
         self.write_message(&payload).await
     }
 
-    async fn send_error(
-        &self,
-        id: Value,
-        error: Value,
-    ) -> Result<(), ToolInvokeError> {
+    async fn send_error(&self, id: Value, error: Value) -> Result<(), ToolInvokeError> {
         let mut payload = json!({
             "jsonrpc": "2.0",
             "error": error
@@ -551,10 +399,11 @@ impl McpProcessInner {
     }
 
     async fn write_message(&self, message: &Value) -> Result<(), ToolInvokeError> {
-        let encoded = serde_json::to_string(message).map_err(|source| ToolInvokeError::InvalidJson {
-            server: self.server.name.clone(),
-            source,
-        })?;
+        let encoded =
+            serde_json::to_string(message).map_err(|source| ToolInvokeError::InvalidJson {
+                server: self.server.name.clone(),
+                source,
+            })?;
 
         let mut writer = self.writer.lock().await;
         let stream = writer
@@ -660,4 +509,12 @@ impl McpProcessInner {
             message: message.into(),
         }
     }
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct ElicitationCreateParams {
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(rename = "requestedSchema", default)]
+    _requested_schema: Value,
 }
