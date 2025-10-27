@@ -6,7 +6,7 @@ use crate::config::ToolConfig;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 pub struct ToolRuntime {
     configs: Vec<ToolConfig>,
@@ -160,7 +160,7 @@ impl ToolRuntime {
             let manifest = self.build_context().await;
             let output = serde_json::to_value(&manifest).unwrap_or_else(|_| Value::Null);
             debug!("Agent requested tool catalogue via list_tools");
-            return Ok(ToolExecution {
+            let execution = ToolExecution {
                 tool: "list_tools".to_string(),
                 success: true,
                 input,
@@ -169,11 +169,13 @@ impl ToolRuntime {
                     "Configured tools tersedia: {} item.",
                     manifest.tools.len()
                 )),
-            });
+            };
+            info!(tool = %execution.tool, success = execution.success, "Tool executed");
+            return Ok(execution);
         }
 
         if tool_name.eq_ignore_ascii_case("translation") {
-            return Ok(ToolExecution {
+            let execution = ToolExecution {
                 tool: "translation".to_string(),
                 success: false,
                 input,
@@ -182,7 +184,9 @@ impl ToolRuntime {
                     "Tidak perlu tool terjemahan. Jawab langsung dalam bahasa yang sama dengan pengguna."
                         .to_string(),
                 ),
-            });
+            };
+            info!(tool = %execution.tool, success = execution.success, "Tool executed");
+            return Ok(execution);
         }
 
         let key = tool_name.to_lowercase();
@@ -218,13 +222,15 @@ impl ToolRuntime {
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
                 let message = extract_tool_message(&result);
-                Ok(ToolExecution {
+                let execution = ToolExecution {
                     tool: tool_name,
                     success: !is_error,
                     input,
                     output: result,
                     message,
-                })
+                };
+                info!(tool = %execution.tool, success = execution.success, "Tool executed");
+                Ok(execution)
             }
             Err(ToolInvokeError::NotConfigured { .. }) => Err(ToolError::UnboundTool(tool_name)),
             Err(source) => {

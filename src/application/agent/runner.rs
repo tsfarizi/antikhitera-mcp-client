@@ -33,7 +33,9 @@ impl<P: ModelProvider> Agent<P> {
         info!("Agent run started");
         let mut session_id = options.session_id.clone();
         let mut steps = Vec::new();
+        let mut logs = Vec::new();
         let model_override = options.model.clone();
+        let provider_override = options.provider.clone();
 
         let context = self.runtime.build_context().await;
         let instructions = self.runtime.compose_system_instructions(&context);
@@ -44,7 +46,18 @@ impl<P: ModelProvider> Agent<P> {
             _ => instructions,
         };
 
+        let prompt_preview = McpClient::<P>::summarise(&prompt);
         let mut next_prompt = self.runtime.initial_user_prompt(prompt, &context);
+        logs.push(format!("Permintaan awal agent: {prompt_preview}"));
+        let effective_provider = provider_override
+            .clone()
+            .unwrap_or_else(|| self.client.default_provider().to_string());
+        let effective_model = model_override
+            .clone()
+            .unwrap_or_else(|| self.client.default_model().to_string());
+        logs.push(format!(
+            "Provider aktif: '{effective_provider}' | Model: '{effective_model}'"
+        ));
         let mut remaining_steps = options.max_steps;
         let mut system_prompt_to_send = Some(system_prompt);
         let mut first_call = true;
@@ -56,6 +69,7 @@ impl<P: ModelProvider> Agent<P> {
             );
             let request = ChatRequest {
                 prompt: next_prompt.clone(),
+                provider: provider_override.clone(),
                 model: model_override.clone(),
                 system_prompt: if first_call {
                     system_prompt_to_send.take()
@@ -66,6 +80,7 @@ impl<P: ModelProvider> Agent<P> {
             };
 
             let result = self.client.chat(request).await?;
+            logs.extend(result.logs.clone());
             session_id = Some(result.session_id.clone());
             first_call = false;
 
@@ -75,7 +90,10 @@ impl<P: ModelProvider> Agent<P> {
                         session_id = result.session_id.as_str(),
                         "Agent returned final response"
                     );
+                    let final_preview = McpClient::<P>::summarise(&response);
+                    logs.push(format!("Jawaban akhir agent: {final_preview}"));
                     return Ok(AgentOutcome {
+                        logs,
                         session_id: result.session_id,
                         response,
                         steps,
@@ -91,6 +109,16 @@ impl<P: ModelProvider> Agent<P> {
                     remaining_steps -= 1;
                     info!(tool = %tool, "Agent requested tool execution");
                     let execution = self.runtime.execute(&tool, input).await?;
+                    logs.push(format!(
+                        "Tool '{}' dijalankan (sukses: {})",
+                        execution.tool, execution.success
+                    ));
+                    if let Some(message) = execution.message.as_deref() {
+                        logs.push(format!(
+                            "Pesan tool: {}",
+                            McpClient::<P>::summarise(message)
+                        ));
+                    }
 
                     steps.push(AgentStep {
                         tool: execution.tool.clone(),

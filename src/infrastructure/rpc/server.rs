@@ -103,17 +103,46 @@ async fn handle_chat_message<P: ModelProvider>(
         .get("session_id")
         .and_then(|value| value.as_str().map(ToOwned::to_owned));
 
+    let provider = params
+        .get("provider")
+        .and_then(|value| value.as_str().map(ToOwned::to_owned));
+    let model = params
+        .get("model")
+        .and_then(|value| value.as_str().map(ToOwned::to_owned));
+    let system_prompt = params
+        .get("system_prompt")
+        .and_then(|value| value.as_str().map(ToOwned::to_owned));
+
+    let client = state.client();
+    let resolved_provider = provider
+        .clone()
+        .unwrap_or_else(|| client.default_provider().to_string());
+    let resolved_model = model
+        .clone()
+        .unwrap_or_else(|| client.default_model().to_string());
+
     let mut options = AgentOptions::default();
+    options.provider = provider;
+    options.model = model;
+    options.system_prompt = system_prompt;
     options.session_id = session_id.clone();
-    let agent = Agent::new(state.client());
-    info!(?session_id, "Processing chat message via JSON-RPC");
+    let agent = Agent::new(client.clone());
+    info!(
+        ?session_id,
+        provider = resolved_provider.as_str(),
+        model = resolved_model.as_str(),
+        "Processing chat message via JSON-RPC"
+    );
 
     match agent.run(prompt, options).await {
         Ok(outcome) => {
             let result = json!({
                 "session_id": outcome.session_id,
                 "content": outcome.response,
+                "provider": resolved_provider,
+                "model": resolved_model,
                 "tool_steps": outcome.steps,
+                "logs": outcome.logs,
             });
             RpcResponse::success(request.id.clone(), result)
         }

@@ -1,11 +1,12 @@
 use crate::agent::{AgentStep, ServerGuidance, ToolContext, ToolDescriptor};
-use crate::config::ToolConfig;
+use crate::config::{ModelProviderConfig, ToolConfig};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RestChatRequest {
     pub prompt: String,
+    pub provider: Option<String>,
     pub model: Option<String>,
     pub system_prompt: Option<String>,
     pub session_id: Option<String>,
@@ -17,8 +18,11 @@ pub struct RestChatRequest {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RestChatResponse {
+    pub logs: Vec<String>,
     pub session_id: String,
     pub content: String,
+    pub provider: String,
+    pub model: String,
     pub tool_steps: Vec<AgentStep>,
 }
 
@@ -45,15 +49,18 @@ impl From<ToolContext> for ToolInventoryResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ConfigResponse {
     pub model: String,
+    pub default_provider: String,
     pub system_prompt: Option<String>,
     pub prompt_template: String,
     pub tools: Vec<ToolConfig>,
+    pub providers: Vec<ModelProviderConfig>,
     pub raw: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConfigUpdateRequest {
     pub model: String,
+    pub default_provider: String,
     pub system_prompt: Option<String>,
     pub prompt_template: String,
 }
