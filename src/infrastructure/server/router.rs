@@ -27,6 +27,7 @@ where
         .allow_origin([
             HeaderValue::from_static("http://localhost:5173"),
             HeaderValue::from_static("http://127.0.0.1:5173"),
+            HeaderValue::from_static("https://tsfarizi.github.io"),
         ])
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
         .allow_headers(Any);
