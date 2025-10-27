@@ -10,8 +10,8 @@ pub use infrastructure::{model, rpc, server};
 use agent::{Agent, AgentOptions};
 use clap::{Parser, ValueEnum};
 use client::{ChatRequest, ClientConfig, McpClient};
-use config::AppConfig;
-use model::OllamaClient;
+use config::{AppConfig, ModelProviderConfig, ProviderKind};
+use model::DynamicModelProvider;
 use serde_json::json;
 use std::error::Error;
 use std::fs;
@@ -26,7 +26,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 #[command(
     name = "cbt-mcp-client",
     version,
-    about = "MCP client powered by Ollama"
+    about = "MCP client dengan penyedia model yang dapat dikonfigurasi"
 )]
 struct Cli {
     #[arg(long, default_value = "http://127.0.0.1:11434")]
@@ -68,12 +68,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         info!("Loaded configuration using default path or defaults");
     }
 
-    debug!(ollama_url = %cli.ollama_url, "Creating Ollama provider");
-    let provider = OllamaClient::new(cli.ollama_url.clone());
-    let mut client_config = ClientConfig::new(file_config.model.clone())
-        .with_tools(file_config.tools.clone())
-        .with_servers(file_config.servers.clone())
-        .with_prompt_template(file_config.prompt_template.clone());
+    let mut providers = file_config.providers.clone();
+    apply_cli_overrides(&cli, &mut providers);
+    debug!(
+        provider_count = providers.len(),
+        "Initializing dynamic model providers"
+    );
+    let provider = DynamicModelProvider::from_configs(&providers);
+    let mut client_config = ClientConfig::new(
+        file_config.default_provider.clone(),
+        file_config.model.clone(),
+    )
+    .with_tools(file_config.tools.clone())
+    .with_servers(file_config.servers.clone())
+    .with_prompt_template(file_config.prompt_template.clone())
+    .with_providers(providers.clone());
     if let Some(system_prompt) = cli.system.clone().or(file_config.system_prompt.clone()) {
         client_config = client_config.with_system_prompt(system_prompt);
     }
@@ -87,6 +96,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let result = client
                 .chat(ChatRequest {
                     prompt,
+                    provider: None,
                     model: None,
                     system_prompt: None,
                     session_id: cli.session.clone(),
@@ -96,6 +106,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let output = json!({
                 "session_id": result.session_id,
                 "content": result.content,
+                "provider": result.provider,
+                "model": result.model,
+                "logs": result.logs,
             });
 
             println!("{}", serde_json::to_string_pretty(&output)?);
@@ -120,6 +133,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "session_id": outcome.session_id,
                 "content": outcome.response,
                 "tool_steps": outcome.steps,
+                "logs": outcome.logs,
             });
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
@@ -162,6 +176,21 @@ fn load_prompt(cli: &Cli) -> Result<String, Box<dyn Error>> {
 
     warn!("Prompt not provided via arguments, file, or stdin");
     Err("prompt required via arguments, file, or stdin".into())
+}
+
+fn apply_cli_overrides(cli: &Cli, providers: &mut [ModelProviderConfig]) {
+    for provider in providers.iter_mut() {
+        if provider.kind == ProviderKind::Ollama {
+            if provider.endpoint != cli.ollama_url {
+                info!(
+                    provider = provider.id.as_str(),
+                    url = %cli.ollama_url,
+                    "Overriding provider endpoint based on CLI flag"
+                );
+            }
+            provider.endpoint = cli.ollama_url.clone();
+        }
+    }
 }
 
 fn normalize_prompt(prompt: String) -> String {

@@ -18,6 +18,7 @@ pub enum StdioError {
 #[derive(Debug, Deserialize)]
 struct StdioChatRequest {
     prompt: String,
+    provider: Option<String>,
     model: Option<String>,
     system_prompt: Option<String>,
     session_id: Option<String>,
@@ -33,15 +34,22 @@ struct StdioChatResponse {
     content: Option<String>,
     error: Option<String>,
     tool_steps: Vec<AgentStep>,
+    logs: Vec<String>,
 }
 
 impl StdioChatResponse {
-    fn success(session_id: String, content: String, tool_steps: Vec<AgentStep>) -> Self {
+    fn success(
+        session_id: String,
+        content: String,
+        tool_steps: Vec<AgentStep>,
+        logs: Vec<String>,
+    ) -> Self {
         Self {
             session_id: Some(session_id),
             content: Some(content),
             error: None,
             tool_steps,
+            logs,
         }
     }
 
@@ -51,6 +59,7 @@ impl StdioChatResponse {
             content: None,
             error: Some(message.into()),
             tool_steps: Vec::new(),
+            logs: Vec::new(),
         }
     }
 }
@@ -71,7 +80,17 @@ where
 
         match serde_json::from_str::<StdioChatRequest>(&line) {
             Ok(request) => {
-                if request.prompt.trim().is_empty() {
+                let StdioChatRequest {
+                    prompt,
+                    provider,
+                    model,
+                    system_prompt,
+                    session_id,
+                    agent,
+                    max_tool_steps,
+                } = request;
+
+                if prompt.trim().is_empty() {
                     write_response(
                         &mut stdout,
                         StdioChatResponse::error("prompt cannot be empty"),
@@ -80,17 +99,18 @@ where
                     continue;
                 }
 
-                if request.agent {
+                if agent {
                     info!("Processing STDIO agent request");
                     let mut options = AgentOptions::default();
-                    options.model = request.model;
-                    options.system_prompt = request.system_prompt;
-                    options.session_id = request.session_id;
-                    if let Some(max_steps) = request.max_tool_steps {
+                    options.provider = provider.clone();
+                    options.model = model.clone();
+                    options.system_prompt = system_prompt.clone();
+                    options.session_id = session_id.clone();
+                    if let Some(max_steps) = max_tool_steps {
                         options.max_steps = max_steps;
                     }
                     let agent = Agent::new(client.clone());
-                    match agent.run(request.prompt, options).await {
+                    match agent.run(prompt, options).await {
                         Ok(outcome) => {
                             write_response(
                                 &mut stdout,
@@ -98,6 +118,7 @@ where
                                     outcome.session_id,
                                     outcome.response,
                                     outcome.steps,
+                                    outcome.logs,
                                 ),
                             )
                             .await?;
@@ -112,10 +133,11 @@ where
                     info!("Processing STDIO direct chat request");
                     match client
                         .chat(ChatRequest {
-                            prompt: request.prompt,
-                            model: request.model,
-                            system_prompt: request.system_prompt,
-                            session_id: request.session_id,
+                            prompt,
+                            provider,
+                            model,
+                            system_prompt,
+                            session_id,
                         })
                         .await
                     {
@@ -126,6 +148,7 @@ where
                                     result.session_id,
                                     result.content,
                                     Vec::new(),
+                                    result.logs,
                                 ),
                             )
                             .await?;

@@ -1,13 +1,18 @@
+use dotenvy::from_filename;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Once;
 use thiserror::Error;
 use tracing::{debug, info};
 use utoipa::ToSchema;
 
-const DEFAULT_MODEL: &str = "llama3";
+const DEFAULT_MODEL: &str = "gemini-1.5-flash-latest";
+const DEFAULT_PROVIDER_ID: &str = "gemini";
+const DEFAULT_OLLAMA_ENDPOINT: &str = "http://127.0.0.1:11434";
+const DEFAULT_GEMINI_ENDPOINT: &str = "https://generativelanguage.googleapis.com";
 const DEFAULT_CONFIG_PATH: &str = "config/client.toml";
 pub const CONFIG_PATH: &str = DEFAULT_CONFIG_PATH;
 pub const DEFAULT_PROMPT_TEMPLATE: &str = r#"
@@ -22,13 +27,17 @@ Anda adalah petugas Pelayanan Publik Kelurahan Cakung Barat. Layani warga dengan
 Selalu ringkas informasi penting dalam bentuk daftar bila diperlukan dan pastikan warga memahami langkah selanjutnya.
 "#;
 
+static ENV_LOADER: Once = Once::new();
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    pub default_provider: String,
     pub model: String,
     pub system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
     pub prompt_template: Option<String>,
+    pub providers: Vec<ModelProviderConfig>,
 }
 
 #[derive(Debug, Error)]
@@ -50,12 +59,15 @@ pub enum ConfigError {
 #[derive(Debug, Deserialize, Default)]
 struct RawConfig {
     model: Option<String>,
+    default_provider: Option<String>,
     system_prompt: Option<String>,
     #[serde(default)]
     tools: Vec<RawTool>,
     #[serde(default)]
     servers: Vec<RawServer>,
     prompt_template: Option<String>,
+    #[serde(default)]
+    providers: Vec<RawProviderConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, ToSchema)]
@@ -104,8 +116,61 @@ struct RawServer {
     default_city: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProviderKind {
+    Ollama,
+    Gemini,
+}
+
+impl Default for ProviderKind {
+    fn default() -> Self {
+        ProviderKind::Ollama
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+pub struct ModelInfo {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+pub struct ModelProviderConfig {
+    pub id: String,
+    pub kind: ProviderKind,
+    pub endpoint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    pub models: Vec<ModelInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawProviderConfig {
+    id: String,
+    #[serde(rename = "type", default)]
+    kind: ProviderKind,
+    endpoint: Option<String>,
+    api_key: Option<String>,
+    #[serde(default)]
+    models: Vec<RawModelInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum RawModelInfo {
+    Name(String),
+    Detailed {
+        name: String,
+        #[serde(default)]
+        display_name: Option<String>,
+    },
+}
+
 impl AppConfig {
     pub fn load(path: Option<&Path>) -> Result<Self, ConfigError> {
+        ensure_env_loaded();
         if let Some(path) = path {
             return read_config(path);
         }
@@ -122,13 +187,24 @@ impl AppConfig {
 
     pub fn default() -> Self {
         Self {
+            default_provider: DEFAULT_PROVIDER_ID.to_string(),
             model: DEFAULT_MODEL.to_string(),
             system_prompt: None,
             tools: Vec::new(),
             servers: Vec::new(),
             prompt_template: Some(DEFAULT_PROMPT_TEMPLATE.to_string()),
+            providers: vec![
+                ModelProviderConfig::default_gemini(),
+                ModelProviderConfig::default_ollama(),
+            ],
         }
     }
+}
+
+fn ensure_env_loaded() {
+    ENV_LOADER.call_once(|| {
+        let _ = from_filename("config/.env");
+    });
 }
 
 fn read_config(path: &Path) -> Result<AppConfig, ConfigError> {
@@ -141,8 +217,41 @@ fn read_config(path: &Path) -> Result<AppConfig, ConfigError> {
         path: path.to_path_buf(),
         source,
     })?;
+    let mut providers: Vec<ModelProviderConfig> = if parsed.providers.is_empty() {
+        vec![
+            ModelProviderConfig::default_gemini(),
+            ModelProviderConfig::default_ollama(),
+        ]
+    } else {
+        parsed
+            .providers
+            .into_iter()
+            .map(ModelProviderConfig::from)
+            .collect()
+    };
+    let model = parsed.model.unwrap_or_else(|| DEFAULT_MODEL.to_string());
+    let mut default_provider = parsed
+        .default_provider
+        .or_else(|| {
+            providers
+                .iter()
+                .find(|provider| provider.models.iter().any(|m| m.name == model))
+                .map(|provider| provider.id.clone())
+        })
+        .unwrap_or_else(|| DEFAULT_PROVIDER_ID.to_string());
+
+    if let Some(provider) = providers.iter_mut().find(|p| p.id == default_provider) {
+        provider.ensure_model(&model);
+    } else {
+        let mut fallback = ModelProviderConfig::default_ollama();
+        fallback.ensure_model(&model);
+        default_provider = fallback.id.clone();
+        providers.push(fallback);
+    }
+
     Ok(AppConfig {
-        model: parsed.model.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
+        default_provider,
+        model,
         system_prompt: parsed.system_prompt,
         tools: parsed.tools.into_iter().map(ToolConfig::from).collect(),
         servers: parsed.servers.into_iter().map(ServerConfig::from).collect(),
@@ -151,6 +260,7 @@ fn read_config(path: &Path) -> Result<AppConfig, ConfigError> {
                 .prompt_template
                 .unwrap_or_else(|| DEFAULT_PROMPT_TEMPLATE.to_string()),
         ),
+        providers,
     })
 }
 
@@ -191,6 +301,71 @@ impl From<RawServer> for ServerConfig {
     }
 }
 
+impl From<RawModelInfo> for ModelInfo {
+    fn from(value: RawModelInfo) -> Self {
+        match value {
+            RawModelInfo::Name(name) => Self {
+                name,
+                display_name: None,
+            },
+            RawModelInfo::Detailed { name, display_name } => Self { name, display_name },
+        }
+    }
+}
+
+impl From<RawProviderConfig> for ModelProviderConfig {
+    fn from(raw: RawProviderConfig) -> Self {
+        let endpoint = raw.endpoint.unwrap_or_else(|| match raw.kind {
+            ProviderKind::Ollama => DEFAULT_OLLAMA_ENDPOINT.to_string(),
+            ProviderKind::Gemini => DEFAULT_GEMINI_ENDPOINT.to_string(),
+        });
+        Self {
+            id: raw.id,
+            kind: raw.kind,
+            endpoint,
+            api_key: raw.api_key,
+            models: raw.models.into_iter().map(ModelInfo::from).collect(),
+        }
+    }
+}
+
+impl ModelProviderConfig {
+    fn default_ollama() -> Self {
+        Self {
+            id: "ollama".to_string(),
+            kind: ProviderKind::Ollama,
+            endpoint: DEFAULT_OLLAMA_ENDPOINT.to_string(),
+            api_key: None,
+            models: vec![ModelInfo {
+                name: "llama3".to_string(),
+                display_name: Some("Llama 3".to_string()),
+            }],
+        }
+    }
+
+    fn default_gemini() -> Self {
+        Self {
+            id: "gemini".to_string(),
+            kind: ProviderKind::Gemini,
+            endpoint: DEFAULT_GEMINI_ENDPOINT.to_string(),
+            api_key: Some("GEMINI_API_KEY".to_string()),
+            models: vec![ModelInfo {
+                name: DEFAULT_MODEL.to_string(),
+                display_name: Some("Gemini 1.5 Flash".to_string()),
+            }],
+        }
+    }
+
+    fn ensure_model(&mut self, model: &str) {
+        if self.models.iter().all(|info| info.name != model) {
+            self.models.push(ModelInfo {
+                name: model.to_string(),
+                display_name: None,
+            });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,6 +386,20 @@ mod tests {
 
         let config = AppConfig::load(None).expect("load succeeds");
         assert_eq!(config.model, DEFAULT_MODEL);
+        assert_eq!(config.default_provider, DEFAULT_PROVIDER_ID);
+        assert!(!config.providers.is_empty());
+        assert!(
+            config
+                .providers
+                .iter()
+                .any(|provider| provider.id == DEFAULT_PROVIDER_ID)
+        );
+        assert!(config.providers.iter().any(|provider| {
+            provider
+                .models
+                .iter()
+                .any(|model| model.name == DEFAULT_MODEL)
+        }));
         assert!(config.system_prompt.is_none());
         assert!(config.tools.is_empty());
         assert!(config.servers.is_empty());
@@ -238,6 +427,12 @@ system_prompt = "keep short"
 
         let config = AppConfig::load(Some(&path)).expect("load config");
         assert_eq!(config.model, "mistral");
+        assert!(
+            config
+                .providers
+                .iter()
+                .any(|provider| provider.id == config.default_provider)
+        );
         assert_eq!(config.system_prompt.as_deref(), Some("keep short"));
         assert!(config.tools.is_empty());
         assert!(config.servers.is_empty());
@@ -255,6 +450,13 @@ system_prompt = "keep short"
 
         let config = AppConfig::load(Some(&path)).expect("load");
         assert_eq!(config.model, DEFAULT_MODEL);
+        assert_eq!(config.default_provider, DEFAULT_PROVIDER_ID);
+        assert!(
+            config
+                .providers
+                .iter()
+                .any(|provider| provider.id == config.default_provider)
+        );
         assert_eq!(config.system_prompt.as_deref(), Some("only system"));
         assert!(config.tools.is_empty());
         assert!(config.servers.is_empty());
@@ -347,5 +549,51 @@ server = "time"
         assert_eq!(config.tools.len(), 1);
         assert_eq!(config.tools[0].name, "get_time");
         assert_eq!(config.tools[0].server.as_deref(), Some("time"));
+    }
+
+    #[test]
+    fn reads_provider_definitions() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        fs::write(
+            &path,
+            r#"
+model = "gemini-1.5-flash"
+default_provider = "gemini"
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+endpoint = "http://localhost:11434"
+models = ["llama3"]
+
+[[providers]]
+id = "gemini"
+type = "gemini"
+api_key = "secret"
+models = [{ name = "gemini-1.5-flash", display_name = "Gemini Flash" }]
+"#,
+        )
+        .expect("write provider config");
+
+        let config = AppConfig::load(Some(&path)).expect("load provider config");
+        assert_eq!(config.model, "gemini-1.5-flash");
+        assert_eq!(config.default_provider, "gemini");
+        assert_eq!(config.providers.len(), 2);
+        let gemini = config
+            .providers
+            .iter()
+            .find(|provider| provider.id == "gemini")
+            .expect("gemini provider exists");
+        assert_eq!(gemini.kind, ProviderKind::Gemini);
+        assert_eq!(gemini.api_key.as_deref(), Some("secret"));
+        assert_eq!(
+            gemini
+                .models
+                .iter()
+                .find(|model| model.name == "gemini-1.5-flash")
+                .and_then(|model| model.display_name.as_deref()),
+            Some("Gemini Flash")
+        );
     }
 }

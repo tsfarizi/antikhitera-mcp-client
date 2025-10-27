@@ -17,6 +17,7 @@ pub struct AgentStep {
 
 #[derive(Debug, Clone)]
 pub struct AgentOutcome {
+    pub logs: Vec<String>,
     pub session_id: String,
     pub response: String,
     pub steps: Vec<AgentStep>,
@@ -24,6 +25,7 @@ pub struct AgentOutcome {
 
 #[derive(Debug, Clone)]
 pub struct AgentOptions {
+    pub provider: Option<String>,
     pub model: Option<String>,
     pub system_prompt: Option<String>,
     pub session_id: Option<String>,
@@ -33,6 +35,7 @@ pub struct AgentOptions {
 impl Default for AgentOptions {
     fn default() -> Self {
         Self {
+            provider: None,
             model: None,
             system_prompt: None,
             session_id: None,

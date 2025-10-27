@@ -24,13 +24,25 @@ pub async fn chat_handler<P: ModelProvider>(
     State(state): State<Arc<ServerState<P>>>,
     Json(payload): Json<RestChatRequest>,
 ) -> Result<Json<RestChatResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let RestChatRequest {
+        prompt,
+        provider,
+        model,
+        system_prompt,
+        session_id,
+        agent,
+        max_tool_steps,
+    } = payload;
+
     info!(
-        agent = payload.agent,
-        session = payload.session_id.as_deref(),
+        agent,
+        session = session_id.as_deref(),
+        provider = provider.as_deref(),
+        model = model.as_deref(),
         "Received /chat request"
     );
 
-    if payload.prompt.trim().is_empty() {
+    if prompt.trim().is_empty() {
         error!("Rejecting /chat request due to empty prompt");
         return Err((
             StatusCode::BAD_REQUEST,
@@ -42,24 +54,36 @@ pub async fn chat_handler<P: ModelProvider>(
 
     let client = state.client();
 
-    if payload.agent {
+    if agent {
         let mut options = AgentOptions::default();
-        options.model = payload.model;
-        options.system_prompt = payload.system_prompt;
-        options.session_id = payload.session_id;
-        if let Some(max_steps) = payload.max_tool_steps {
+        let provider_for_agent = provider.clone();
+        let model_for_agent = model.clone();
+        let resolved_provider = provider_for_agent
+            .clone()
+            .unwrap_or_else(|| client.default_provider().to_string());
+        let resolved_model = model_for_agent
+            .clone()
+            .unwrap_or_else(|| client.default_model().to_string());
+        options.provider = provider_for_agent;
+        options.model = model_for_agent;
+        options.system_prompt = system_prompt.clone();
+        options.session_id = session_id.clone();
+        if let Some(max_steps) = max_tool_steps {
             options.max_steps = max_steps;
         }
         let agent = Agent::new(client.clone());
-        match agent.run(payload.prompt, options).await {
+        match agent.run(prompt, options).await {
             Ok(outcome) => {
                 info!(
                     session_id = outcome.session_id.as_str(),
                     "Agent run completed successfully"
                 );
                 Ok(Json(RestChatResponse {
+                    logs: outcome.logs,
                     session_id: outcome.session_id,
                     content: outcome.response,
+                    provider: resolved_provider,
+                    model: resolved_model,
                     tool_steps: outcome.steps,
                 }))
             }
@@ -76,10 +100,11 @@ pub async fn chat_handler<P: ModelProvider>(
         debug!("Forwarding /chat request to model provider");
         let result = client
             .chat(ChatRequest {
-                prompt: payload.prompt,
-                model: payload.model,
-                system_prompt: payload.system_prompt,
-                session_id: payload.session_id,
+                prompt,
+                provider,
+                model,
+                system_prompt,
+                session_id,
             })
             .await;
 
@@ -87,11 +112,16 @@ pub async fn chat_handler<P: ModelProvider>(
             Ok(result) => {
                 info!(
                     session_id = result.session_id.as_str(),
+                    provider = result.provider.as_str(),
+                    model = result.model.as_str(),
                     "Chat request completed successfully"
                 );
                 Ok(Json(RestChatResponse {
+                    logs: result.logs,
                     session_id: result.session_id,
                     content: result.content,
+                    provider: result.provider,
+                    model: result.model,
                     tool_steps: Vec::new(),
                 }))
             }

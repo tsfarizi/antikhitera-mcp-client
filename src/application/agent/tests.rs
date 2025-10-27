@@ -76,7 +76,7 @@ impl ModelProvider for ScriptedProvider {
 #[tokio::test]
 async fn agent_returns_final_response_without_tools() {
     let provider = ScriptedProvider::new(vec![r#"{"action":"final","response":"done"}"#]);
-    let client = McpClient::new(provider.clone(), ClientConfig::new("llama"));
+    let client = McpClient::new(provider.clone(), ClientConfig::new("ollama", "llama"));
     let agent = Agent::new(Arc::new(client));
 
     let outcome = agent
@@ -86,6 +86,7 @@ async fn agent_returns_final_response_without_tools() {
 
     assert_eq!(outcome.response, "done");
     assert!(outcome.steps.is_empty());
+    assert!(!outcome.logs.is_empty());
 
     let records = provider.requests().await;
     assert!(!records.is_empty());
@@ -110,7 +111,7 @@ async fn agent_handles_list_tools() {
         r#"{"action":"call_tool","tool":"list_tools"}"#,
         r#"{"action":"final","response":"all done"}"#,
     ]);
-    let mut cfg = ClientConfig::new("llama");
+    let mut cfg = ClientConfig::new("ollama", "llama");
     cfg = cfg.with_tools(vec![
         ToolConfig {
             name: "weather".into(),
@@ -135,6 +136,7 @@ async fn agent_handles_list_tools() {
     assert_eq!(outcome.steps.len(), 1);
     assert_eq!(outcome.steps[0].tool, "list_tools");
     assert!(outcome.steps[0].success);
+    assert!(!outcome.logs.is_empty());
     assert!(
         outcome.steps[0]
             .output

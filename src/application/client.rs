@@ -1,5 +1,5 @@
 use super::tooling::{ServerManager, ToolServerInterface};
-use crate::config::{DEFAULT_PROMPT_TEMPLATE, ServerConfig, ToolConfig};
+use crate::config::{DEFAULT_PROMPT_TEMPLATE, ModelProviderConfig, ServerConfig, ToolConfig};
 use crate::model::{ModelError, ModelProvider, ModelRequest};
 use crate::types::{ChatMessage, MessageRole};
 use std::collections::HashMap;
@@ -12,21 +12,25 @@ use uuid::Uuid;
 const LANGUAGE_GUIDANCE: &str = "Kamu memahami permintaan dalam bahasa apa pun. Jawablah menggunakan bahasa yang sama dengan warga kecuali mereka secara eksplisit meminta sebaliknya. Jangan gunakan tool apa pun hanya untuk menerjemahkan; tangani kebutuhan bahasa secara internal.";
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
+    pub default_provider: String,
     pub default_model: String,
     pub default_system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
     pub prompt_template: Option<String>,
+    pub providers: Vec<ModelProviderConfig>,
 }
 
 impl ClientConfig {
-    pub fn new(default_model: impl Into<String>) -> Self {
+    pub fn new(default_provider: impl Into<String>, default_model: impl Into<String>) -> Self {
         Self {
+            default_provider: default_provider.into(),
             default_model: default_model.into(),
             default_system_prompt: None,
             tools: Vec::new(),
             servers: Vec::new(),
             prompt_template: None,
+            providers: Vec::new(),
         }
     }
 
@@ -49,11 +53,21 @@ impl ClientConfig {
         self.prompt_template = template;
         self
     }
+
+    pub fn with_providers(mut self, providers: Vec<ModelProviderConfig>) -> Self {
+        self.providers = providers;
+        self
+    }
+
+    pub fn providers(&self) -> &[ModelProviderConfig] {
+        &self.providers
+    }
 }
 
 #[derive(Debug)]
 pub struct ChatRequest {
     pub prompt: String,
+    pub provider: Option<String>,
     pub model: Option<String>,
     pub system_prompt: Option<String>,
     pub session_id: Option<String>,
@@ -63,6 +77,9 @@ pub struct ChatRequest {
 pub struct ChatResult {
     pub content: String,
     pub session_id: String,
+    pub provider: String,
+    pub model: String,
+    pub logs: Vec<String>,
 }
 
 #[derive(Debug, Error)]
@@ -102,11 +119,26 @@ impl<P: ModelProvider> McpClient<P> {
         &self.config.tools
     }
 
+    pub fn default_provider(&self) -> &str {
+        &self.config.default_provider
+    }
+
+    pub fn default_model(&self) -> &str {
+        &self.config.default_model
+    }
+
+    pub fn providers(&self) -> &[ModelProviderConfig] {
+        self.config.providers()
+    }
+
     pub fn server_bridge(&self) -> Arc<dyn ToolServerInterface> {
         self.server_bridge.clone()
     }
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
+        let provider = request
+            .provider
+            .unwrap_or_else(|| self.config.default_provider.clone());
         let model = request
             .model
             .unwrap_or_else(|| self.config.default_model.clone());
@@ -125,18 +157,41 @@ impl<P: ModelProvider> McpClient<P> {
             "Preparing chat request with prior history"
         );
 
+        let mut logs = Vec::new();
+        logs.push(format!("Provider '{provider}' dengan model '{model}'"));
+        if !history.is_empty() {
+            logs.push(format!(
+                "Riwayat percakapan sebelumnya: {} pesan",
+                history.len()
+            ));
+        }
+
         let mut messages = Vec::with_capacity(history.len() + 2);
         let system_prompt = self.compose_system_prompt(system);
         if !system_prompt.is_empty() {
+            logs.push(format!(
+                "System prompt aktif: {}",
+                Self::summarise(&system_prompt)
+            ));
             messages.push(ChatMessage::new(MessageRole::System, system_prompt));
         }
+        let prompt_preview = Self::summarise(&request.prompt);
         messages.extend(history.iter().cloned());
         messages.push(ChatMessage::new(MessageRole::User, request.prompt.clone()));
+        logs.push(format!("Pengguna: {prompt_preview}"));
+
+        info!(
+            session_id = session_id.as_str(),
+            provider = provider.as_str(),
+            model = model.as_str(),
+            "Mengirim permintaan ke penyedia model"
+        );
 
         let response = self
             .provider
             .chat(ModelRequest {
-                model,
+                provider: provider.clone(),
+                model: model.clone(),
                 messages,
                 session_id: Some(session_id.clone()),
             })
@@ -146,11 +201,19 @@ impl<P: ModelProvider> McpClient<P> {
             .session_id
             .clone()
             .unwrap_or_else(|| session_id.clone());
+        let assistant_message = response.message.clone();
+        let response_preview = Self::summarise(&assistant_message.content);
+        logs.push(format!("Model: {response_preview}"));
+
         info!(
             session_id = final_session.as_str(),
-            "Received response from model provider"
+            provider = provider.as_str(),
+            model = model.as_str(),
+            "Respons diterima dari penyedia model"
         );
-        let assistant_message = response.message.clone();
+        for entry in &logs {
+            info!(session_id = final_session.as_str(), %entry, "Log interaksi");
+        }
 
         self.persist_exchange(&final_session, request.prompt, assistant_message)
             .await;
@@ -158,6 +221,9 @@ impl<P: ModelProvider> McpClient<P> {
         Ok(ChatResult {
             content: response.message.content,
             session_id: final_session,
+            provider,
+            model,
+            logs,
         })
     }
 
@@ -234,6 +300,28 @@ impl<P: ModelProvider> McpClient<P> {
             "Persisted chat exchange to session history"
         );
     }
+
+    pub(crate) fn summarise(text: &str) -> String {
+        const SNIPPET_LIMIT: usize = 160;
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return "(kosong)".to_string();
+        }
+        let single_line = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut result = String::new();
+        let mut chars = single_line.chars();
+        for _ in 0..SNIPPET_LIMIT {
+            if let Some(ch) = chars.next() {
+                result.push(ch);
+            } else {
+                return result;
+            }
+        }
+        if chars.next().is_some() {
+            result.push('…');
+        }
+        result
+    }
 }
 
 fn new_session_id() -> String {
@@ -275,12 +363,13 @@ mod tests {
         let provider = RecordingProvider::default();
         let client = McpClient::new(
             provider.clone(),
-            ClientConfig::new("llama3").with_system_prompt("be precise"),
+            ClientConfig::new("ollama", "llama3").with_system_prompt("be precise"),
         );
 
         let first = client
             .chat(ChatRequest {
                 prompt: "hello".into(),
+                provider: None,
                 model: None,
                 system_prompt: None,
                 session_id: None,
@@ -291,6 +380,7 @@ mod tests {
         let second = client
             .chat(ChatRequest {
                 prompt: "next".into(),
+                provider: None,
                 model: None,
                 system_prompt: None,
                 session_id: Some(first.session_id.clone()),
@@ -299,9 +389,17 @@ mod tests {
             .expect("second call succeeds");
 
         assert_eq!(first.session_id, second.session_id);
+        assert_eq!(first.provider, "ollama");
+        assert_eq!(second.provider, "ollama");
+        assert_eq!(first.model, "llama3");
+        assert_eq!(second.model, "llama3");
+        assert!(!first.logs.is_empty());
+        assert!(!second.logs.is_empty());
 
         let records = provider.records().await;
         assert_eq!(records.len(), 2);
+        assert_eq!(records[0].provider, "ollama");
+        assert_eq!(records[1].provider, "ollama");
 
         let first_messages = &records[0].messages;
         assert_eq!(first_messages.len(), 2);
