@@ -1,5 +1,5 @@
 [package]
-name = "cbt-mcp-client"
+name = "antikhitera-mcp-client"
 version = "0.1.0"
 edition = "2024"
 
@@ -24,3 +24,11 @@ dotenvy = "0.15"
 
 [dev-dependencies]
 tempfile = "3.10"
+
+[[bin]]
+name = "antikhitera-mcp-client-rest"
+path = "src/bin/rest.rs"
+
+[[bin]]
+name = "antikhitera-mcp-client-stdio"
+path = "src/bin/stdio.rs"
