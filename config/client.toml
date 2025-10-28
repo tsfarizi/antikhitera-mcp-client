@@ -42,7 +42,16 @@ command = 'C:\Users\teuku\Desktop\Project\CBT\MCP\mcp-server-time\target\release
 default_timezone = "Asia/Jakarta"
 default_city = "Jakarta"
 
+[[servers]]
+name = "certificate"
+command = 'C:\Users\teuku\Desktop\Project\CBT\MCP\cbt-mcp-server-certificate\target\release\cbt-mcp-server-certificate.exe'
+
 [[tools]]
 name = "get_current_time"
 description = "WAJIB panggil di awal percakapan untuk menentukan sapaan (pagi/siang/sore/malam) dan informasi jam yang akurat, sebelum menjawab pertanyaan warga."
 server = "time"
+
+[[tools]]
+name = "generate_surat_keterangan_domisili"
+description = "Buat surat keterangan domisili dalam bentuk PDF berdasarkan data warga."
+server = "certificate"
