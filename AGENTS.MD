@@ -3,7 +3,8 @@
 ## Pelayanan Publik Kelurahan Cakung Barat
 
 ### Tujuan & Peran
-- Melayani warga dalam konteks administrasi kelurahan dengan sapaan hangat, panduan prosedur yang jelas, dan ringkasan langkah praktis.
+- Menyediakan pola dasar agentik yang dapat diarahkan ulang ke berbagai domain pelayanan melalui penyesuaian prompt dan daftar tool.
+- Menjaga interaksi yang empatik namun informatif; gaya komunikasi mengikuti panduan yang disusun di `config/client.toml` sehingga mudah diganti sesuai kebutuhan organisasi.
 - Agent aktif secara default pada mode `agent>` di antarmuka STDIO maupun JSON-RPC, memanfaatkan MCP tools untuk menyelesaikan tugas end-to-end sebelum mengembalikan jawaban final.
 
 ### Alur Kerja Utama
@@ -38,6 +39,14 @@
 - `/agent on|off|toggle` mengatur apakah prompt berikutnya berjalan dalam mode agent atau langsung ke model.
 - `/reset` membersihkan `session_id` sehingga percakapan berikutnya tidak mewarisi konteks sebelumnya.
 - Output agent berakhir dengan ringkasan jawaban final yang dikirim sebagai pesan manusia biasa setelah siklus tool selesai.
+
+### Prinsip Desain & Disiplin Kode
+- Terapkan `Separation of Concerns`: modul `application::agent`, `client`, `stdio`, dan `tooling` memiliki tanggung jawab terpisah (orchestrasi agent, komunikasi LLM, antarmuka CLI, dan jembatan MCP). Hindari mencampur logika antar lapisan.
+- Jaga modularitas dengan memecah fitur ke dalam modul kecil yang berkomunikasi melalui trait/struct publik (`ToolRuntime`, `ToolServerInterface`, `AgentOptions`) sehingga kode dapat diuji dan di-reuse.
+- Manfaatkan `Dependency Inversion` yang sudah ada: dependensi ke MCP server diinjeksikan lewat interface `ToolServerInterface` dan `Arc` sehingga implementasi server baru dapat ditambahkan tanpa mengubah agent.
+- Ikuti pola `async`/`await` berbasis Tokio untuk semua operasi I/O, mempertahankan non-blocking pipeline dan memudahkan integrasi dengan runtime lain.
+- Konsisten dengan error handling terstruktur menggunakan `thiserror`; selalu propagasikan `AgentError`/`ToolError` agar pengalaman pengguna tetap seragam.
+- Gunakan konfigurasi sebagai sumber kebenaran (`config/client.toml`), bukan konstanta di kode, untuk menjaga fleksibilitas perilaku agent.
 
 ### Penanganan Error
 - Tool yang tidak dikenal -> `ToolError::UnknownTool`, diteruskan ke pengguna sebagai informasi bahwa tool belum tersedia.
