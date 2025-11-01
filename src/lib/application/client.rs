@@ -1,5 +1,7 @@
 use super::tooling::{ServerManager, ToolServerInterface};
-use crate::config::{DEFAULT_PROMPT_TEMPLATE, ModelProviderConfig, ServerConfig, ToolConfig};
+use crate::config::{
+    AppConfig, DEFAULT_PROMPT_TEMPLATE, ModelProviderConfig, ServerConfig, ToolConfig,
+};
 use crate::model::{ModelError, ModelProvider, ModelRequest};
 use crate::types::{ChatMessage, MessageRole};
 use std::collections::HashMap;
@@ -62,6 +64,24 @@ impl ClientConfig {
     pub fn providers(&self) -> &[ModelProviderConfig] {
         &self.providers
     }
+
+    pub fn prompt_template_or_default(&self) -> &str {
+        self.prompt_template
+            .as_deref()
+            .unwrap_or(DEFAULT_PROMPT_TEMPLATE)
+    }
+
+    pub fn to_app_config(&self) -> AppConfig {
+        AppConfig {
+            default_provider: self.default_provider.clone(),
+            model: self.default_model.clone(),
+            system_prompt: self.default_system_prompt.clone(),
+            tools: self.tools.clone(),
+            servers: self.servers.clone(),
+            prompt_template: Some(self.prompt_template_or_default().to_string()),
+            providers: self.providers.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -96,6 +116,18 @@ impl McpError {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ClientConfigSnapshot {
+    pub model: String,
+    pub default_provider: String,
+    pub system_prompt: Option<String>,
+    pub prompt_template: String,
+    pub tools: Vec<ToolConfig>,
+    pub servers: Vec<ServerConfig>,
+    pub providers: Vec<ModelProviderConfig>,
+    pub raw: String,
+}
+
 pub struct McpClient<P: ModelProvider> {
     provider: P,
     config: ClientConfig,
@@ -125,6 +157,22 @@ impl<P: ModelProvider> McpClient<P> {
 
     pub fn default_model(&self) -> &str {
         &self.config.default_model
+    }
+
+    pub fn config_snapshot(&self) -> ClientConfigSnapshot {
+        let app_config = self.config.to_app_config();
+        let prompt_template = app_config.prompt_template_or_default().to_string();
+        let raw = app_config.to_raw_toml();
+        ClientConfigSnapshot {
+            model: app_config.model.clone(),
+            default_provider: app_config.default_provider.clone(),
+            system_prompt: app_config.system_prompt.clone(),
+            prompt_template,
+            tools: app_config.tools.clone(),
+            servers: app_config.servers.clone(),
+            providers: app_config.providers.clone(),
+            raw,
+        }
     }
 
     pub fn providers(&self) -> &[ModelProviderConfig] {
