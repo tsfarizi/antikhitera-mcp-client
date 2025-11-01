@@ -87,7 +87,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
         RunMode::Stdio => {
-            info!("Entering STDIO mode; awaiting JSON line input");
+            info!("Launching STDIO interactive chat interface");
             stdio::run(client.clone()).await?;
         }
         RunMode::Rest => {
