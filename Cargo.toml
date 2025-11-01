@@ -3,6 +3,9 @@ name = "antikhitera-mcp-client"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "src/lib/mod.rs"
+
 [dependencies]
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "process", "io-std", "io-util"] }
 reqwest = { version = "0.12", features = ["json"] }
@@ -24,6 +27,10 @@ dotenvy = "0.15"
 
 [dev-dependencies]
 tempfile = "3.10"
+
+[[bin]]
+name = "antikhitera-mcp-client"
+path = "src/bin/main.rs"
 
 [[bin]]
 name = "antikhitera-mcp-client-rest"
