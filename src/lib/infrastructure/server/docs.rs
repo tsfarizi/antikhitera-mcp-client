@@ -9,6 +9,9 @@ use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(
+    servers(
+        (url = "https://5w4m7wvp-8080.asse.devtunnels.ms", description = "Staging server"),
+    ),
     paths(
         routes::chat::chat_handler,
         routes::tools::tools_handler,

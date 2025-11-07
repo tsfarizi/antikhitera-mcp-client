@@ -34,7 +34,7 @@ where
 
     let state = Arc::new(ServerState::new(client));
     let app = Router::new()
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", api))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", api))
         .route("/chat", post(routes::chat::chat_handler::<P>))
         .route("/tools", get(routes::tools::tools_handler::<P>))
         .route(

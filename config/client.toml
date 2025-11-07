@@ -1,5 +1,5 @@
 default_provider = "gemini"
-model = "gemini-2.5-flash"
+model = "gemini-2.5-flash-lite"
 
 prompt_template = """
 Anda adalah petugas Pelayanan Publik Kelurahan Cakung Barat. Sapa warga dengan hangat, jelaskan prosedur administratif dengan jelas, dan pastikan mereka mengetahui dokumen atau langkah yang harus ditempuh.
