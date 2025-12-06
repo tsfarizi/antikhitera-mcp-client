@@ -1,10 +1,9 @@
 use super::super::dto::{ConfigResponse, ConfigUpdateRequest, ErrorResponse};
-use crate::config::{AppConfig, CONFIG_PATH, ConfigError};
+use crate::config::{AppConfig, CONFIG_PATH};
 use crate::model::ModelProvider;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use std::io;
 use std::path::Path;
 use std::sync::Arc;
 use tracing::info;
@@ -26,9 +25,6 @@ pub async fn config_get_handler<P: ModelProvider>(
     let path = Path::new(CONFIG_PATH);
     let config = match AppConfig::load(Some(path)) {
         Ok(config) => config,
-        Err(ConfigError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => {
-            AppConfig::default()
-        }
         Err(error) => {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -39,7 +35,7 @@ pub async fn config_get_handler<P: ModelProvider>(
         }
     };
 
-    let prompt_template = config.prompt_template_or_default().to_string();
+    let prompt_template = config.prompt_template.clone();
     let raw = std::fs::read_to_string(path).unwrap_or_else(|_| config.to_raw_toml());
 
     Ok(Json(ConfigResponse {
@@ -68,11 +64,21 @@ pub async fn config_put_handler<P: ModelProvider>(
     Json(payload): Json<ConfigUpdateRequest>,
 ) -> Result<Json<ConfigResponse>, (StatusCode, Json<ErrorResponse>)> {
     let path = Path::new(CONFIG_PATH);
-    let mut config = AppConfig::load(Some(path)).unwrap_or_else(|_| AppConfig::default());
+    let mut config = match AppConfig::load(Some(path)) {
+        Ok(c) => c,
+        Err(error) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("failed to load existing config: {error}"),
+                }),
+            ));
+        }
+    };
     config.model = payload.model;
     config.default_provider = payload.default_provider;
     config.system_prompt = payload.system_prompt;
-    config.prompt_template = Some(payload.prompt_template.clone());
+    config.prompt_template = payload.prompt_template.clone();
 
     if let Some(parent) = path.parent() {
         if let Err(error) = std::fs::create_dir_all(parent) {
@@ -86,7 +92,7 @@ pub async fn config_put_handler<P: ModelProvider>(
     }
 
     let raw = config.to_raw_toml();
-    let prompt_template = config.prompt_template_or_default().to_string();
+    let prompt_template = config.prompt_template.clone();
 
     if let Err(error) = std::fs::write(path, &raw) {
         return Err((

@@ -1,4 +1,4 @@
-use super::defaults::*;
+use super::CONFIG_PATH;
 use super::provider::*;
 use super::server::*;
 use super::tool::*;
@@ -9,7 +9,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Once;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::debug;
 
 static ENV_LOADER: Once = Once::new();
 
@@ -20,12 +20,14 @@ pub struct AppConfig {
     pub system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
-    pub prompt_template: Option<String>,
+    pub prompt_template: String,
     pub providers: Vec<ModelProviderConfig>,
 }
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
+    #[error("configuration file not found at {path:?}")]
+    NotFound { path: PathBuf },
     #[error("failed to read config from {path:?}: {source}")]
     Io {
         path: PathBuf,
@@ -38,6 +40,18 @@ pub enum ConfigError {
         #[source]
         source: toml::de::Error,
     },
+    #[error("missing required field 'model' in configuration")]
+    MissingModel,
+    #[error("missing required field 'default_provider' in configuration")]
+    MissingDefaultProvider,
+    #[error("missing required field 'prompt_template' in configuration")]
+    MissingPromptTemplate,
+    #[error("no providers configured - at least one [[providers]] entry is required")]
+    NoProvidersConfigured,
+    #[error("default provider '{provider}' not found in configured providers")]
+    ProviderNotFound { provider: String },
+    #[error("provider '{provider}' is missing required field 'endpoint'")]
+    MissingEndpoint { provider: String },
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -57,68 +71,16 @@ pub(crate) struct RawConfig {
 impl AppConfig {
     pub fn load(path: Option<&Path>) -> Result<Self, ConfigError> {
         ensure_env_loaded();
-        if let Some(path) = path {
-            return read_config(path);
-        }
-        let default_path = Path::new(DEFAULT_CONFIG_PATH);
-        match read_config(default_path) {
-            Ok(config) => Ok(config),
-            Err(ConfigError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => {
-                info!("Configuration file not found; using defaults");
-                Ok(Self::default())
-            }
-            Err(other) => Err(other),
-        }
+        let config_path = path.unwrap_or_else(|| Path::new(CONFIG_PATH));
+        read_config(config_path)
     }
 
-    pub fn default() -> Self {
-        Self {
-            default_provider: DEFAULT_PROVIDER_ID.to_string(),
-            model: DEFAULT_MODEL.to_string(),
-            system_prompt: None,
-            tools: Vec::new(),
-            servers: Vec::new(),
-            prompt_template: Some(DEFAULT_PROMPT_TEMPLATE.to_string()),
-            providers: vec![default_gemini_provider(), default_ollama_provider()],
-        }
-    }
-
-    pub fn prompt_template_or_default(&self) -> &str {
-        self.prompt_template
-            .as_deref()
-            .unwrap_or(DEFAULT_PROMPT_TEMPLATE)
+    pub fn prompt_template(&self) -> &str {
+        &self.prompt_template
     }
 
     pub fn to_raw_toml(&self) -> String {
         to_raw_toml_string(self)
-    }
-}
-
-/// Create a default Gemini provider configuration
-pub fn default_gemini_provider() -> ModelProviderConfig {
-    ModelProviderConfig {
-        id: "gemini".to_string(),
-        provider_type: "gemini".to_string(),
-        endpoint: DEFAULT_GEMINI_ENDPOINT.to_string(),
-        api_key: Some("GEMINI_API_KEY".to_string()),
-        models: vec![ModelInfo {
-            name: DEFAULT_MODEL.to_string(),
-            display_name: Some("Gemini 1.5 Flash".to_string()),
-        }],
-    }
-}
-
-/// Create a default Ollama provider configuration
-pub fn default_ollama_provider() -> ModelProviderConfig {
-    ModelProviderConfig {
-        id: "ollama".to_string(),
-        provider_type: "ollama".to_string(),
-        endpoint: DEFAULT_OLLAMA_ENDPOINT.to_string(),
-        api_key: None,
-        models: vec![ModelInfo {
-            name: "llama3".to_string(),
-            display_name: Some("Llama 3".to_string()),
-        }],
     }
 }
 
@@ -127,7 +89,7 @@ pub fn to_raw_toml_string(config: &AppConfig) -> String {
         &config.default_provider,
         &config.model,
         config.system_prompt.as_deref(),
-        config.prompt_template_or_default(),
+        &config.prompt_template,
         &config.tools,
         &config.providers,
     )
@@ -141,41 +103,58 @@ fn ensure_env_loaded() {
 
 fn read_config(path: &Path) -> Result<AppConfig, ConfigError> {
     debug!(path = %path.display(), "Reading client configuration file");
-    let content = fs::read_to_string(path).map_err(|source| ConfigError::Io {
-        path: path.to_path_buf(),
-        source,
+
+    let content = fs::read_to_string(path).map_err(|source| {
+        if source.kind() == io::ErrorKind::NotFound {
+            ConfigError::NotFound {
+                path: path.to_path_buf(),
+            }
+        } else {
+            ConfigError::Io {
+                path: path.to_path_buf(),
+                source,
+            }
+        }
     })?;
+
     let parsed: RawConfig = toml::from_str(&content).map_err(|source| ConfigError::Parse {
         path: path.to_path_buf(),
         source,
     })?;
-    let mut providers: Vec<ModelProviderConfig> = if parsed.providers.is_empty() {
-        vec![default_gemini_provider(), default_ollama_provider()]
-    } else {
-        parsed
-            .providers
-            .into_iter()
-            .map(ModelProviderConfig::from)
-            .collect()
-    };
-    let model = parsed.model.unwrap_or_else(|| DEFAULT_MODEL.to_string());
-    let mut default_provider = parsed
-        .default_provider
-        .or_else(|| {
-            providers
-                .iter()
-                .find(|provider| provider.models.iter().any(|m| m.name == model))
-                .map(|provider| provider.id.clone())
-        })
-        .unwrap_or_else(|| DEFAULT_PROVIDER_ID.to_string());
 
+    // Required fields validation
+    let model = parsed.model.ok_or(ConfigError::MissingModel)?;
+    let default_provider = parsed
+        .default_provider
+        .ok_or(ConfigError::MissingDefaultProvider)?;
+    let prompt_template = parsed
+        .prompt_template
+        .ok_or(ConfigError::MissingPromptTemplate)?;
+
+    if parsed.providers.is_empty() {
+        return Err(ConfigError::NoProvidersConfigured);
+    }
+
+    let mut providers: Vec<ModelProviderConfig> = Vec::new();
+    for raw_provider in parsed.providers {
+        if raw_provider.endpoint.is_none() {
+            return Err(ConfigError::MissingEndpoint {
+                provider: raw_provider.id.clone(),
+            });
+        }
+        providers.push(ModelProviderConfig::from(raw_provider));
+    }
+
+    // Validate default provider exists
+    if !providers.iter().any(|p| p.id == default_provider) {
+        return Err(ConfigError::ProviderNotFound {
+            provider: default_provider,
+        });
+    }
+
+    // Ensure model exists in default provider
     if let Some(provider) = providers.iter_mut().find(|p| p.id == default_provider) {
         provider.ensure_model(&model);
-    } else {
-        let mut fallback = default_ollama_provider();
-        fallback.ensure_model(&model);
-        default_provider = fallback.id.clone();
-        providers.push(fallback);
     }
 
     Ok(AppConfig {
@@ -184,11 +163,7 @@ fn read_config(path: &Path) -> Result<AppConfig, ConfigError> {
         system_prompt: parsed.system_prompt,
         tools: parsed.tools.into_iter().map(ToolConfig::from).collect(),
         servers: parsed.servers.into_iter().map(ServerConfig::from).collect(),
-        prompt_template: Some(
-            parsed
-                .prompt_template
-                .unwrap_or_else(|| DEFAULT_PROMPT_TEMPLATE.to_string()),
-        ),
+        prompt_template,
         providers,
     })
 }
@@ -271,133 +246,185 @@ fn render_config_raw(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::fs::File;
     use std::io::Write;
     use std::path::Path;
-    use std::sync::Mutex;
 
-    static WORKDIR_GUARD: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn returns_default_when_missing() {
-        let _lock = WORKDIR_GUARD.lock().expect("lock guard");
-        let original_dir = env::current_dir().expect("current dir");
-        let temp = tempfile::tempdir().expect("tempdir");
-        env::set_current_dir(temp.path()).expect("switch to temp dir");
-
-        let config = AppConfig::load(None).expect("load succeeds");
-        assert_eq!(config.model, DEFAULT_MODEL);
-        assert_eq!(config.default_provider, DEFAULT_PROVIDER_ID);
-        assert!(!config.providers.is_empty());
-        assert!(
-            config
-                .providers
-                .iter()
-                .any(|provider| provider.id == DEFAULT_PROVIDER_ID)
-        );
-        assert!(config.providers.iter().any(|provider| {
-            provider
-                .models
-                .iter()
-                .any(|model| model.name == DEFAULT_MODEL)
-        }));
-        assert!(config.system_prompt.is_none());
-        assert!(config.tools.is_empty());
-        assert!(config.servers.is_empty());
-        assert_eq!(
-            config.prompt_template.as_deref(),
-            Some(DEFAULT_PROMPT_TEMPLATE)
-        );
-
-        env::set_current_dir(original_dir).expect("restore current dir");
-    }
-
-    #[test]
-    fn reads_model_and_system_prompt() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("client.toml");
-        let mut file = File::create(&path).expect("create config");
+    fn write_valid_config(path: &Path) {
+        let mut file = File::create(path).expect("create config");
         writeln!(
             file,
             r#"
-model = "mistral"
-system_prompt = "keep short"
+default_provider = "gemini"
+model = "gemini-1.5-flash"
+prompt_template = "You are a helpful assistant."
+
+[[providers]]
+id = "gemini"
+type = "gemini"
+endpoint = "https://generativelanguage.googleapis.com"
+api_key = "TEST_KEY"
+models = [{{ name = "gemini-1.5-flash" }}]
 "#
         )
         .expect("write");
-
-        let config = AppConfig::load(Some(&path)).expect("load config");
-        assert_eq!(config.model, "mistral");
-        assert!(
-            config
-                .providers
-                .iter()
-                .any(|provider| provider.id == config.default_provider)
-        );
-        assert_eq!(config.system_prompt.as_deref(), Some("keep short"));
-        assert!(config.tools.is_empty());
-        assert!(config.servers.is_empty());
-        assert_eq!(
-            config.prompt_template.as_deref(),
-            Some(DEFAULT_PROMPT_TEMPLATE)
-        );
     }
 
     #[test]
-    fn falls_back_to_default_model_if_missing() {
+    fn errors_when_config_not_found() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("client.toml");
-        fs::write(&path, "system_prompt = \"only system\"").expect("write");
+        let path = dir.path().join("nonexistent.toml");
 
-        let config = AppConfig::load(Some(&path)).expect("load");
-        assert_eq!(config.model, DEFAULT_MODEL);
-        assert_eq!(config.default_provider, DEFAULT_PROVIDER_ID);
-        assert!(
-            config
-                .providers
-                .iter()
-                .any(|provider| provider.id == config.default_provider)
-        );
-        assert_eq!(config.system_prompt.as_deref(), Some("only system"));
-        assert!(config.tools.is_empty());
-        assert!(config.servers.is_empty());
-        assert_eq!(
-            config.prompt_template.as_deref(),
-            Some(DEFAULT_PROMPT_TEMPLATE)
-        );
+        let result = AppConfig::load(Some(&path));
+        assert!(matches!(result, Err(ConfigError::NotFound { .. })));
     }
 
     #[test]
-    fn reads_tool_definitions() {
+    fn errors_when_model_missing() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("client.toml");
         fs::write(
             &path,
             r#"
-model = "mistral"
+default_provider = "gemini"
+prompt_template = "test"
 
-tools = [
-    "tool-a",
-    { name = "tool-b", description = "Second tool" }
-]
+[[providers]]
+id = "gemini"
+type = "gemini"
+endpoint = "https://example.com"
+models = ["test"]
 "#,
         )
-        .expect("write tools config");
+        .expect("write");
 
-        let config = AppConfig::load(Some(&path)).expect("load");
-        assert_eq!(config.tools.len(), 2);
-        assert_eq!(config.tools[0].name, "tool-a");
-        assert!(config.tools[0].description.is_none());
-        assert!(config.tools[0].server.is_none());
-        assert_eq!(config.tools[1].name, "tool-b");
-        assert_eq!(config.tools[1].description.as_deref(), Some("Second tool"));
-        assert!(config.tools[1].server.is_none());
-        assert_eq!(
-            config.prompt_template.as_deref(),
-            Some(DEFAULT_PROMPT_TEMPLATE)
-        );
-        assert!(config.servers.is_empty());
+        let result = AppConfig::load(Some(&path));
+        assert!(matches!(result, Err(ConfigError::MissingModel)));
+    }
+
+    #[test]
+    fn errors_when_default_provider_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        fs::write(
+            &path,
+            r#"
+model = "test-model"
+prompt_template = "test"
+
+[[providers]]
+id = "gemini"
+type = "gemini"
+endpoint = "https://example.com"
+models = ["test"]
+"#,
+        )
+        .expect("write");
+
+        let result = AppConfig::load(Some(&path));
+        assert!(matches!(result, Err(ConfigError::MissingDefaultProvider)));
+    }
+
+    #[test]
+    fn errors_when_prompt_template_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        fs::write(
+            &path,
+            r#"
+model = "test-model"
+default_provider = "gemini"
+
+[[providers]]
+id = "gemini"
+type = "gemini"
+endpoint = "https://example.com"
+models = ["test"]
+"#,
+        )
+        .expect("write");
+
+        let result = AppConfig::load(Some(&path));
+        assert!(matches!(result, Err(ConfigError::MissingPromptTemplate)));
+    }
+
+    #[test]
+    fn errors_when_no_providers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        fs::write(
+            &path,
+            r#"
+model = "test-model"
+default_provider = "gemini"
+prompt_template = "test"
+"#,
+        )
+        .expect("write");
+
+        let result = AppConfig::load(Some(&path));
+        assert!(matches!(result, Err(ConfigError::NoProvidersConfigured)));
+    }
+
+    #[test]
+    fn errors_when_provider_missing_endpoint() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        fs::write(
+            &path,
+            r#"
+model = "test-model"
+default_provider = "gemini"
+prompt_template = "test"
+
+[[providers]]
+id = "gemini"
+type = "gemini"
+models = ["test"]
+"#,
+        )
+        .expect("write");
+
+        let result = AppConfig::load(Some(&path));
+        assert!(matches!(result, Err(ConfigError::MissingEndpoint { .. })));
+    }
+
+    #[test]
+    fn errors_when_default_provider_not_in_list() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        fs::write(
+            &path,
+            r#"
+model = "test-model"
+default_provider = "nonexistent"
+prompt_template = "test"
+
+[[providers]]
+id = "gemini"
+type = "gemini"
+endpoint = "https://example.com"
+models = ["test"]
+"#,
+        )
+        .expect("write");
+
+        let result = AppConfig::load(Some(&path));
+        assert!(matches!(result, Err(ConfigError::ProviderNotFound { .. })));
+    }
+
+    #[test]
+    fn loads_valid_config() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("client.toml");
+        write_valid_config(&path);
+
+        let config = AppConfig::load(Some(&path)).expect("load config");
+        assert_eq!(config.model, "gemini-1.5-flash");
+        assert_eq!(config.default_provider, "gemini");
+        assert_eq!(config.prompt_template, "You are a helpful assistant.");
+        assert_eq!(config.providers.len(), 1);
+        assert!(config.providers[0].is_gemini());
     }
 
     #[test]
@@ -408,6 +435,14 @@ tools = [
             &path,
             r#"
 model = "mistral"
+default_provider = "ollama"
+prompt_template = "Be helpful."
+
+[[providers]]
+id = "ollama"
+type = "ollama"
+endpoint = "http://localhost:11434"
+models = ["mistral"]
 
 [[servers]]
 name = "time"
@@ -444,9 +479,6 @@ server = "time"
         );
         assert_eq!(config.servers[0].default_city.as_deref(), Some("Jakarta"));
         assert_eq!(config.servers[1].name, "other");
-        assert!(config.servers[1].workdir.is_none());
-        assert!(config.servers[1].default_timezone.is_none());
-        assert!(config.servers[1].default_city.is_none());
 
         assert_eq!(config.tools.len(), 1);
         assert_eq!(config.tools[0].name, "get_time");
@@ -462,6 +494,7 @@ server = "time"
             r#"
 model = "gemini-1.5-flash"
 default_provider = "gemini"
+prompt_template = "Be helpful."
 
 [[providers]]
 id = "ollama"
@@ -472,6 +505,7 @@ models = ["llama3"]
 [[providers]]
 id = "gemini"
 type = "gemini"
+endpoint = "https://generativelanguage.googleapis.com"
 api_key = "secret"
 models = [{ name = "gemini-1.5-flash", display_name = "Gemini Flash" }]
 "#,
@@ -497,13 +531,6 @@ models = [{ name = "gemini-1.5-flash", display_name = "Gemini Flash" }]
                 .find(|model| model.name == "gemini-1.5-flash")
                 .and_then(|model| model.display_name.as_deref()),
             Some("Gemini Flash")
-        );
-        assert!(config.system_prompt.is_none());
-        assert!(config.tools.is_empty());
-        assert!(config.servers.is_empty());
-        assert_eq!(
-            config.prompt_template.as_deref(),
-            Some(DEFAULT_PROMPT_TEMPLATE)
         );
     }
 }

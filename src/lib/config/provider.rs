@@ -67,14 +67,8 @@ impl From<RawModelInfo> for ModelInfo {
 
 impl From<RawProviderConfig> for ModelProviderConfig {
     fn from(raw: RawProviderConfig) -> Self {
-        // Use provided endpoint or a sensible default based on type
-        let endpoint = raw.endpoint.unwrap_or_else(|| {
-            match raw.provider_type.as_str() {
-                "ollama" => "http://127.0.0.1:11434".to_string(),
-                "gemini" => "https://generativelanguage.googleapis.com".to_string(),
-                _ => String::new(), // Unknown types must provide endpoint
-            }
-        });
+        // Endpoint is required - validation happens in app.rs before this conversion
+        let endpoint = raw.endpoint.unwrap_or_default();
 
         Self {
             id: raw.id,
