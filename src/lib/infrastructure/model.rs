@@ -1,4 +1,4 @@
-use crate::config::{ModelProviderConfig, ProviderKind};
+use crate::config::ModelProviderConfig;
 use crate::types::{ChatMessage, MessageRole};
 use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
@@ -40,6 +40,11 @@ pub enum ModelError {
     },
     #[error("provider '{provider}' returned invalid response: {reason}")]
     InvalidResponse { provider: String, reason: String },
+    #[error("unsupported provider type '{provider_type}' for provider '{provider}'")]
+    UnsupportedProviderType {
+        provider: String,
+        provider_type: String,
+    },
 }
 
 impl ModelError {
@@ -73,6 +78,16 @@ impl ModelError {
         Self::InvalidResponse {
             provider: provider.into(),
             reason: reason.into(),
+        }
+    }
+
+    pub fn unsupported_provider_type(
+        provider: impl Into<String>,
+        provider_type: impl Into<String>,
+    ) -> Self {
+        Self::UnsupportedProviderType {
+            provider: provider.into(),
+            provider_type: provider_type.into(),
         }
     }
 
@@ -118,6 +133,12 @@ impl ModelError {
             ModelError::InvalidResponse { provider, .. } => format!(
                 "Penyedia model '{provider}' memberikan respons yang tidak dapat diproses. Coba lagi."
             ),
+            ModelError::UnsupportedProviderType {
+                provider,
+                provider_type,
+            } => format!(
+                "Tipe penyedia '{provider_type}' untuk '{provider}' tidak didukung. Gunakan 'ollama' atau 'gemini'."
+            ),
         }
     }
 }
@@ -133,7 +154,7 @@ pub struct DynamicModelProvider {
 }
 
 impl DynamicModelProvider {
-    pub fn from_configs(configs: &[ModelProviderConfig]) -> Self {
+    pub fn from_configs(configs: &[ModelProviderConfig]) -> Result<Self, ModelError> {
         let mut backends = HashMap::new();
         for config in configs {
             let models = config
@@ -141,12 +162,13 @@ impl DynamicModelProvider {
                 .iter()
                 .map(|model| model.name.clone())
                 .collect::<HashSet<_>>();
-            let backend = match config.kind {
-                ProviderKind::Ollama => ProviderBackend::Ollama(OllamaClient::new(
+
+            let backend = match config.provider_type.to_lowercase().as_str() {
+                "ollama" => ProviderBackend::Ollama(OllamaClient::new(
                     config.id.clone(),
                     config.endpoint.clone(),
                 )),
-                ProviderKind::Gemini => {
+                "gemini" => {
                     let resolved = resolve_api_key(config.id.as_str(), config.api_key.as_deref());
                     ProviderBackend::Gemini(GeminiClient::new(
                         config.id.clone(),
@@ -154,18 +176,25 @@ impl DynamicModelProvider {
                         resolved,
                     ))
                 }
+                other => {
+                    return Err(ModelError::unsupported_provider_type(
+                        config.id.clone(),
+                        other.to_string(),
+                    ));
+                }
             };
+
             backends.insert(
                 config.id.clone(),
                 ProviderRuntime {
                     _id: config.id.clone(),
-                    _kind: config.kind,
+                    _provider_type: config.provider_type.clone(),
                     models,
                     backend,
                 },
             );
         }
-        Self { backends }
+        Ok(Self { backends })
     }
 
     pub fn contains(&self, provider: &str) -> bool {
@@ -195,7 +224,7 @@ impl ModelProvider for DynamicModelProvider {
 #[derive(Clone)]
 struct ProviderRuntime {
     _id: String,
-    _kind: ProviderKind,
+    _provider_type: String,
     models: HashSet<String>,
     backend: ProviderBackend,
 }

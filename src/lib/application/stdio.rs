@@ -329,19 +329,11 @@ where
                 state.clear_steps();
             } else {
                 state.record_steps(steps);
-                write_line(stdout, "").await?;
-                write_line(
-                    stdout,
-                    "(Gunakan /steps untuk melihat detail eksekusi tool.)",
-                )
-                .await?;
             }
             if logs.is_empty() {
                 state.clear_logs();
             } else {
                 state.record_logs(logs);
-                write_line(stdout, "").await?;
-                write_line(stdout, "(Gunakan /log untuk melihat log terbaru.)").await?;
             }
         }
         Err(err) => {
@@ -418,8 +410,10 @@ async fn show_config<P: ModelProvider>(
     } else {
         write_line(stdout, "- Providers:").await?;
         for provider in &snapshot.providers {
-            let kind = format!("{:?}", provider.kind).to_ascii_lowercase();
-            let mut line = format!("  - {} [{}] -> {}", provider.id, kind, provider.endpoint);
+            let mut line = format!(
+                "  - {} [{}] -> {}",
+                provider.id, provider.provider_type, provider.endpoint
+            );
             if !provider.models.is_empty() {
                 let names: Vec<&str> = provider
                     .models
