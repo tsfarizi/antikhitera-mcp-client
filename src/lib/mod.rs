@@ -6,7 +6,7 @@ pub mod infrastructure;
 
 pub use application::{agent, client, stdio, tooling};
 pub use cli::{Cli, RunMode};
-pub use config::{AppConfig, ModelProviderConfig, ProviderKind};
+pub use config::{AppConfig, ModelProviderConfig};
 pub use domain::types;
 pub use infrastructure::{model, rpc, server};
 
@@ -23,7 +23,8 @@ use tracing::{debug, info, warn};
 use tracing_subscriber::{EnvFilter, fmt};
 
 pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
-    init_tracing();
+    let quiet_mode = matches!(cli.mode, RunMode::Stdio);
+    init_tracing(quiet_mode);
     info!("Starting antikhitera-mcp-client");
     debug!(
         mode = ?cli.mode,
@@ -47,7 +48,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         provider_count = providers.len(),
         "Initializing dynamic model providers"
     );
-    let provider = DynamicModelProvider::from_configs(&providers);
+    let provider = DynamicModelProvider::from_configs(&providers)?;
     let mut client_config = ClientConfig::new(
         file_config.default_provider.clone(),
         file_config.model.clone(),
@@ -115,10 +116,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn init_tracing() {
+fn init_tracing(quiet: bool) {
     static INIT: std::sync::Once = std::sync::Once::new();
     INIT.call_once(|| {
-        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        let filter = if quiet {
+            EnvFilter::new("off")
+        } else {
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+        };
         fmt()
             .with_env_filter(filter)
             .with_target(false)
@@ -153,7 +158,7 @@ fn load_prompt(cli: &Cli) -> Result<String, Box<dyn Error>> {
 
 fn apply_cli_overrides(cli: &Cli, providers: &mut [ModelProviderConfig]) {
     for provider in providers.iter_mut() {
-        if provider.kind == ProviderKind::Ollama {
+        if provider.is_ollama() {
             if provider.endpoint != cli.ollama_url {
                 info!(
                     provider = provider.id.as_str(),
