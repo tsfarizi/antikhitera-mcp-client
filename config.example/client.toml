@@ -1,0 +1,85 @@
+# MCP Client Configuration Template
+#
+# Copy this file to config/client.toml and customize for your setup.
+# See README.md for detailed configuration guide.
+
+# =============================================================================
+# BASIC SETTINGS
+# =============================================================================
+
+# Default LLM provider to use (must match a provider id below)
+default_provider = "cloud"
+
+# Default model for chat
+model = "default-model"
+
+# System prompt template (supports placeholders)
+# Placeholders:
+#   {{custom_instruction}} - User-provided instruction
+#   {{language_guidance}}  - Language detection guidance
+#   {{tool_guidance}}      - Available tools description
+prompt_template = """
+You are a helpful AI assistant.
+
+{{custom_instruction}}
+
+{{language_guidance}}
+
+{{tool_guidance}}
+
+Respond clearly and concisely.
+"""
+
+# Optional: Static system prompt (overrides template if set)
+# system_prompt = "You are a helpful assistant."
+
+# =============================================================================
+# PROVIDERS - Configure your LLM backends
+# =============================================================================
+
+# Cloud/External API Provider
+# Supported types: gemini, openai, anthropic, etc.
+[[providers]]
+id = "cloud"
+type = "gemini"                                      # Provider type
+endpoint = "https://api.example.com"                 # API endpoint
+api_key = "API_KEY_ENV_VAR"                          # Environment variable name
+models = [
+    { name = "default-model", display_name = "Default Model" },
+    { name = "fast-model", display_name = "Fast Model" },
+    { name = "pro-model", display_name = "Pro Model" },
+]
+
+# Local Provider (e.g., Ollama)
+[[providers]]
+id = "local"
+type = "ollama"
+endpoint = "http://127.0.0.1:11434"
+models = [
+    { name = "llama3", display_name = "Llama 3" },
+    { name = "mistral", display_name = "Mistral" },
+]
+
+# =============================================================================
+# MCP SERVERS - Define your tool servers
+# =============================================================================
+
+# Example server configuration:
+#
+# [[servers]]
+# name = "example"                    # Unique identifier
+# command = "/path/to/server-binary"  # Path to executable
+# args = ["--flag", "value"]          # Optional arguments
+# workdir = "/working/directory"      # Optional working directory
+# env = { KEY = "value" }             # Optional environment variables
+
+# =============================================================================
+# TOOLS - Bind tools to servers
+# =============================================================================
+
+# Example tool binding:
+#
+# [[tools]]
+# name = "tool_name"                  # Tool name (from server)
+# description = "What this tool does" # Override server description
+# server = "example"                  # Server that provides this tool
