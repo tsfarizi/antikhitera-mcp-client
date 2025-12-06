@@ -1,4 +1,4 @@
-use super::super::dto::{ConfigResponse, ConfigUpdateRequest, ErrorResponse};
+use super::super::dto::{ConfigResponse, ConfigUpdateRequest, ErrorResponse, ReloadResponse};
 use crate::config::{AppConfig, CONFIG_PATH};
 use crate::model::ModelProvider;
 use axum::Json;
@@ -114,4 +114,50 @@ pub async fn config_put_handler<P: ModelProvider>(
         providers: config.providers,
         raw,
     }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/reload",
+    tag = "config",
+    responses(
+        (status = 200, description = "Konfigurasi dimuat ulang dari file", body = ReloadResponse),
+        (status = 500, description = "Gagal memuat konfigurasi", body = ErrorResponse)
+    )
+)]
+pub async fn config_reload_handler<P: ModelProvider>(
+    State(_state): State<Arc<ServerState<P>>>,
+) -> Result<Json<ReloadResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let path = Path::new(CONFIG_PATH);
+
+    info!(path = %path.display(), "Reloading configuration from file");
+
+    match AppConfig::load(Some(path)) {
+        Ok(config) => {
+            let raw = std::fs::read_to_string(path).unwrap_or_else(|_| config.to_raw_toml());
+            let prompt_template = config.prompt_template.clone();
+
+            info!("Configuration reloaded successfully");
+
+            Ok(Json(ReloadResponse {
+                success: true,
+                message: "Konfigurasi berhasil dimuat ulang. Restart aplikasi untuk menerapkan perubahan.".to_string(),
+                config: Some(ConfigResponse {
+                    model: config.model,
+                    default_provider: config.default_provider,
+                    system_prompt: config.system_prompt,
+                    prompt_template,
+                    tools: config.tools,
+                    providers: config.providers,
+                    raw,
+                }),
+            }))
+        }
+        Err(error) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Gagal memuat konfigurasi: {error}"),
+            }),
+        )),
+    }
 }

@@ -1,6 +1,6 @@
 use crate::agent::{Agent, AgentOptions, AgentOutcome, AgentStep};
 use crate::client::{ChatRequest, McpClient};
-use crate::config::CONFIG_PATH;
+use crate::config::{AppConfig, CONFIG_PATH};
 use crate::model::ModelProvider;
 use serde_json::{Value, to_string_pretty};
 use std::fs;
@@ -159,6 +159,42 @@ async fn handle_command<P: ModelProvider>(
         "reset" | "clear" => {
             state.reset();
             write_line(stdout, "Riwayat sesi dihapus. Mulai sesi baru.").await?;
+            Ok(LoopControl::Continue)
+        }
+        "reload" => {
+            write_line(stdout, "\nMemuat ulang konfigurasi...").await?;
+            match AppConfig::load(Some(Path::new(CONFIG_PATH))) {
+                Ok(config) => {
+                    write_line(stdout, "Konfigurasi berhasil dimuat dari file.").await?;
+                    write_line(stdout, &format!("- Provider: {}", config.default_provider)).await?;
+                    write_line(stdout, &format!("- Model: {}", config.model)).await?;
+                    write_line(
+                        stdout,
+                        &format!(
+                            "- Prompt template: {} karakter",
+                            config.prompt_template.len()
+                        ),
+                    )
+                    .await?;
+                    write_line(stdout, &format!("- Providers: {}", config.providers.len())).await?;
+                    write_line(stdout, &format!("- Servers: {}", config.servers.len())).await?;
+                    write_line(stdout, &format!("- Tools: {}", config.tools.len())).await?;
+                    write_line(stdout, "").await?;
+                    write_line(
+                        stdout,
+                        "CATATAN: Perubahan konfigurasi akan berlaku setelah restart aplikasi.",
+                    )
+                    .await?;
+                    write_line(
+                        stdout,
+                        "Untuk menerapkan konfigurasi baru, gunakan /exit lalu jalankan ulang.",
+                    )
+                    .await?;
+                }
+                Err(error) => {
+                    write_line(stdout, &format!("Gagal memuat konfigurasi: {}", error)).await?;
+                }
+            }
             Ok(LoopControl::Continue)
         }
         "agent" => {
@@ -552,6 +588,11 @@ async fn print_help(stdout: &mut io::Stdout) -> io::Result<()> {
     write_line(
         stdout,
         "  /reset              Hapus session dan mulai percakapan baru",
+    )
+    .await?;
+    write_line(
+        stdout,
+        "  /reload             Muat ulang konfigurasi dari file",
     )
     .await?;
     write_line(stdout, "  /exit               Keluar dari mode STDIO").await?;

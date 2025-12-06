@@ -91,12 +91,44 @@ impl ModelProviderConfig {
         }
     }
 
-    /// Check if this is an Ollama provider
+    /// Check if this is an Ollama provider (case-insensitive).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use antikhitera_mcp_client::config::ModelProviderConfig;
+    ///
+    /// let provider = ModelProviderConfig {
+    ///     id: "local".to_string(),
+    ///     provider_type: "ollama".to_string(),
+    ///     endpoint: "http://localhost:11434".to_string(),
+    ///     api_key: None,
+    ///     models: vec![],
+    /// };
+    /// assert!(provider.is_ollama());
+    /// assert!(!provider.is_gemini());
+    /// ```
     pub fn is_ollama(&self) -> bool {
         self.provider_type.eq_ignore_ascii_case("ollama")
     }
 
-    /// Check if this is a Gemini provider
+    /// Check if this is a Gemini provider (case-insensitive).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use antikhitera_mcp_client::config::ModelProviderConfig;
+    ///
+    /// let provider = ModelProviderConfig {
+    ///     id: "google".to_string(),
+    ///     provider_type: "GEMINI".to_string(),
+    ///     endpoint: "https://example.com".to_string(),
+    ///     api_key: Some("key".to_string()),
+    ///     models: vec![],
+    /// };
+    /// assert!(provider.is_gemini());
+    /// assert!(!provider.is_ollama());
+    /// ```
     pub fn is_gemini(&self) -> bool {
         self.provider_type.eq_ignore_ascii_case("gemini")
     }
