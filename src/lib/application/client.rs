@@ -1,7 +1,5 @@
 use super::tooling::{ServerManager, ToolServerInterface};
-use crate::config::{
-    AppConfig, DEFAULT_PROMPT_TEMPLATE, ModelProviderConfig, ServerConfig, ToolConfig,
-};
+use crate::config::{AppConfig, ModelProviderConfig, ServerConfig, ToolConfig};
 use crate::model::{ModelError, ModelProvider, ModelRequest};
 use crate::types::{ChatMessage, MessageRole};
 use std::collections::HashMap;
@@ -65,10 +63,8 @@ impl ClientConfig {
         &self.providers
     }
 
-    pub fn prompt_template_or_default(&self) -> &str {
-        self.prompt_template
-            .as_deref()
-            .unwrap_or(DEFAULT_PROMPT_TEMPLATE)
+    pub fn prompt_template(&self) -> Option<&str> {
+        self.prompt_template.as_deref()
     }
 
     pub fn to_app_config(&self) -> AppConfig {
@@ -78,7 +74,7 @@ impl ClientConfig {
             system_prompt: self.default_system_prompt.clone(),
             tools: self.tools.clone(),
             servers: self.servers.clone(),
-            prompt_template: Some(self.prompt_template_or_default().to_string()),
+            prompt_template: self.prompt_template.clone().unwrap_or_default(),
             providers: self.providers.clone(),
         }
     }
@@ -161,7 +157,7 @@ impl<P: ModelProvider> McpClient<P> {
 
     pub fn config_snapshot(&self) -> ClientConfigSnapshot {
         let app_config = self.config.to_app_config();
-        let prompt_template = app_config.prompt_template_or_default().to_string();
+        let prompt_template = app_config.prompt_template.clone();
         let raw = app_config.to_raw_toml();
         ClientConfigSnapshot {
             model: app_config.model.clone(),
@@ -276,13 +272,14 @@ impl<P: ModelProvider> McpClient<P> {
     }
 
     fn compose_system_prompt(&self, override_prompt: Option<String>) -> String {
-        let template = self
-            .config
-            .prompt_template
-            .clone()
-            .unwrap_or_else(|| DEFAULT_PROMPT_TEMPLATE.to_string());
-
+        let template = self.config.prompt_template.clone().unwrap_or_default();
         let custom_instruction = override_prompt.unwrap_or_default();
+
+        // If no template is set, just return the custom instruction
+        if template.is_empty() {
+            return custom_instruction.trim().to_string();
+        }
+
         let tool_guidance = if self.config.tools.is_empty() {
             "Saat warga meminta layanan khusus di luar kemampuanmu saat ini, sampaikan permintaan maaf secara sopan dan jelaskan bahwa layanan tersebut belum tersedia. Tetap berikan alternatif manual atau informasi lain yang dapat membantu."
                 .to_string()
