@@ -4,6 +4,6 @@ use clap::Parser;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cli = Cli::parse();
-    cli.mode = RunMode::Stdio;
+    cli.mode = Some(RunMode::Stdio);
     antikhitera_mcp_client::run(cli).await
 }

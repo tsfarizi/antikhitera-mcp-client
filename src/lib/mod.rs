@@ -10,27 +10,28 @@ pub use config::{AppConfig, ModelProviderConfig};
 pub use domain::types;
 pub use infrastructure::{model, rpc, server};
 
-use application::agent::{Agent, AgentOptions};
-use application::client::{ChatRequest, ClientConfig, McpClient};
+use application::client::{ClientConfig, McpClient};
 use infrastructure::model::DynamicModelProvider;
-use serde_json::json;
 use std::error::Error;
-use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Write};
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, fmt};
 
 pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
-    let quiet_mode = matches!(cli.mode, RunMode::Stdio);
+    let mode = match cli.mode {
+        Some(m) => m,
+        None => select_mode_interactive()?,
+    };
+
+    let quiet_mode = matches!(mode, RunMode::Stdio | RunMode::All);
     init_tracing(quiet_mode);
-    info!("Starting antikhitera-mcp-client");
+    info!("Starting mcp");
     debug!(
-        mode = ?cli.mode,
+        mode = ?mode,
         config = ?cli.config,
         system = ?cli.system,
-        session = ?cli.session,
         "CLI arguments parsed"
     );
 
@@ -62,31 +63,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     }
     let client = Arc::new(McpClient::new(provider, client_config));
 
-    info!(mode = ?cli.mode, "Running client in selected mode");
-    match cli.mode {
-        RunMode::Cli => {
-            let prompt = load_prompt(&cli)?;
-            info!("Dispatching single prompt via CLI mode");
-            let result = client
-                .chat(ChatRequest {
-                    prompt,
-                    provider: None,
-                    model: None,
-                    system_prompt: None,
-                    session_id: cli.session.clone(),
-                })
-                .await?;
-
-            let output = json!({
-                "session_id": result.session_id,
-                "content": result.content,
-                "provider": result.provider,
-                "model": result.model,
-                "logs": result.logs,
-            });
-
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        }
+    info!(mode = ?mode, "Running client in selected mode");
+    match mode {
         RunMode::Stdio => {
             info!("Launching STDIO interactive chat interface");
             stdio::run(client.clone()).await?;
@@ -95,25 +73,81 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             info!(addr = %cli.rest_addr, "Starting REST server");
             server::serve(client.clone(), cli.rest_addr).await?;
         }
-        RunMode::Agent => {
-            let prompt = load_prompt(&cli)?;
-            let mut options = AgentOptions::default();
-            options.session_id = cli.session.clone();
-            options.system_prompt = cli.system.clone().or(file_config.system_prompt.clone());
-            info!("Executing agent workflow from CLI mode");
-            let agent = Agent::new(client.clone());
-            let outcome = agent.run(prompt, options).await?;
-            let output = json!({
-                "session_id": outcome.session_id,
-                "content": outcome.response,
-                "tool_steps": outcome.steps,
-                "logs": outcome.logs,
+        RunMode::All => {
+            info!(addr = %cli.rest_addr, "Starting both STDIO and REST server");
+            let rest_client = client.clone();
+            let rest_addr = cli.rest_addr;
+
+            // Spawn REST server in background
+            let rest_handle = tokio::spawn(async move {
+                if let Err(e) = server::serve(rest_client, rest_addr).await {
+                    tracing::error!(error = %e, "REST server error");
+                }
             });
-            println!("{}", serde_json::to_string_pretty(&output)?);
+
+            // Run STDIO in foreground
+            let stdio_result = stdio::run(client.clone()).await;
+
+            // When STDIO exits, abort REST server
+            rest_handle.abort();
+
+            stdio_result?;
         }
     }
     info!("Client execution finished");
     Ok(())
+}
+
+fn select_mode_interactive() -> Result<RunMode, Box<dyn Error>> {
+    let thread_count = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+
+    println!();
+
+    if thread_count <= 1 {
+        println!("Note: Only 1 thread available, cannot run both modes simultaneously.");
+        println!();
+        println!("Available modes:");
+        println!("  1. STDIO - Interactive chat");
+        println!("  2. REST  - API server");
+        println!();
+        print!("Select mode [1-2]: ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+
+        match input.trim() {
+            "1" | "stdio" => Ok(RunMode::Stdio),
+            "2" | "rest" => Ok(RunMode::Rest),
+            _ => {
+                println!("Invalid selection, defaulting to STDIO");
+                Ok(RunMode::Stdio)
+            }
+        }
+    } else {
+        println!("Available modes:");
+        println!("  1. STDIO - Interactive chat");
+        println!("  2. REST  - API server");
+        println!("  3. Both  - Run STDIO + REST simultaneously");
+        println!();
+        print!("Select mode [1-3]: ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+
+        match input.trim() {
+            "1" | "stdio" => Ok(RunMode::Stdio),
+            "2" | "rest" => Ok(RunMode::Rest),
+            "3" | "both" | "all" => Ok(RunMode::All),
+            _ => {
+                println!("Invalid selection, defaulting to STDIO");
+                Ok(RunMode::Stdio)
+            }
+        }
+    }
 }
 
 fn init_tracing(quiet: bool) {
@@ -132,30 +166,6 @@ fn init_tracing(quiet: bool) {
     });
 }
 
-fn load_prompt(cli: &Cli) -> Result<String, Box<dyn Error>> {
-    if let Some(path) = &cli.prompt_file {
-        info!(path = %path, "Loading prompt from file");
-        let content = fs::read_to_string(path)?;
-        return Ok(normalize_prompt(content));
-    }
-
-    if !cli.prompt.is_empty() {
-        info!("Using prompt provided through CLI arguments");
-        let joined = cli.prompt.join(" ");
-        return Ok(normalize_prompt(joined));
-    }
-
-    if atty::isnt(atty::Stream::Stdin) {
-        info!("Reading prompt from standard input");
-        let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer)?;
-        return Ok(normalize_prompt(buffer));
-    }
-
-    warn!("Prompt not provided via arguments, file, or stdin");
-    Err("prompt required via arguments, file, or stdin".into())
-}
-
 fn apply_cli_overrides(cli: &Cli, providers: &mut [ModelProviderConfig]) {
     for provider in providers.iter_mut() {
         if provider.is_ollama() {
@@ -169,8 +179,4 @@ fn apply_cli_overrides(cli: &Cli, providers: &mut [ModelProviderConfig]) {
             provider.endpoint = cli.ollama_url.clone();
         }
     }
-}
-
-fn normalize_prompt(prompt: String) -> String {
-    prompt.trim().to_string()
 }
