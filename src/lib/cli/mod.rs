@@ -4,7 +4,7 @@ use clap::{Parser, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "antikhitera-mcp-client",
+    name = "mcp",
     version,
     about = "MCP client dengan penyedia model yang dapat dikonfigurasi"
 )]
@@ -15,22 +15,18 @@ pub struct Cli {
     pub config: Option<String>,
     #[arg(long)]
     pub system: Option<String>,
-    #[arg(long)]
-    pub session: Option<String>,
-    #[arg(long)]
-    pub prompt_file: Option<String>,
-    #[arg(long, value_enum, default_value_t = RunMode::Cli)]
-    pub mode: RunMode,
+    #[arg(long, short, value_enum)]
+    pub mode: Option<RunMode>,
     #[arg(long, default_value = "127.0.0.1:8080")]
     pub rest_addr: SocketAddr,
-    #[arg()]
-    pub prompt: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum RunMode {
-    Cli,
+    /// Interactive STDIO mode
     Stdio,
+    /// REST API server
     Rest,
-    Agent,
+    /// Run both STDIO and REST simultaneously
+    All,
 }
