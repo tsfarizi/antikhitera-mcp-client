@@ -46,7 +46,7 @@ impl From<ToolContext> for ToolInventoryResponse {
     }
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ConfigResponse {
     pub model: String,
     pub default_provider: String,
@@ -63,4 +63,11 @@ pub struct ConfigUpdateRequest {
     pub default_provider: String,
     pub system_prompt: Option<String>,
     pub prompt_template: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ReloadResponse {
+    pub success: bool,
+    pub message: String,
+    pub config: Option<ConfigResponse>,
 }

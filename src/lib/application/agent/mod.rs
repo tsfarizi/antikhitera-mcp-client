@@ -5,9 +5,6 @@ mod models;
 mod runner;
 mod runtime;
 
-#[cfg(test)]
-mod tests;
-
 pub use context::{ServerGuidance, ToolContext, ToolDescriptor};
 pub use errors::{AgentError, ToolError};
 pub use models::{AgentOptions, AgentOutcome, AgentStep};

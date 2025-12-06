@@ -1,6 +1,6 @@
 use super::dto::{
-    ConfigResponse, ConfigUpdateRequest, ErrorResponse, RestChatRequest, RestChatResponse,
-    ToolInventoryResponse,
+    ConfigResponse, ConfigUpdateRequest, ErrorResponse, ReloadResponse, RestChatRequest,
+    RestChatResponse, ToolInventoryResponse,
 };
 use super::routes;
 use crate::agent::AgentStep;
@@ -16,7 +16,8 @@ use utoipa::OpenApi;
         routes::chat::chat_handler,
         routes::tools::tools_handler,
         routes::config::config_get_handler,
-        routes::config::config_put_handler
+        routes::config::config_put_handler,
+        routes::config::config_reload_handler
     ),
     components(
         schemas(
@@ -26,6 +27,7 @@ use utoipa::OpenApi;
             ToolInventoryResponse,
             ConfigResponse,
             ConfigUpdateRequest,
+            ReloadResponse,
             AgentStep,
             ToolConfig
         )

@@ -42,6 +42,7 @@ where
             get(routes::config::config_get_handler::<P>)
                 .put(routes::config::config_put_handler::<P>),
         )
+        .route("/reload", post(routes::config::config_reload_handler::<P>))
         .route("/rpc", post(handle_rpc::<P>))
         .layer(cors)
         .with_state(state);
