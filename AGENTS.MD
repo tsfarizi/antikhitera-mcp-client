@@ -1,66 +1,156 @@
-# AGENTS
+# 🤖 Agent Architecture
 
-## Pelayanan Publik Kelurahan Cakung Barat
+Dokumen ini menjelaskan arsitektur, peran, dan alur kerja Agent dalam sistem MCP Client.
 
-### Tujuan & Peran
-- Menyediakan pola dasar agentik yang dapat diarahkan ulang ke berbagai domain pelayanan melalui penyesuaian prompt dan daftar tool.
-- Menjaga interaksi yang empatik namun informatif; gaya komunikasi mengikuti panduan yang disusun di `config/client.toml` sehingga mudah diganti sesuai kebutuhan organisasi.
-- Agent aktif secara default pada mode `agent>` di antarmuka STDIO maupun JSON-RPC, memanfaatkan MCP tools untuk menyelesaikan tugas end-to-end sebelum mengembalikan jawaban final.
+---
 
-### Alur Kerja Utama
-- Titik masuk utama berada di `Agent::run`, yang dipanggil dari `src/lib/application/stdio.rs` dan `src/lib/infrastructure/rpc/server.rs` ketika mode agent aktif.
-- System prompt dibangun dari template di `config/client.toml` dan diperkuat oleh instruksi tambahan `ToolRuntime::compose_system_instructions`.
-- Setiap putaran percakapan mewajibkan output JSON valid: gunakan `{"action":"call_tool","tool":"...", "input":{...}}` untuk eksekusi berikutnya atau `{"action":"final","response":"..."}` saat jawaban sudah lengkap.
-- Agent otomatis menangani deteksi bahasa dan harus membalas dalam bahasa pengguna; tidak ada tool penerjemahan eksternal yang boleh dipanggil.
-- Batas interaksi tool adalah 8 langkah per sesi (`AgentOptions::max_steps`). Jika batas tercapai, agent me-return error ke pengguna.
+## 📋 Overview
 
-### Instruksi Sistem yang Terkandung
-- Tool dapat didaftarkan ulang oleh agent melalui `{"action":"call_tool","tool":"list_tools"}` untuk mendapatkan manifest terkini.
-- Jika tidak ada tool tersedia, agent harus mengandalkan jawaban langsung dari model.
-- Panduan tambahan dari MCP server (mis. instruksi server `time` atau `certificate`) disisipkan secara dinamis agar agent mengikuti SOP server terkait.
-- Hasil eksekusi tool dibungkus sebagai JSON `tool_result` yang kemudian diteruskan kembali ke model dalam putaran berikutnya, bersama petunjuk `"instruction": "..."` agar model tetap merespons dengan format yang benar.
+Agent adalah komponen inti yang bertindak sebagai orkestrator antara pengguna (User), Model Bahasa (LLM), dan MCP Tools. Agent bertanggung jawab untuk memahami maksud pengguna, memilih tool yang tepat, mengeksekusinya, dan merangkum hasil akhir.
 
-### Tooling yang Dikonsumsi
-- Built-in `list_tools`: mengembalikan daftar tool dan metadata yang sudah diperkaya oleh MCP bridge.
-- MCP server `time` menyediakan tool `get_current_time`.
-  - Deskripsi (`config/client.toml`): wajib dipanggil di awal percakapan untuk menentukan sapaan dan memperoleh jam akurat.
-  - Server ini menerima konfigurasi zona `Asia/Jakarta` dan kota `Jakarta`; metadata tambahan diambil dari server saat runtime.
-- MCP server `certificate` menyediakan tool `generate_surat_keterangan_domisili` untuk membuat surat domisili berformat PDF berdasarkan data warga.
-- Input schema, deskripsi, dan instruksi server diambil secara dinamis melalui `ToolRuntime::build_context`, sehingga perubahan di server akan otomatis tercermin tanpa harus mengubah kode.
+```mermaid
+graph TD
+    User([👤 User]) <-->|Input/Output| Agent[🤖 Agent]
+    
+    subgraph "Agent Brain"
+        Context[📝 Context & History]
+        Planner[🧠 Planner]
+    end
+    
+    subgraph "Capabilities"
+        LLM[☁️ Gemini / Ollama]
+        Tools[🛠️ MCP Tools]
+    end
+    
+    Agent --> Context
+    Agent --> Planner
+    Planner <--> LLM
+    Planner <-->|Call| Tools
+    
+    style Agent fill:#1a1a2e,stroke:#fff,color:#fff
+    style LLM fill:#0f3460,stroke:#fff,color:#fff
+    style Tools fill:#533483,stroke:#fff,color:#fff
+```
 
-### Konfigurasi Model & Provider
-- Provider bawaan: `gemini` dengan model default `gemini-2.5-flash`.
-- Provider lain yang sudah dikonfigurasi: Ollama (`gemma3:4b`).
-- `AgentOptions` memungkinkan override provider, model, dan system prompt; opsi ini dipermukaan melalui CLI `/agent` atau integrasi pemanggil lain.
-- Setiap permintaan ke model direkam di log (lihat `AgentOutcome.logs`) untuk membantu audit percakapan.
+---
 
-### Observabilitas & Mode STDIO
-- Gunakan perintah `/log` dan `/steps` di STDIO untuk memeriksa log model dan jejak pemanggilan tool terakhir.
-- `/agent on|off|toggle` mengatur apakah prompt berikutnya berjalan dalam mode agent atau langsung ke model.
-- `/reset` membersihkan `session_id` sehingga percakapan berikutnya tidak mewarisi konteks sebelumnya.
-- Output agent berakhir dengan ringkasan jawaban final yang dikirim sebagai pesan manusia biasa setelah siklus tool selesai.
+## ⚙️ Core Workflow
 
-### Prinsip Desain & Disiplin Kode
-- Terapkan `Separation of Concerns`: modul `application::agent`, `client`, `stdio`, dan `tooling` memiliki tanggung jawab terpisah (orchestrasi agent, komunikasi LLM, antarmuka CLI, dan jembatan MCP). Hindari mencampur logika antar lapisan.
-- Jaga modularitas dengan memecah fitur ke dalam modul kecil yang berkomunikasi melalui trait/struct publik (`ToolRuntime`, `ToolServerInterface`, `AgentOptions`) sehingga kode dapat diuji dan di-reuse.
-- Manfaatkan `Dependency Inversion` yang sudah ada: dependensi ke MCP server diinjeksikan lewat interface `ToolServerInterface` dan `Arc` sehingga implementasi server baru dapat ditambahkan tanpa mengubah agent.
-- Ikuti pola `async`/`await` berbasis Tokio untuk semua operasi I/O, mempertahankan non-blocking pipeline dan memudahkan integrasi dengan runtime lain.
-- Konsisten dengan error handling terstruktur menggunakan `thiserror`; selalu propagasikan `AgentError`/`ToolError` agar pengalaman pengguna tetap seragam.
-- Gunakan konfigurasi sebagai sumber kebenaran (`config/client.toml`), bukan konstanta di kode, untuk menjaga fleksibilitas perilaku agent.
+Alur kerja utama Agent (`Agent::run`) mengikuti siklus **Thought-Act-Observe** (ReAct pattern) dengan format komunikasi JSON yang ketat.
 
-### Penanganan Error
-- Tool yang tidak dikenal -> `ToolError::UnknownTool`, diteruskan ke pengguna sebagai informasi bahwa tool belum tersedia.
-- Tool tanpa binding server -> `ToolError::UnboundTool`, menunjukkan konfigurasi MCP perlu diperiksa.
-- Kegagalan eksekusi (termasuk respons error dari server) -> `ToolError::Execution`, pesan dari server diteruskan bila ada.
-- Respons model yang tidak memenuhi format JSON -> `AgentError::InvalidResponse`, dengan pesan ramah pengguna agar mencoba ulang.
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant L as LLM
+    participant T as Tool Runtime
+    participant S as MCP Server
+    
+    U->>A: "Buatkan surat domisili..."
+    
+    loop Thinking Loop (Max 8 Steps)
+        A->>L: Context + Available Tools
+        L-->>A: {"action": "call_tool", ...}
+        
+        alt Action == final
+            A->>U: Final Answer
+            Note right of A: Loop Ends
+        else Action == call_tool
+            A->>T: Execute Tool
+            T->>S: JSON-RPC Request
+            S-->>T: Result
+            T-->>A: Tool Output
+            A->>A: Append to History
+        end
+    end
+```
 
-### Pengujian & Pemeliharaan
-- Unit test agent berada di `src/lib/application/agent/tests.rs`; jalankan dengan `cargo test agent`.
-- Saat menambah tool baru:
-  1. Tambahkan entri di `config/client.toml` dengan nama, deskripsi, dan server tujuan.
-  2. Pastikan MCP server terkait memberikan metadata dan schema yang konsisten.
-  3. Sesuaikan dokumentasi SOP pada server agar agent menerima panduan yang benar melalui `server_instructions`.
+### 1. Inisialisasi
+- Memuat **System Prompt** dari `config/client.toml`.
+- Menyuntikkan **Tool Context** (daftar tool tersedia).
+- Menyuntikkan **Server Instructions** (SOP spesifik dari MCP server).
 
-### Catatan Untuk Pengembang
-- Perubahan pada prompt dasar sebaiknya dilakukan melalui `config/client.toml` agar tetap sinkron dengan konfigurasi UI/CLI lainnya.
-- Jika menambah mode interaksi baru (selain STDIO atau JSON-RPC), pastikan untuk menginisialisasi `AgentOptions` secara eksplisit dan menyalin pola log/step agar fitur observabilitas tetap tersedia.
+### 2. Siklus Eksekusi
+Model wajib merespons dalam format JSON:
+- **Call Tool**: `{"action":"call_tool", "tool":"nama_tool", "arguments":{...}}`
+- **Final Answer**: `{"action":"final", "response":"Jawaban akhir..."}`
+
+### 3. Tool Execution
+- Agent memanggil `ToolRuntime`.
+- Runtime meneruskan request ke MCP Server yang sesuai via JSON-RPC.
+- Hasil (output/error) dikembalikan ke Agent dan ditambahkan ke memori percakapan.
+
+---
+
+## 🛠️ Tool Integration
+
+Agent tidak memiliki tool "hardcoded". Semua tool berasal dari konfigurasi dinamis.
+
+```mermaid
+graph LR
+    Config["📄 client.toml"] -->|Defines| Bindings["🔗 Tool Bindings"]
+    Bindings -->|Maps to| Servers["🔌 MCP Servers"]
+    
+    subgraph "Available Tools"
+        T1["🕒 get_current_time"]
+        T2["📄 generate_certificate"]
+        T3["🔍 list_tools"]
+    end
+    
+    Servers -->|Provides| T1
+    Servers -->|Provides| T2
+    
+    style Config fill:#2d3436,color:#fff
+    style Bindings fill:#0984e3,color:#fff
+    style Servers fill:#6c5ce7,color:#fff
+```
+
+### Built-in Tools
+- **`list_tools`**: Kemampuan introspeksi agar agent bisa melihat daftar tool yang tersedia saat runtime.
+
+### External Tools (via MCP)
+- **Time Server**: Menyediakan waktu akurat, zona waktu.
+- **Certificate Server**: Generasi dokumen PDF, validasi data.
+
+---
+
+## 🧠 Configuration & Personality
+
+Perilaku agent sepenuhnya dikendalikan oleh konfigurasi, membuatnya mudah diadaptasi untuk berbagai domain (Pelayanan Publik, Coding Assistant, Data Analyst, dll).
+
+| Komponen | Lokasi Config | Deskripsi |
+|:---------|:--------------|:----------|
+| **Persona** | `prompt_template` | Instruksi dasar tentang siapa agent ini |
+| **Model** | `default_provider` | Otak di balik agent (Gemini, Ollama) |
+| **Tools** | `[[tools]]` | Kemampuan yang bisa dilakukan agent |
+| **Servers** | `[[servers]]` | Backend yang menjalankan tools |
+
+### Contoh Persona (Pelayanan Publik)
+> "Anda adalah asisten pelayanan publik yang ramah dan efisien. Jangan pernah menebak informasi waktu atau prosedur, selalu gunakan tool yang tersedia."
+
+---
+
+## 🛡️ Error Handling & Limits
+
+1. **Max Steps**: Dibatasi 8 langkah untuk mencegah infinite loop.
+2. **Invalid JSON**: Agent akan meminta model memperbaiki format output.
+3. **Tool Error**: Kesalahan tool akan dikembalikan ke model agar bisa dicoba ulang (self-correction).
+4. **Language**: Otomatis mendeteksi dan merespons dalam bahasa pengguna.
+
+---
+
+## 🧪 Observability
+
+Dalam mode STDIO, developer bisa memantau "pikiran" agent:
+
+- **`/log`**: Melihat raw conversation history antara Agent dan LLM.
+- **`/steps`**: Melihat urutan pemanggilan tool (Thought -> Action -> Observation).
+- **`/config`**: Memeriksa konfigurasi yang aktif saat ini.
+
+---
+
+## 📝 Developer Guidelines
+
+1. **Separation of Concerns**: Logika agent (`application::agent`) terpisah dari implementasi tool (`tooling`).
+2. **Stateless Tooling**: Agent menganggap tool stateless; context disimpan di percakapan.
+3. **Async/Await**: Semua I/O (LLM, MCP) bersifat non-blocking untuk performa tinggi.
