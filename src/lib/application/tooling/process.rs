@@ -527,3 +527,26 @@ struct ElicitationCreateParams {
     #[serde(rename = "requestedSchema", default)]
     _requested_schema: Value,
 }
+
+/// Spawn an MCP server process and list its available tools.
+/// Returns a list of (tool_name, description) pairs.
+pub async fn spawn_and_list_tools(
+    config: &crate::config::ServerConfig,
+) -> Result<Vec<(String, String)>, ToolInvokeError> {
+    let process = McpProcess::new(config.clone());
+    process.ensure_running().await?;
+
+    // Access the tool cache after initialization
+    let cache = process.inner.tool_cache.lock().await;
+    let tools: Vec<(String, String)> = cache
+        .values()
+        .map(|info| {
+            (
+                info.name.clone(),
+                info.description.clone().unwrap_or_default(),
+            )
+        })
+        .collect();
+
+    Ok(tools)
+}

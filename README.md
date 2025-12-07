@@ -129,7 +129,7 @@ flowchart LR
 
 ### Directory Structure
 
-```
+```text
 config/
 ├── client.toml    # Main configuration
 └── .env           # API keys (gitignored)
@@ -156,53 +156,9 @@ graph LR
     style Backends fill:#0984e3,stroke:#74b9ff,color:#fff
 ```
 
-<details>
-<summary><b>📄 Full Configuration Example</b></summary>
+### Full Configuration Example
 
-```toml
-# Basic Settings
-default_provider = "cloud"
-model = "default-model"
-
-prompt_template = """
-You are a helpful AI assistant.
-{{custom_instruction}}
-{{language_guidance}}
-{{tool_guidance}}
-"""
-
-# Cloud Provider
-[[providers]]
-id = "cloud"
-type = "gemini"
-endpoint = "https://api.example.com"
-api_key = "API_KEY_ENV_VAR"
-models = [
-    { name = "model-fast", display_name = "Fast Model" },
-    { name = "model-pro", display_name = "Pro Model" },
-]
-
-# Local Provider
-[[providers]]
-id = "local"
-type = "ollama"
-endpoint = "http://127.0.0.1:11434"
-models = [
-    { name = "llama3", display_name = "Llama 3" },
-]
-
-# MCP Server
-[[servers]]
-name = "my-tools"
-command = "/path/to/server"
-
-# Tool Binding
-[[tools]]
-name = "my_tool"
-server = "my-tools"
-```
-
-</details>
+See [config.example/client.toml](https://github.com/tsfarizi/antikhitera-mcp-client/blob/697899d85562d19467d22d59d0771322639201ea/config.example/client.toml) for the complete configuration reference with detailed comments.
 
 ---
 
@@ -226,8 +182,8 @@ server = "my-tools"
 | Command | Description |
 |:--------|:------------|
 | `/help` | 📖 Show commands |
-| `/config` | ⚙️ Display config |
-| `/reload` | 🔄 Reload config |
+| `/config` | ⚙️ Display configuration from `config/client.toml` |
+| `/reload` | 🔄 Reload current configuration |
 | `/reset` | 🗑️ Clear history |
 | `/exit` | 🚪 Exit app |
 
@@ -277,7 +233,7 @@ server = "my-server"
 
 ## 🧪 Development
 
-### Project Structure
+### Project Structure (Interactive)
 
 ```mermaid
 graph TD
@@ -294,19 +250,49 @@ graph TD
     LIB --> DOM[📋 domain<br/>Domain Types]
     LIB --> INF[🔧 infrastructure<br/>Infrastructure]
     
+    click MAIN "src/bin/main.rs"
+    click REST "src/bin/rest.rs"
+    click STD "src/bin/stdio.rs"
+    click APP "src/lib/application"
+    click CLI "src/lib/cli"
+    click CFG "src/lib/config"
+    click DOM "src/lib/domain"
+    click INF "src/lib/infrastructure"
+    
     style SRC fill:#2d3436,stroke:#636e72,color:#fff
     style BIN fill:#0984e3,stroke:#74b9ff,color:#fff
     style LIB fill:#6c5ce7,stroke:#a29bfe,color:#fff
 ```
 
-### Commands
+### 🛠️ Developer Commands
+
+#### Build & Run
 
 | Command | Description |
 |:--------|:------------|
-| `cargo build` | Build debug |
-| `cargo build --release` | Build release |
-| `cargo test` | Run all tests |
-| `cargo test --test config_loading_tests` | Specific test |
+| `cargo build` | 🔨 Build in debug mode |
+| `cargo build --release` | 🚀 Build for production |
+| `cargo run --bin mcp` | 🎮 Run interactive mode selector |
+| `cargo run --bin stdio` | 💬 Run directly in STDIO mode |
+| `cargo run --bin rest` | 🌐 Run directly in REST mode |
+| `cargo run --bin mcp -- -m all` | ⚡ Run both modes simultaneously |
+
+#### Testing
+
+| Command | Description |
+|:--------|:------------|
+| `cargo test` | 🧪 Run all tests |
+| `cargo test --test config_loading_tests` | 📄 Run specific integration test |
+| `cargo test --doc` | 📚 Run documentation tests |
+| `cargo test -- --nocapture` | 🗣️ Run tests showing output |
+
+#### Maintenance
+
+| Command | Description |
+|:--------|:------------|
+| `cargo fmt` | 🎨 Format code |
+| `cargo clippy` | 🔍 Lint code |
+| `cargo doc --open` | 📖 Generate and open docs |
 
 ---
 

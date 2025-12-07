@@ -225,7 +225,23 @@ async fn handle_command<P: ModelProvider>(
             Ok(LoopControl::Continue)
         }
         "config" => {
-            show_config(stdout, client).await?;
+            let action = args.first().map(|v| v.to_ascii_lowercase());
+            match action.as_deref() {
+                Some("edit") => {
+                    // Run the setup menu
+                    match crate::config::wizard::run_setup_menu().await {
+                        Ok(_) => {
+                            write_line(stdout, "\nKembali ke mode STDIO.").await?;
+                        }
+                        Err(e) => {
+                            write_line(stdout, &format!("Error dalam editor: {}", e)).await?;
+                        }
+                    }
+                }
+                _ => {
+                    show_config(stdout, client).await?;
+                }
+            }
             Ok(LoopControl::Continue)
         }
         "log" | "logs" => {
@@ -570,6 +586,11 @@ async fn print_help(stdout: &mut io::Stdout) -> io::Result<()> {
     write_line(stdout, "\nPerintah yang tersedia:").await?;
     write_line(stdout, "  /help               Tampilkan bantuan ini").await?;
     write_line(stdout, "  /config             Lihat konfigurasi MCP aktif").await?;
+    write_line(
+        stdout,
+        "  /config edit        Buka editor konfigurasi interaktif",
+    )
+    .await?;
     write_line(
         stdout,
         "  /log                Tampilkan log interaksi terakhir",

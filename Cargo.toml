@@ -2,6 +2,7 @@
 name = "antikhitera-mcp-client"
 version = "0.1.0"
 edition = "2024"
+default-run = "menu"
 
 [lib]
 path = "src/lib/mod.rs"
@@ -26,12 +27,14 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 tower-http = { version = "0.6", features = ["cors"] }
 dotenvy = "0.15"
 shellexpand = "3.0"
+ratatui = "0.29"
+crossterm = "0.28"
 
 [dev-dependencies]
 tempfile = "3.10"
 
 [[bin]]
-name = "mcp"
+name = "menu"
 path = "src/bin/main.rs"
 
 [[bin]]
