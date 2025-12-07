@@ -1,16 +1,179 @@
-# 🤖 Agent Architecture
+# 🤖 AGENTS.md - AI Coding Agent Guide
 
-Dokumen ini menjelaskan arsitektur, peran, dan alur kerja Agent dalam sistem MCP Client.
+> **Purpose**: Quick reference for AI coding agents to understand this codebase.
 
 ---
 
-## 📋 Overview
+## 📍 Repository Overview
 
-Agent adalah komponen inti yang bertindak sebagai orkestrator antara pengguna (User), Model Bahasa (LLM), dan MCP Tools. Agent bertanggung jawab untuk memahami maksud pengguna, memilih tool yang tepat, mengeksekusinya, dan merangkum hasil akhir.
+**What is this?** A Rust-based MCP (Model Context Protocol) client with:
+- Full TUI interface (Ratatui)
+- Multi-provider LLM support (Gemini, OpenAI, Ollama, Anthropic)
+- Agent mode with tool calling
+- REST API server
+
+**Tech Stack**: Rust 1.75+, Tokio (async), Ratatui (TUI), Axum (HTTP), Serde (JSON)
+
+---
+
+## 🗂️ File Map
+
+```
+src/
+├── bin/                    # Entry points
+│   ├── menu.rs            # Main TUI entry (cargo run)
+│   ├── rest.rs            # REST-only mode
+│   └── stdio.rs           # STDIO-only mode
+│
+└── lib/                    # Main library
+    ├── mod.rs             # Top-level orchestration, run() function
+    │
+    ├── application/       # Business logic layer
+    │   ├── agent/         # Agent with tool-calling loop
+    │   │   ├── runner.rs  # Core ReAct loop (thought → action → observe)
+    │   │   ├── parser.rs  # JSON response parsing
+    │   │   └── prompt.rs  # System prompt composition
+    │   ├── client.rs      # McpClient - main client facade
+    │   ├── stdio.rs       # Legacy text-based STDIO (deprecated)
+    │   └── tooling.rs     # Tool execution runtime
+    │
+    ├── cli/               # CLI argument parsing (clap)
+    │
+    ├── config/            # Configuration loading & wizard
+    │   ├── loader.rs      # TOML config parsing
+    │   ├── wizard/        # Interactive setup wizard
+    │   └── generator.rs   # Config file generation
+    │
+    ├── domain/            # Domain types (tool definitions, etc.)
+    │
+    ├── infrastructure/    # External integrations
+    │   ├── model/         # LLM provider implementations
+    │   │   ├── gemini.rs
+    │   │   ├── openai.rs
+    │   │   ├── ollama.rs
+    │   │   └── anthropic.rs
+    │   ├── server/        # REST API server (Axum)
+    │   └── rpc/           # JSON-RPC for MCP communication
+    │
+    └── tui/               # TUI layer (Ratatui)  ⭐ NEW
+        ├── terminal.rs    # Terminal init/restore, NavAction enum
+        ├── widgets/       # Reusable widgets (Menu, TableMenu)
+        └── screens/       # Screen modules
+            ├── mode_selector.rs   # Mode selection menu
+            ├── setup_menu/        # Configuration management
+            │   ├── mod.rs         # Main setup menu
+            │   ├── providers.rs   # Manage LLM providers
+            │   ├── models.rs      # Manage models
+            │   ├── servers.rs     # Manage MCP servers
+            │   ├── sync.rs        # Sync tools from servers
+            │   └── prompt.rs      # Edit prompt template
+            └── chat/              # Interactive chat ⭐ NEW (SOLID)
+                ├── state.rs       # ChatState, ChatMessage
+                ├── ui.rs          # Rendering (status, messages, input)
+                ├── input.rs       # Keyboard handling
+                └── runner.rs      # Async event loop
+```
+
+---
+
+## 🔑 Key Patterns
+
+### 1. Terminal Reference Passing
+TUI screens accept `&mut Tui` parameter to avoid reinitializing terminal:
+```rust
+pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<()>
+```
+
+### 2. NavAction Enum
+Single enum for all navigation actions in `tui/terminal.rs`:
+```rust
+pub enum NavAction {
+    Up, Down, Select, Back, ForceQuit, None
+}
+```
+- `q` key → `ForceQuit` (exits entire app)
+- `ESC` → `Back` (go back one screen)
+
+### 3. Async Channel Pattern (Chat)
+Chat uses `mpsc::channel` for async LLM responses:
+```rust
+let (response_tx, mut response_rx) = mpsc::channel::<ResponseEvent>(10);
+tokio::spawn(async move { send_message(..., tx).await; });
+// In loop: response_rx.try_recv()
+```
+
+### 4. Configuration Loading
+```rust
+let config = AppConfig::load(Some(Path::new(CONFIG_PATH)))?;
+```
+Config at `config/client.toml`, API keys in `config/.env`.
+
+### 5. Agent ReAct Loop
+Agent expects JSON responses from LLM:
+```json
+{"action": "call_tool", "tool": "tool_name", "arguments": {...}}
+{"action": "final", "response": "Final answer text"}
+```
+
+---
+
+## 🧭 Common Tasks
+
+### Add a new TUI screen
+1. Create `src/lib/tui/screens/your_screen.rs`
+2. Function signature: `pub fn run_your_screen(terminal: &mut Tui) -> Result<()>`
+3. Export in `screens/mod.rs`
+
+### Add a new LLM provider
+1. Implement `ModelProvider` trait in `infrastructure/model/`
+2. Add to `DynamicModelProvider::from_configs()`
+
+### Add a new command in chat
+1. Add variant to `CommandResult` in `chat/input.rs`
+2. Add to `parse_command()` match
+3. Handle in `handle_command()` in `chat/runner.rs`
+
+### Modify config structure
+1. Update structs in `config/loader.rs`
+2. Update wizard in `config/wizard/`
+3. Update `config.example/client.toml`
+
+---
+
+## ⚠️ Gotchas
+
+1. **PowerShell exit codes**: `cargo build` may show exit code 1 due to PowerShell parsing, check for "Finished" text instead.
+
+2. **Terminal state**: Always restore terminal on error paths to prevent broken terminal state.
+
+3. **Unused code warnings**: Legacy functions may exist for backwards compatibility, check `#[allow(dead_code)]`.
+
+4. **Async in TUI**: Use `tokio::task::block_in_place` or channels to bridge sync TUI with async operations.
+
+5. **Windows line endings**: Files may have CRLF endings.
+
+---
+
+## 🔧 Quick Commands
+
+```bash
+cargo run                    # TUI mode selector
+cargo run --bin stdio        # Direct STDIO mode
+cargo run --bin rest         # Direct REST mode
+cargo build                  # Build debug
+cargo clippy                 # Lint
+cargo fmt                    # Format
+```
+
+---
+
+## 📊 Agent Architecture
 
 ```mermaid
 graph TD
-    User([👤 User]) <-->|Input/Output| Agent[🤖 Agent]
+    User([👤 User]) <-->|Input/Output| TUI[🖥️ TUI Chat]
+    
+    TUI --> Agent[🤖 Agent]
     
     subgraph "Agent Brain"
         Context[📝 Context & History]
@@ -18,7 +181,7 @@ graph TD
     end
     
     subgraph "Capabilities"
-        LLM[☁️ Gemini / Ollama]
+        LLM[☁️ LLM Provider]
         Tools[🛠️ MCP Tools]
     end
     
@@ -27,6 +190,7 @@ graph TD
     Planner <--> LLM
     Planner <-->|Call| Tools
     
+    style TUI fill:#6c5ce7,stroke:#fff,color:#fff
     style Agent fill:#1a1a2e,stroke:#fff,color:#fff
     style LLM fill:#0f3460,stroke:#fff,color:#fff
     style Tools fill:#533483,stroke:#fff,color:#fff
@@ -34,123 +198,24 @@ graph TD
 
 ---
 
-## ⚙️ Core Workflow
+## 📝 Code Style
 
-Alur kerja utama Agent (`Agent::run`) mengikuti siklus **Thought-Act-Observe** (ReAct pattern) dengan format komunikasi JSON yang ketat.
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant A as Agent
-    participant L as LLM
-    participant T as Tool Runtime
-    participant S as MCP Server
-    
-    U->>A: "Buatkan surat domisili..."
-    
-    loop Thinking Loop (Max 8 Steps)
-        A->>L: Context + Available Tools
-        L-->>A: {"action": "call_tool", ...}
-        
-        alt Action == final
-            A->>U: Final Answer
-            Note right of A: Loop Ends
-        else Action == call_tool
-            A->>T: Execute Tool
-            T->>S: JSON-RPC Request
-            S-->>T: Result
-            T-->>A: Tool Output
-            A->>A: Append to History
-        end
-    end
-```
-
-### 1. Inisialisasi
-- Memuat **System Prompt** dari `config/client.toml`.
-- Menyuntikkan **Tool Context** (daftar tool tersedia).
-- Menyuntikkan **Server Instructions** (SOP spesifik dari MCP server).
-
-### 2. Siklus Eksekusi
-Model wajib merespons dalam format JSON:
-- **Call Tool**: `{"action":"call_tool", "tool":"nama_tool", "arguments":{...}}`
-- **Final Answer**: `{"action":"final", "response":"Jawaban akhir..."}`
-
-### 3. Tool Execution
-- Agent memanggil `ToolRuntime`.
-- Runtime meneruskan request ke MCP Server yang sesuai via JSON-RPC.
-- Hasil (output/error) dikembalikan ke Agent dan ditambahkan ke memori percakapan.
+- **Error handling**: Use `Box<dyn Error>` for flexibility, `thiserror` for custom errors
+- **Logging**: Use `tracing` crate (`info!`, `debug!`, `error!`)
+- **Async**: Tokio runtime, avoid blocking in async contexts
+- **TUI**: Ratatui with crossterm backend
+- **Config**: TOML format with serde
 
 ---
 
-## 🛠️ Tool Integration
+## 🔗 Key Dependencies
 
-Agent tidak memiliki tool "hardcoded". Semua tool berasal dari konfigurasi dinamis.
-
-```mermaid
-graph LR
-    Config["📄 client.toml"] -->|Defines| Bindings["🔗 Tool Bindings"]
-    Bindings -->|Maps to| Servers["🔌 MCP Servers"]
-    
-    subgraph "Available Tools"
-        T1["🕒 get_current_time"]
-        T2["📄 generate_certificate"]
-        T3["🔍 list_tools"]
-    end
-    
-    Servers -->|Provides| T1
-    Servers -->|Provides| T2
-    
-    style Config fill:#2d3436,color:#fff
-    style Bindings fill:#0984e3,color:#fff
-    style Servers fill:#6c5ce7,color:#fff
-```
-
-### Built-in Tools
-- **`list_tools`**: Kemampuan introspeksi agar agent bisa melihat daftar tool yang tersedia saat runtime.
-
-### External Tools (via MCP)
-- **Time Server**: Menyediakan waktu akurat, zona waktu.
-- **Certificate Server**: Generasi dokumen PDF, validasi data.
-
----
-
-## 🧠 Configuration & Personality
-
-Perilaku agent sepenuhnya dikendalikan oleh konfigurasi, membuatnya mudah diadaptasi untuk berbagai domain (Pelayanan Publik, Coding Assistant, Data Analyst, dll).
-
-| Komponen | Lokasi Config | Deskripsi |
-|:---------|:--------------|:----------|
-| **Persona** | `prompt_template` | Instruksi dasar tentang siapa agent ini |
-| **Model** | `default_provider` | Otak di balik agent (Gemini, Ollama) |
-| **Tools** | `[[tools]]` | Kemampuan yang bisa dilakukan agent |
-| **Servers** | `[[servers]]` | Backend yang menjalankan tools |
-
-### Contoh Persona (Pelayanan Publik)
-> "Anda adalah asisten pelayanan publik yang ramah dan efisien. Jangan pernah menebak informasi waktu atau prosedur, selalu gunakan tool yang tersedia."
-
----
-
-## 🛡️ Error Handling & Limits
-
-1. **Max Steps**: Dibatasi 8 langkah untuk mencegah infinite loop.
-2. **Invalid JSON**: Agent akan meminta model memperbaiki format output.
-3. **Tool Error**: Kesalahan tool akan dikembalikan ke model agar bisa dicoba ulang (self-correction).
-4. **Language**: Otomatis mendeteksi dan merespons dalam bahasa pengguna.
-
----
-
-## 🧪 Observability
-
-Dalam mode STDIO, developer bisa memantau "pikiran" agent:
-
-- **`/log`**: Melihat raw conversation history antara Agent dan LLM.
-- **`/steps`**: Melihat urutan pemanggilan tool (Thought -> Action -> Observation).
-- **`/config`**: Memeriksa konfigurasi yang aktif saat ini.
-
----
-
-## 📝 Developer Guidelines
-
-1. **Separation of Concerns**: Logika agent (`application::agent`) terpisah dari implementasi tool (`tooling`).
-2. **Stateless Tooling**: Agent menganggap tool stateless; context disimpan di percakapan.
-3. **Async/Await**: Semua I/O (LLM, MCP) bersifat non-blocking untuk performa tinggi.
+| Crate | Purpose |
+|:------|:--------|
+| `ratatui` | TUI framework |
+| `crossterm` | Terminal manipulation |
+| `tokio` | Async runtime |
+| `axum` | HTTP server |
+| `serde` | Serialization |
+| `clap` | CLI parsing |
+| `tracing` | Logging |
