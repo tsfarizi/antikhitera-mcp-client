@@ -3,6 +3,7 @@ pub mod cli;
 pub mod config;
 pub mod domain;
 pub mod infrastructure;
+pub mod tui;
 
 pub use application::{agent, client, stdio, tooling};
 pub use cli::{Cli, RunMode};
@@ -13,7 +14,6 @@ pub use infrastructure::{model, rpc, server};
 use application::client::{ClientConfig, McpClient};
 use infrastructure::model::DynamicModelProvider;
 use std::error::Error;
-use std::io::{self, Write};
 use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info};
@@ -25,6 +25,27 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         None => select_mode_interactive()?,
     };
 
+    // Handle Setup mode before loading config
+    if mode == RunMode::Setup {
+        match tui::screens::run_setup_menu() {
+            Ok(_) => {}
+            Err(e) => eprintln!("Setup error: {}", e),
+        }
+        // After setup, ask for mode again
+        return Box::pin(run(Cli { mode: None, ..cli })).await;
+    }
+
+    // Check if config exists, if not run wizard
+    let config_path = cli.config.as_deref().map(Path::new);
+    let default_config = Path::new(config::CONFIG_PATH);
+    let check_path = config_path.unwrap_or(default_config);
+
+    if !check_path.exists() {
+        println!();
+        println!("No configuration found at: {}", check_path.display());
+        config::wizard::run_wizard().await?;
+    }
+
     let quiet_mode = matches!(mode, RunMode::Stdio | RunMode::All);
     init_tracing(quiet_mode);
     info!("Starting mcp");
@@ -35,7 +56,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         "CLI arguments parsed"
     );
 
-    let config_path = cli.config.as_deref().map(Path::new);
     let file_config = AppConfig::load(config_path)?;
     if let Some(path) = config_path {
         info!(path = %path.display(), "Loaded configuration from file");
@@ -66,8 +86,15 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     info!(mode = ?mode, "Running client in selected mode");
     match mode {
         RunMode::Stdio => {
-            info!("Launching STDIO interactive chat interface");
-            stdio::run(client.clone()).await?;
+            info!("Launching TUI interactive chat interface");
+            let provider_name = file_config.default_provider.clone();
+            let model_name = file_config.model.clone();
+            match tui::screens::run_chat(client.clone(), provider_name, model_name).await {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Chat error: {}", e);
+                }
+            }
         }
         RunMode::Rest => {
             info!(addr = %cli.rest_addr, "Starting REST server");
@@ -93,59 +120,27 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 
             stdio_result?;
         }
+        RunMode::Setup => {
+            // Setup mode returns to mode selection after completion
+            unreachable!("Setup mode should be handled before config loading");
+        }
     }
     info!("Client execution finished");
     Ok(())
 }
 
 fn select_mode_interactive() -> Result<RunMode, Box<dyn Error>> {
-    let thread_count = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-
-    println!();
-
-    if thread_count <= 1 {
-        println!("Note: Only 1 thread available, cannot run both modes simultaneously.");
-        println!();
-        println!("Available modes:");
-        println!("  1. STDIO - Interactive chat");
-        println!("  2. REST  - API server");
-        println!();
-        print!("Select mode [1-2]: ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-
-        match input.trim() {
-            "1" | "stdio" => Ok(RunMode::Stdio),
-            "2" | "rest" => Ok(RunMode::Rest),
-            _ => {
-                println!("Invalid selection, defaulting to STDIO");
-                Ok(RunMode::Stdio)
-            }
+    match tui::screens::run_mode_selector() {
+        Ok(Some(mode)) => Ok(mode),
+        Ok(None) => {
+            // User quit
+            std::process::exit(0);
         }
-    } else {
-        println!("Available modes:");
-        println!("  1. STDIO - Interactive chat");
-        println!("  2. REST  - API server");
-        println!("  3. Both  - Run STDIO + REST simultaneously");
-        println!();
-        print!("Select mode [1-3]: ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-
-        match input.trim() {
-            "1" | "stdio" => Ok(RunMode::Stdio),
-            "2" | "rest" => Ok(RunMode::Rest),
-            "3" | "both" | "all" => Ok(RunMode::All),
-            _ => {
-                println!("Invalid selection, defaulting to STDIO");
-                Ok(RunMode::Stdio)
-            }
+        Err(e) => {
+            // Fallback to simple mode on TUI error
+            eprintln!("TUI error: {}", e);
+            eprintln!("Defaulting to STDIO mode");
+            Ok(RunMode::Stdio)
         }
     }
 }

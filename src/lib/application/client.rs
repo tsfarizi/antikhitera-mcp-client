@@ -80,7 +80,7 @@ impl ClientConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ChatRequest {
     pub prompt: String,
     pub provider: Option<String>,

@@ -29,4 +29,6 @@ pub enum RunMode {
     Rest,
     /// Run both STDIO and REST simultaneously
     All,
+    /// Configuration wizard/setup menu
+    Setup,
 }

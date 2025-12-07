@@ -5,6 +5,7 @@ pub mod provider;
 pub mod serializer;
 pub mod server;
 pub mod tool;
+pub mod wizard;
 
 /// Default config file path - can be overridden via CLI argument
 pub const CONFIG_PATH: &str = "config/client.toml";
