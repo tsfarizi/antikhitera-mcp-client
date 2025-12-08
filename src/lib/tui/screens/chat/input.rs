@@ -27,10 +27,8 @@ pub enum InputAction {
 /// Handle keyboard input and update state
 pub fn handle_input(state: &mut ChatState, event: Event) -> InputAction {
     if state.loading {
-        // Only allow exit when loading
         if let Event::Key(key) = event {
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                // TODO: Cancel request
                 return InputAction::None;
             }
             if key.code == KeyCode::Char('q')
@@ -51,23 +49,15 @@ pub fn handle_input(state: &mut ChatState, event: Event) -> InputAction {
 
 fn handle_key(state: &mut ChatState, key: KeyEvent) -> InputAction {
     use crossterm::event::KeyEventKind;
-
-    // Only handle key press events
     if key.kind != KeyEventKind::Press {
         return InputAction::None;
     }
-
-    // Force quit: Ctrl+Q or q (when input is empty)
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
         return InputAction::Exit;
     }
-
-    // Regular q to exit only when input is empty
     if key.code == KeyCode::Char('q') && state.input.is_empty() {
         return InputAction::Exit;
     }
-
-    // Ctrl+C to clear input
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         state.input.clear();
         state.cursor_pos = 0;
@@ -75,7 +65,6 @@ fn handle_key(state: &mut ChatState, key: KeyEvent) -> InputAction {
     }
 
     match key.code {
-        // Submit
         KeyCode::Enter => {
             if state.input.is_empty() {
                 return InputAction::None;
@@ -88,8 +77,6 @@ fn handle_key(state: &mut ChatState, key: KeyEvent) -> InputAction {
 
             InputAction::Submit
         }
-
-        // Escape to clear input
         KeyCode::Esc => {
             if !state.input.is_empty() {
                 state.input.clear();
@@ -97,20 +84,14 @@ fn handle_key(state: &mut ChatState, key: KeyEvent) -> InputAction {
             }
             InputAction::None
         }
-
-        // Backspace
         KeyCode::Backspace => {
             state.delete_char();
             InputAction::None
         }
-
-        // Delete
         KeyCode::Delete => {
             state.delete_char_forward();
             InputAction::None
         }
-
-        // Cursor movement
         KeyCode::Left => {
             state.move_cursor_left();
             InputAction::None
@@ -127,28 +108,19 @@ fn handle_key(state: &mut ChatState, key: KeyEvent) -> InputAction {
             state.move_cursor_end();
             InputAction::None
         }
-
-        // Scrolling
         KeyCode::Up | KeyCode::PageUp => InputAction::ScrollUp,
         KeyCode::Down | KeyCode::PageDown => InputAction::ScrollDown,
-
-        // Ctrl+Home/End for scroll to top/bottom
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             InputAction::ScrollTop
         }
         KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             InputAction::ScrollBottom
         }
-
-        // Character input
         KeyCode::Char(c) => {
             state.insert_char(c);
             InputAction::None
         }
-
-        // Tab - could be used for autocomplete
         KeyCode::Tab => {
-            // For now, insert spaces
             state.insert_char(' ');
             state.insert_char(' ');
             InputAction::None

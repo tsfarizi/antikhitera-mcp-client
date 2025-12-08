@@ -107,8 +107,6 @@ impl Menu {
             Constraint::Length(2), // Footer
         ])
         .split(area);
-
-        // Header
         let header = Paragraph::new(self.title.clone())
             .style(
                 Style::default()
@@ -118,16 +116,12 @@ impl Menu {
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::BOTTOM));
         frame.render_widget(header, chunks[0]);
-
-        // Subtitle
         if let Some(subtitle) = &self.subtitle {
             let sub = Paragraph::new(subtitle.clone())
                 .style(Style::default().fg(Color::DarkGray))
                 .alignment(Alignment::Center);
             frame.render_widget(sub, chunks[1]);
         }
-
-        // List items
         let items: Vec<ListItem> = self
             .items
             .iter()
@@ -152,8 +146,6 @@ impl Menu {
             .highlight_symbol("▶ ");
 
         frame.render_stateful_widget(list, chunks[2], &mut self.state);
-
-        // Footer
         let footer = Paragraph::new("↑↓ Navigate  Enter Select  Esc Back  q Quit")
             .style(Style::default().fg(Color::DarkGray))
             .alignment(Alignment::Center);
@@ -334,8 +326,6 @@ impl TableMenu {
             Constraint::Length(2), // Footer
         ])
         .split(area);
-
-        // Title
         let header = Paragraph::new(self.title.clone())
             .style(
                 Style::default()
@@ -345,23 +335,17 @@ impl TableMenu {
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::BOTTOM));
         frame.render_widget(header, chunks[0]);
-
-        // Subtitle
         if let Some(subtitle) = &self.subtitle {
             let sub = Paragraph::new(subtitle.clone())
                 .style(Style::default().fg(Color::DarkGray))
                 .alignment(Alignment::Center);
             frame.render_widget(sub, chunks[1]);
         }
-
-        // Table content area
         let content_chunks = Layout::vertical([
             Constraint::Min(0),                                  // Table
             Constraint::Length((self.actions.len() + 1) as u16), // Actions
         ])
         .split(chunks[2]);
-
-        // Build table
         let header_row = Row::new(
             self.headers
                 .iter()
@@ -403,8 +387,6 @@ impl TableMenu {
             .header(header_row.style(Style::default().fg(Color::Cyan)))
             .block(Block::default().borders(Borders::ALL));
         frame.render_widget(table, content_chunks[0]);
-
-        // Actions
         let action_items: Vec<ListItem> = self
             .actions
             .iter()
@@ -424,8 +406,6 @@ impl TableMenu {
 
         let actions_list = List::new(action_items);
         frame.render_widget(actions_list, content_chunks[1]);
-
-        // Footer
         let footer = Paragraph::new("↑↓ Navigate  Enter Select  Esc Back  q Quit")
             .style(Style::default().fg(Color::DarkGray))
             .alignment(Alignment::Center);

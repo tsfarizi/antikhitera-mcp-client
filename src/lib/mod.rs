@@ -24,18 +24,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Some(m) => m,
         None => select_mode_interactive()?,
     };
-
-    // Handle Setup mode before loading config
     if mode == RunMode::Setup {
         match tui::screens::run_setup_menu() {
             Ok(_) => {}
             Err(e) => eprintln!("Setup error: {}", e),
         }
-        // After setup, ask for mode again
         return Box::pin(run(Cli { mode: None, ..cli })).await;
     }
-
-    // Check if config exists, if not run wizard
     let config_path = cli.config.as_deref().map(Path::new);
     let default_config = Path::new(config::CONFIG_PATH);
     let check_path = config_path.unwrap_or(default_config);
@@ -104,24 +99,17 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             info!(addr = %cli.rest_addr, "Starting both STDIO and REST server");
             let rest_client = client.clone();
             let rest_addr = cli.rest_addr;
-
-            // Spawn REST server in background
             let rest_handle = tokio::spawn(async move {
                 if let Err(e) = server::serve(rest_client, rest_addr).await {
                     tracing::error!(error = %e, "REST server error");
                 }
             });
-
-            // Run STDIO in foreground
             let stdio_result = stdio::run(client.clone()).await;
-
-            // When STDIO exits, abort REST server
             rest_handle.abort();
 
             stdio_result?;
         }
         RunMode::Setup => {
-            // Setup mode returns to mode selection after completion
             unreachable!("Setup mode should be handled before config loading");
         }
     }
@@ -133,11 +121,9 @@ fn select_mode_interactive() -> Result<RunMode, Box<dyn Error>> {
     match tui::screens::run_mode_selector() {
         Ok(Some(mode)) => Ok(mode),
         Ok(None) => {
-            // User quit
             std::process::exit(0);
         }
         Err(e) => {
-            // Fallback to simple mode on TUI error
             eprintln!("TUI error: {}", e);
             eprintln!("Defaulting to STDIO mode");
             Ok(RunMode::Stdio)

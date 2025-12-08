@@ -18,8 +18,6 @@ pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<
 
     loop {
         let config = load_config()?;
-
-        // Build table rows - ID | Type | Endpoint
         let rows: Vec<TableRow> = config
             .providers
             .iter()
@@ -61,13 +59,11 @@ pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<
             }
             NavAction::Select => {
                 if menu.is_row_selected() {
-                    // Set this provider as default
                     let provider_id = &config.providers[menu.selected_index()].id;
                     generator::update_default_provider(provider_id)?;
                 } else if let Some(action_idx) = menu.selected_action_index() {
                     match action_idx {
                         0 => {
-                            // Add Provider(s) - stay in TUI
                             run_add_providers_tui(terminal)?;
                         }
                         1 => break, // Back
@@ -86,8 +82,6 @@ pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<
 /// Add providers using TUI (no native terminal)
 fn run_add_providers_tui(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
     use crate::config::wizard::generator;
-
-    // Show provider type selection menu
     let provider_types = vec![
         (
             "Gemini (Google)",
@@ -121,20 +115,14 @@ fn run_add_providers_tui(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
                 if let Some(idx) = menu.selected_index() {
                     if idx < provider_types.len() {
                         let (_, ptype, endpoint) = provider_types[idx];
-
-                        // Generate a unique ID for the provider
                         let config = load_config()?;
                         let id = format!("{}-{}", ptype, config.providers.len() + 1);
-
-                        // Add the provider
                         generator::add_provider(
                             &id,
                             ptype,
                             endpoint,
                             Some(&format!("{}_API_KEY", ptype.to_uppercase())),
                         )?;
-
-                        // Show success message
                         show_message_tui(
                             terminal,
                             &format!("✓ Provider '{}' added!", id),

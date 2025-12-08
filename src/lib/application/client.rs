@@ -274,8 +274,6 @@ impl<P: ModelProvider> McpClient<P> {
     fn compose_system_prompt(&self, override_prompt: Option<String>) -> String {
         let template = self.config.prompt_template.clone().unwrap_or_default();
         let custom_instruction = override_prompt.unwrap_or_default();
-
-        // If no template is set, just return the custom instruction
         if template.is_empty() {
             return custom_instruction.trim().to_string();
         }
@@ -302,14 +300,10 @@ impl<P: ModelProvider> McpClient<P> {
             .replace("{{language_guidance}}", LANGUAGE_GUIDANCE)
             .replace("{{tool_guidance}}", tool_guidance.trim())
             .replace("{{custom_instruction}}", custom_instruction.trim());
-
-        // Clean leftover placeholders if template omits them.
         prompt = prompt
             .replace("{{language_guidance}}", "")
             .replace("{{tool_guidance}}", "")
             .replace("{{custom_instruction}}", "");
-
-        // Normalise whitespace while preserving intentional blank lines.
         let mut cleaned = Vec::new();
         let mut previous_blank = false;
         for line in prompt.lines().map(|line| line.trim_end()) {

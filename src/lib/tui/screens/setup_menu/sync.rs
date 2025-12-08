@@ -20,14 +20,11 @@ pub fn run_sync_single_server_tui(
     command: &str,
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
-    // Show syncing status
     show_status_tui(
         terminal,
         &format!("🔄 Syncing: {}", name),
         "⏳ Connecting to server...",
     )?;
-
-    // Get existing tools for this server before sync
     let config = load_config()?;
     let existing_tools: HashSet<String> = config
         .tools
@@ -45,8 +42,6 @@ pub fn run_sync_single_server_tui(
         default_timezone: None,
         default_city: None,
     };
-
-    // Run async using current runtime handle
     let handle = tokio::runtime::Handle::current();
     let result =
         tokio::task::block_in_place(|| handle.block_on(spawn_and_list_tools(&server_config)));
@@ -65,8 +60,6 @@ pub fn run_sync_single_server_tui(
                     }
                     tool_data.push((tool_name.clone(), description.clone()));
                 }
-
-                // Write to config
                 generator::sync_tools_from_server(name, tool_data)?;
 
                 show_result_tui(
@@ -102,14 +95,11 @@ pub fn run_sync_all_servers_tui(
     let mut results: Vec<(String, bool, usize, usize)> = Vec::new();
 
     for server in &config.servers {
-        // Show progress
         show_status_tui(
             terminal,
             "🔄 Syncing All Servers",
             &format!("⏳ Syncing: {}...", server.name),
         )?;
-
-        // Get existing tools for this server
         let current_config = load_config()?;
         let existing_tools: HashSet<String> = current_config
             .tools
@@ -154,8 +144,6 @@ pub fn run_sync_all_servers_tui(
             }
         }
     }
-
-    // Show final summary
     show_all_results_tui(terminal, &results)?;
 
     Ok(())
@@ -226,7 +214,7 @@ fn show_result_tui(
         let action = NavAction::from(read_key()?);
         if matches!(
             action,
-            NavAction::Select | NavAction::Back |  NavAction::ForceQuit
+            NavAction::Select | NavAction::Back | NavAction::ForceQuit
         ) {
             break;
         }
@@ -295,7 +283,7 @@ fn show_all_results_tui(
         let action = NavAction::from(read_key()?);
         if matches!(
             action,
-            NavAction::Select | NavAction::Back |  NavAction::ForceQuit
+            NavAction::Select | NavAction::Back | NavAction::ForceQuit
         ) {
             break;
         }

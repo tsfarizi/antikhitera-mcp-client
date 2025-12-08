@@ -52,8 +52,6 @@ pub enum NavAction {
 impl From<KeyEvent> for NavAction {
     fn from(key: KeyEvent) -> Self {
         use crossterm::event::KeyModifiers;
-
-        // Ctrl+Q = Force quit entire app
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
             return NavAction::ForceQuit;
         }

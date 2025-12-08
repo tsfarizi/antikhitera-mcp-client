@@ -16,8 +16,6 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
     ui::print_header("MCP Client - Configuration Wizard");
     ui::print_info("Welcome! No configuration found.");
     ui::print_info("Let's set up your MCP client.\n");
-
-    // Provider setup
     ui::print_section("PROVIDER SETUP");
 
     let provider_type = prompts::prompt_text("Provider Type (e.g. gemini, ollama, openai)", None)?;
@@ -35,22 +33,16 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
 
     let api_key_env = format!("{}_API_KEY", provider_type.to_uppercase());
     let api_key = prompts::prompt_password(&format!("API Key (saved to .env as {})", api_key_env))?;
-
-    // Models setup
     ui::print_section("MODELS");
     let models = prompts::prompt_models()?;
 
     if models.is_empty() {
         return Err("At least one model is required".into());
     }
-
-    // Default model
     ui::print_section("DEFAULT MODEL");
     let model_names: Vec<&str> = models.iter().map(|(name, _)| name.as_str()).collect();
     ui::print_info(&format!("Available: {}", model_names.join(", ")));
     let default_model = prompts::prompt_text("Default model", Some(&models[0].0))?;
-
-    // Generate config
     generator::generate_config(
         &provider_id,
         &provider_type_display,
@@ -94,10 +86,6 @@ pub async fn run_setup_menu() -> Result<bool, Box<dyn Error>> {
     }
 }
 
-// ============================================================================
-// Provider Management
-// ============================================================================
-
 async fn manage_providers() -> Result<(), Box<dyn Error>> {
     ui::print_header("Manage Providers");
 
@@ -107,8 +95,6 @@ async fn manage_providers() -> Result<(), Box<dyn Error>> {
         ui::print_warning("No providers configured.");
         return Ok(());
     }
-
-    // Show current providers with default indicator
     ui::print_info("Current providers:");
     for (i, provider) in config.providers.iter().enumerate() {
         let default_marker = if provider.id == config.default_provider {
@@ -174,10 +160,6 @@ async fn manage_providers() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// ============================================================================
-// Model Management
-// ============================================================================
-
 async fn manage_models() -> Result<(), Box<dyn Error>> {
     ui::print_header("Manage Models");
 
@@ -187,8 +169,6 @@ async fn manage_models() -> Result<(), Box<dyn Error>> {
         ui::print_warning("No providers configured. Add a provider first.");
         return Ok(());
     }
-
-    // Select provider
     ui::print_info("Select provider:");
     for (i, provider) in config.providers.iter().enumerate() {
         let model_count = provider.models.len();
@@ -219,8 +199,6 @@ async fn manage_models() -> Result<(), Box<dyn Error>> {
 
     let provider = &config.providers[index];
     ui::print_section(&format!("Models for: {}", provider.id));
-
-    // Show current models with default indicator
     if provider.models.is_empty() {
         ui::print_info("No models configured.");
     } else {
@@ -302,10 +280,6 @@ async fn manage_models() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// ============================================================================
-// Server Management
-// ============================================================================
-
 async fn manage_servers() -> Result<(), Box<dyn Error>> {
     ui::print_header("MCP Servers");
 
@@ -365,8 +339,6 @@ async fn add_server() -> Result<(), Box<dyn Error>> {
 
     generator::add_server_to_config(&name, &command, &args_vec)?;
     ui::print_success(&format!("Server '{}' added!", name));
-
-    // Offer to sync tools immediately
     if prompts::prompt_confirm("Sync tools from this server now?", true)? {
         sync_tools_from_single_server(&name, &command, &args_vec).await?;
     }
@@ -406,10 +378,6 @@ async fn remove_server(config: &AppConfig) -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-// ============================================================================
-// Tool Sync
-// ============================================================================
 
 async fn sync_tools() -> Result<(), Box<dyn Error>> {
     ui::print_header("Sync Tools from Servers");
@@ -469,8 +437,6 @@ async fn sync_tools_from_single_server(
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
     ui::print_info(&format!("\nConnecting to server '{}'...", name));
-
-    // Build server config for connection
     use crate::config::ServerConfig;
     use crate::tooling::spawn_and_list_tools;
     use std::collections::HashMap;
@@ -485,8 +451,6 @@ async fn sync_tools_from_single_server(
         default_timezone: None,
         default_city: None,
     };
-
-    // Try to connect and list tools
     match spawn_and_list_tools(&server_config).await {
         Ok(tools) => {
             if tools.is_empty() {
@@ -499,8 +463,6 @@ async fn sync_tools_from_single_server(
                     println!("    • {} - {}", tool_name, desc_preview);
                     tool_data.push((tool_name.clone(), description.clone()));
                 }
-
-                // Write to config
                 generator::sync_tools_from_server(name, tool_data)?;
                 ui::print_success(&format!("Synced {} tools from '{}'!", tools.len(), name));
             }
@@ -513,10 +475,6 @@ async fn sync_tools_from_single_server(
     Ok(())
 }
 
-// ============================================================================
-// Prompt Template
-// ============================================================================
-
 async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
     ui::print_header("Edit Prompt Template");
 
@@ -524,8 +482,6 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
 
     ui::print_info("Current prompt template:");
     ui::print_divider();
-
-    // Show current template (truncated if too long)
     let preview: String = config
         .prompt_template
         .lines()
@@ -579,10 +535,6 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 fn load_config() -> Result<AppConfig, Box<dyn Error>> {
     AppConfig::load(Some(Path::new(CONFIG_PATH))).map_err(|e| Box::new(e) as Box<dyn Error>)
