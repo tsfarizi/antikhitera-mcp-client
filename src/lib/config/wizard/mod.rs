@@ -77,7 +77,7 @@ pub async fn run_setup_menu() -> Result<bool, Box<dyn Error>> {
         println!("  [2] Manage Models");
         println!("  [3] Manage MCP Servers");
         println!("  [4] Sync Tools from Servers");
-        println!("  [5] Edit Prompt Template");
+        println!("  [5] Manage Prompt Template");
         println!("  [0] Back\n");
 
         let choice = prompts::prompt_text("Select option", None)?;
@@ -484,7 +484,7 @@ async fn sync_tools_from_single_server(
 }
 
 async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
-    ui::print_header("Edit Prompt Template");
+    ui::print_header("Manage Prompt Template");
 
     let config = load_config()?;
 

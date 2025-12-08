@@ -17,8 +17,9 @@ pub struct Cli {
     pub system: Option<String>,
     #[arg(long, short, value_enum)]
     pub mode: Option<RunMode>,
-    #[arg(long, default_value = "127.0.0.1:8080")]
-    pub rest_addr: SocketAddr,
+    /// REST API bind address (overrides config if specified)
+    #[arg(long)]
+    pub rest_addr: Option<SocketAddr>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]

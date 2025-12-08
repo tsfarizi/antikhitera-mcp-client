@@ -19,7 +19,7 @@ const DEFAULT_TEMPLATE: &str = r#"You are a helpful AI assistant.
 
 {{tool_guidance}}"#;
 
-/// Edit prompt template screen (uses existing terminal)
+/// Manage Prompt Template screen (uses existing terminal)
 pub fn run_edit_prompt_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
     let mut selected_idx: usize = 0;
 
@@ -44,7 +44,7 @@ pub fn run_edit_prompt_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn E
             MenuItem::new("← Back"),
         ];
 
-        let mut menu = Menu::new("📝 Edit Prompt Template", items)
+        let mut menu = Menu::new("📝 Manage Prompt Template", items)
             .with_subtitle(format!("Current: {}", preview_short));
         menu.select(selected_idx);
 

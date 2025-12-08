@@ -66,7 +66,7 @@ src/
             │   ├── models.rs      # Manage models
             │   ├── servers.rs     # Manage MCP servers
             │   ├── sync.rs        # Sync tools from servers
-            │   └── prompt.rs      # Edit prompt template
+            │   └── prompt.rs      # Manage Prompt Template
             └── chat/              # Interactive chat ⭐ NEW (SOLID)
                 ├── state.rs       # ChatState, ChatMessage
                 ├── ui.rs          # Rendering (status, messages, input)

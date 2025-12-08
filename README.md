@@ -201,7 +201,7 @@ flowchart TD
     SETUP["⚙️ Setup Menu"] --> PROV["Manage Providers"]
     SETUP --> MODEL["Manage Models"]
     SETUP --> SRV["Manage MCP Servers"]
-    SETUP --> PROMPT["Edit Prompt Template"]
+    SETUP --> PROMPT["Manage Prompt Template"]
     
     PROV --> ADD_P["Add Provider"]
     PROV --> VIEW_P["View/Remove"]
