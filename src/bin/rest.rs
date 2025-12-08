@@ -22,9 +22,9 @@ struct Args {
     #[arg(short, long)]
     config: Option<String>,
 
-    /// REST API bind address
-    #[arg(long, default_value = "127.0.0.1:8080")]
-    addr: SocketAddr,
+    /// REST API bind address (overrides config if specified)
+    #[arg(long)]
+    addr: Option<SocketAddr>,
 }
 
 #[tokio::main]
@@ -39,6 +39,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     debug!(provider = %file_config.default_provider, model = %file_config.model, "Configuration loaded");
 
+    // Use CLI addr if provided, otherwise use config bind address
+    let addr: SocketAddr = args.addr.unwrap_or_else(|| {
+        file_config
+            .rest_server
+            .bind
+            .parse()
+            .expect("Invalid bind address in config")
+    });
+
     let provider = DynamicModelProvider::from_configs(&file_config.providers)?;
     let client_config = ClientConfig::new(
         file_config.default_provider.clone(),
@@ -51,10 +60,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let client = Arc::new(McpClient::new(provider, client_config));
 
-    info!(addr = %args.addr, "REST server starting");
+    info!(addr = %addr, "REST server starting");
     let cors_origins = &file_config.rest_server.cors_origins;
     let doc_servers = &file_config.rest_server.docs;
-    server::serve(client, args.addr, cors_origins, doc_servers).await?;
+    server::serve(client, addr, cors_origins, doc_servers).await?;
 
     Ok(())
 }

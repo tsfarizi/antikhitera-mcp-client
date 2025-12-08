@@ -6,14 +6,31 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// REST server configuration
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RestServerConfig {
+    /// Server bind address (e.g., "127.0.0.1:8080")
+    #[serde(default = "default_bind")]
+    pub bind: String,
     /// CORS allowed origins
     #[serde(default)]
     pub cors_origins: Vec<String>,
     /// API documentation servers
     #[serde(default)]
     pub docs: Vec<DocServerConfig>,
+}
+
+fn default_bind() -> String {
+    "127.0.0.1:8080".to_string()
+}
+
+impl Default for RestServerConfig {
+    fn default() -> Self {
+        Self {
+            bind: default_bind(),
+            cors_origins: Vec::new(),
+            docs: Vec::new(),
+        }
+    }
 }
 
 /// API documentation server entry

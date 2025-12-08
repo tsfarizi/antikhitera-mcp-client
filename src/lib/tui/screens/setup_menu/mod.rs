@@ -26,7 +26,7 @@ pub fn run_setup_menu() -> Result<SetupResult, Box<dyn Error>> {
         MenuItem::new("Manage Providers"),
         MenuItem::new("Manage Models"),
         MenuItem::new("Manage MCP Servers"),
-        MenuItem::new("Edit Prompt Template"),
+        MenuItem::new("Manage Prompt Template"),
         MenuItem::new("← Back"),
     ];
 

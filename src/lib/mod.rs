@@ -93,15 +93,30 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             }
         }
         RunMode::Rest => {
-            info!(addr = %cli.rest_addr, "Starting REST server");
+            // Use CLI addr if provided, otherwise use config bind address
+            let addr: std::net::SocketAddr = cli.rest_addr.unwrap_or_else(|| {
+                file_config
+                    .rest_server
+                    .bind
+                    .parse()
+                    .expect("Invalid bind address in config")
+            });
+            info!(addr = %addr, "Starting REST server");
             let cors_origins = &file_config.rest_server.cors_origins;
             let doc_servers = &file_config.rest_server.docs;
-            server::serve(client.clone(), cli.rest_addr, cors_origins, doc_servers).await?;
+            server::serve(client.clone(), addr, cors_origins, doc_servers).await?;
         }
         RunMode::All => {
-            info!(addr = %cli.rest_addr, "Starting both STDIO and REST server");
+            // Use CLI addr if provided, otherwise use config bind address
+            let rest_addr: std::net::SocketAddr = cli.rest_addr.unwrap_or_else(|| {
+                file_config
+                    .rest_server
+                    .bind
+                    .parse()
+                    .expect("Invalid bind address in config")
+            });
+            info!(addr = %rest_addr, "Starting both STDIO and REST server");
             let rest_client = client.clone();
-            let rest_addr = cli.rest_addr;
             let cors_origins = file_config.rest_server.cors_origins.clone();
             let doc_servers = file_config.rest_server.docs.clone();
             let rest_handle = tokio::spawn(async move {

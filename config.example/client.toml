@@ -38,6 +38,9 @@ models = [
 # =============================================================================
 
 [server]
+# REST API bind address
+bind = "127.0.0.1:8080"
+
 # CORS allowed origins (leave empty for permissive)
 cors_origins = [
     "http://localhost:5173",
