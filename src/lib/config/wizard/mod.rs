@@ -4,10 +4,12 @@
 //! and edit functionality for existing configurations.
 
 pub mod generator;
+pub mod generators;
 pub mod prompts;
 pub mod ui;
 
 use crate::config::{AppConfig, CONFIG_PATH};
+use generators::{client, model};
 use std::error::Error;
 use std::path::Path;
 
@@ -43,19 +45,25 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
     let model_names: Vec<&str> = models.iter().map(|(name, _)| name.as_str()).collect();
     ui::print_info(&format!("Available: {}", model_names.join(", ")));
     let default_model = prompts::prompt_text("Default model", Some(&models[0].0))?;
-    generator::generate_config(
+
+    // Generate client.toml (providers, servers, REST settings)
+    client::generate(
         &provider_id,
         &provider_type_display,
         &endpoint,
         &api_key_env,
-        &default_model,
         &models,
     )?;
 
-    generator::generate_env(&api_key_env, &api_key)?;
+    // Generate model.toml (default_provider, model, prompt_template, tools)
+    model::generate(&provider_id, &default_model)?;
+
+    // Generate .env file
+    client::generate_env(&api_key_env, &api_key)?;
 
     ui::print_success("Configuration saved!");
     ui::print_info("  → config/client.toml");
+    ui::print_info("  → config/model.toml");
     ui::print_info("  → config/.env");
 
     Ok(())
@@ -139,7 +147,7 @@ async fn manage_providers() -> Result<(), Box<dyn Error>> {
             let current_api_key = provider.api_key.as_deref().unwrap_or("");
             let new_api_key_env = prompts::prompt_text("API Key env var", Some(current_api_key))?;
 
-            generator::update_provider(&provider.id, &new_endpoint, &new_api_key_env)?;
+            client::update_provider(&provider.id, &new_endpoint, &new_api_key_env)?;
             ui::print_success("Provider updated!");
         }
         "2" => {
@@ -148,7 +156,7 @@ async fn manage_providers() -> Result<(), Box<dyn Error>> {
                 Ok(0) => return Ok(()),
                 Ok(n) if n <= config.providers.len() => {
                     let provider_id = &config.providers[n - 1].id;
-                    generator::update_default_provider(provider_id)?;
+                    model::update_default_provider(provider_id)?;
                     ui::print_success(&format!("Default provider set to '{}'!", provider_id));
                 }
                 _ => ui::print_error("Invalid selection"),
@@ -237,7 +245,7 @@ async fn manage_models() -> Result<(), Box<dyn Error>> {
             }
             let display_name = generate_display_name(&model_name);
             ui::print_hint(&format!("Display: {}", display_name));
-            generator::add_model_to_provider(&provider.id, &model_name, &display_name)?;
+            client::add_model_to_provider(&provider.id, &model_name, &display_name)?;
             ui::print_success(&format!("Model '{}' added!", model_name));
         }
         "2" => {
@@ -255,7 +263,7 @@ async fn manage_models() -> Result<(), Box<dyn Error>> {
                 }
             };
             let model_name = &provider.models[model_idx].name;
-            generator::remove_model_from_provider(&provider.id, model_name)?;
+            client::remove_model_from_provider(&provider.id, model_name)?;
             ui::print_success(&format!("Model '{}' removed!", model_name));
         }
         "3" => {
@@ -268,7 +276,7 @@ async fn manage_models() -> Result<(), Box<dyn Error>> {
                 Ok(0) => return Ok(()),
                 Ok(n) if n <= provider.models.len() => {
                     let model_name = &provider.models[n - 1].name;
-                    generator::update_default_model(model_name)?;
+                    model::update_default_model(model_name)?;
                     ui::print_success(&format!("Default model set to '{}'!", model_name));
                 }
                 _ => ui::print_error("Invalid selection"),
@@ -337,7 +345,7 @@ async fn add_server() -> Result<(), Box<dyn Error>> {
         args.split(',').map(|s| s.trim().to_string()).collect()
     };
 
-    generator::add_server_to_config(&name, &command, &args_vec)?;
+    client::add_server(&name, &command, &args_vec)?;
     ui::print_success(&format!("Server '{}' added!", name));
     if prompts::prompt_confirm("Sync tools from this server now?", true)? {
         sync_tools_from_single_server(&name, &command, &args_vec).await?;
@@ -372,7 +380,7 @@ async fn remove_server(config: &AppConfig) -> Result<(), Box<dyn Error>> {
     let server_name = &config.servers[index].name;
 
     if prompts::prompt_confirm(&format!("Remove server '{}'?", server_name), false)? {
-        generator::remove_server_from_config(server_name)?;
+        client::remove_server(server_name)?;
         ui::print_success(&format!("Server '{}' removed!", server_name));
     }
 
@@ -463,7 +471,7 @@ async fn sync_tools_from_single_server(
                     println!("    • {} - {}", tool_name, desc_preview);
                     tool_data.push((tool_name.clone(), description.clone()));
                 }
-                generator::sync_tools_from_server(name, tool_data)?;
+                model::sync_tools_from_server(name, tool_data)?;
                 ui::print_success(&format!("Synced {} tools from '{}'!", tools.len(), name));
             }
         }
@@ -511,7 +519,7 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
 {{language_guidance}}
 
 {{tool_guidance}}"#;
-            generator::update_prompt_template(default_template)?;
+            model::update_prompt_template(default_template)?;
             ui::print_success("Prompt template reset to default!");
         }
         "2" => {
@@ -526,7 +534,7 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
             }
             if !lines.is_empty() {
                 let template = lines.join("\n");
-                generator::update_prompt_template(&template)?;
+                model::update_prompt_template(&template)?;
                 ui::print_success("Prompt template updated!");
             }
         }

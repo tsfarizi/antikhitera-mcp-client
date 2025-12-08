@@ -2,36 +2,9 @@
 #
 # Copy this file to config/client.toml and customize for your setup.
 # See README.md for detailed configuration guide.
-
-# =============================================================================
-# BASIC SETTINGS
-# =============================================================================
-
-# Default LLM provider to use (must match a provider id below)
-default_provider = "cloud"
-
-# Default model for chat
-model = "default-model"
-
-# System prompt template (supports placeholders)
-# Placeholders:
-#   {{custom_instruction}} - User-provided instruction
-#   {{language_guidance}}  - Language detection guidance
-#   {{tool_guidance}}      - Available tools description
-prompt_template = """
-You are a helpful AI assistant.
-
-{{custom_instruction}}
-
-{{language_guidance}}
-
-{{tool_guidance}}
-
-Respond clearly and concisely.
-"""
-
-# Optional: Static system prompt (overrides template if set)
-# system_prompt = "You are a helpful assistant."
+#
+# NOTE: Model settings (default_provider, model, prompt_template, tools)
+# are now in a separate file: model.toml
 
 # =============================================================================
 # PROVIDERS - Configure your LLM backends
@@ -88,16 +61,3 @@ description = "Local development"
 # args = ["--flag", "value"]          # Optional arguments
 # workdir = "/working/directory"      # Optional working directory
 # env = { KEY = "value" }             # Optional environment variables
-
-# =============================================================================
-# TOOLS - Bind tools to servers (synced from tools/list)
-# =============================================================================
-
-# Example tool binding:
-#
-# [[tools]]
-# name = "tool_name"                  # Tool name (from server)
-# description = "What this tool does" # Description from server
-# server = "example"                  # Server that provides this tool
-# input_schema = '{"type":"object"}'  # JSON Schema for inputs
-

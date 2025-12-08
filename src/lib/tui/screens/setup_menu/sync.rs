@@ -2,7 +2,7 @@
 
 use super::load_config;
 use crate::config::ServerConfig;
-use crate::config::wizard::generator;
+use crate::config::wizard::generators::model;
 use crate::tooling::spawn_and_list_tools;
 use crate::tui::terminal::{NavAction, Tui, read_key};
 use ratatui::style::{Color, Modifier, Style};
@@ -60,7 +60,7 @@ pub fn run_sync_single_server_tui(
                     }
                     tool_data.push((tool_name.clone(), description.clone()));
                 }
-                generator::sync_tools_from_server(name, tool_data)?;
+                model::sync_tools_from_server(name, tool_data)?;
 
                 show_result_tui(
                     terminal,
@@ -134,7 +134,7 @@ pub fn run_sync_all_servers_tui(
 
                     let tool_data: Vec<(String, String)> = tools.into_iter().collect();
                     let total = tool_data.len();
-                    generator::sync_tools_from_server(&server.name, tool_data)?;
+                    model::sync_tools_from_server(&server.name, tool_data)?;
 
                     results.push((server.name.clone(), true, total, new_count));
                 }

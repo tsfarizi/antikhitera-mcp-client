@@ -12,7 +12,7 @@ use std::error::Error;
 
 /// Manage models screen (uses existing terminal)
 pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
-    use crate::config::wizard::generator;
+    use crate::config::wizard::generators::model;
     let provider_idx: usize;
     let mut prov_selected: usize = 0;
     loop {
@@ -106,7 +106,7 @@ pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn
             NavAction::Select => {
                 if menu.is_row_selected() {
                     let model_name = &provider.models[menu.selected_index()].name;
-                    generator::update_default_model(model_name)?;
+                    model::update_default_model(model_name)?;
                 } else if let Some(action_idx) = menu.selected_action_index() {
                     match action_idx {
                         0 => {
@@ -128,7 +128,7 @@ pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn
 
 /// Add models using TUI (no native terminal)
 fn run_add_models_tui(terminal: &mut Tui, provider_id: &str) -> Result<(), Box<dyn Error>> {
-    use crate::config::wizard::generator;
+    use crate::config::wizard::generators::client;
     let model_presets = vec![
         "gemini-2.0-flash-exp",
         "gemini-1.5-pro",
@@ -162,7 +162,7 @@ fn run_add_models_tui(terminal: &mut Tui, provider_id: &str) -> Result<(), Box<d
                 if let Some(idx) = menu.selected_index() {
                     if idx < model_presets.len() {
                         let model_name = model_presets[idx];
-                        generator::add_model_to_provider(provider_id, model_name, model_name)?;
+                        client::add_model_to_provider(provider_id, model_name, model_name)?;
                         show_message_tui(
                             terminal,
                             &format!("✓ Model '{}' added!", model_name),

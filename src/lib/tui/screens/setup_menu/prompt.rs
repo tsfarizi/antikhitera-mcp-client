@@ -1,7 +1,7 @@
 //! Prompt template editing TUI
 
 use super::load_config;
-use crate::config::wizard::generator;
+use crate::config::wizard::generators::model as generator;
 use crate::tui::terminal::{NavAction, Tui, read_key};
 use crate::tui::widgets::{Menu, MenuItem};
 use ratatui::layout::{Constraint, Layout, Rect};
