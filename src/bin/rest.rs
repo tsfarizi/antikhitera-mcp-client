@@ -4,7 +4,7 @@
 //! Optimized for production deployment.
 
 use antikhitera_mcp_client::application::client::{ClientConfig, McpClient};
-use antikhitera_mcp_client::config::{AppConfig, CONFIG_PATH};
+use antikhitera_mcp_client::config::AppConfig;
 use antikhitera_mcp_client::infrastructure::model::DynamicModelProvider;
 use antikhitera_mcp_client::infrastructure::server;
 use clap::Parser;
@@ -52,7 +52,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let client = Arc::new(McpClient::new(provider, client_config));
 
     info!(addr = %args.addr, "REST server starting");
-    server::serve(client, args.addr).await?;
+    let cors_origins = &file_config.rest_server.cors_origins;
+    let doc_servers = &file_config.rest_server.docs;
+    server::serve(client, args.addr, cors_origins, doc_servers).await?;
 
     Ok(())
 }

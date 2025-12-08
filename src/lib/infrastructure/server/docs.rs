@@ -4,14 +4,11 @@ use super::dto::{
 };
 use super::routes;
 use crate::agent::AgentStep;
-use crate::config::ToolConfig;
+use crate::config::{DocServerConfig, ToolConfig};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(
-    servers(
-        (url = "https://5w4m7wvp-8080.asse.devtunnels.ms", description = "Staging server"),
-    ),
     paths(
         routes::chat::chat_handler,
         routes::tools::tools_handler,
@@ -33,9 +30,30 @@ use utoipa::OpenApi;
         )
     ),
     tags(
-        (name = "chat", description = "Interaksi warga dengan LLM atau agen"),
-        (name = "tools", description = "Daftar tool MCP yang tersedia"),
-        (name = "config", description = "Manajemen konfigurasi klien MCP")
+        (name = "chat", description = "LLM and agent interactions"),
+        (name = "tools", description = "Available MCP tools"),
+        (name = "config", description = "Client configuration management")
     )
 )]
 pub(super) struct ApiDoc;
+
+impl ApiDoc {
+    /// Create OpenAPI spec with servers from config
+    pub fn with_servers(doc_servers: &[DocServerConfig]) -> utoipa::openapi::OpenApi {
+        let mut api = Self::openapi();
+        if !doc_servers.is_empty() {
+            api.servers = Some(
+                doc_servers
+                    .iter()
+                    .map(|s| {
+                        utoipa::openapi::ServerBuilder::new()
+                            .url(&s.url)
+                            .description(Some(&s.description))
+                            .build()
+                    })
+                    .collect(),
+            );
+        }
+        api
+    }
+}

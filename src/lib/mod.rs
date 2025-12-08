@@ -1,6 +1,7 @@
 pub mod application;
 pub mod cli;
 pub mod config;
+pub mod constants;
 pub mod domain;
 pub mod infrastructure;
 pub mod tui;
@@ -93,14 +94,20 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         RunMode::Rest => {
             info!(addr = %cli.rest_addr, "Starting REST server");
-            server::serve(client.clone(), cli.rest_addr).await?;
+            let cors_origins = &file_config.rest_server.cors_origins;
+            let doc_servers = &file_config.rest_server.docs;
+            server::serve(client.clone(), cli.rest_addr, cors_origins, doc_servers).await?;
         }
         RunMode::All => {
             info!(addr = %cli.rest_addr, "Starting both STDIO and REST server");
             let rest_client = client.clone();
             let rest_addr = cli.rest_addr;
+            let cors_origins = file_config.rest_server.cors_origins.clone();
+            let doc_servers = file_config.rest_server.docs.clone();
             let rest_handle = tokio::spawn(async move {
-                if let Err(e) = server::serve(rest_client, rest_addr).await {
+                if let Err(e) =
+                    server::serve(rest_client, rest_addr, &cors_origins, &doc_servers).await
+                {
                     tracing::error!(error = %e, "REST server error");
                 }
             });

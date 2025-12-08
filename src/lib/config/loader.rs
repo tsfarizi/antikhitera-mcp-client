@@ -1,8 +1,9 @@
-use super::CONFIG_PATH;
+use super::app::RestServerConfig;
 use super::error::ConfigError;
 use super::provider::{ModelProviderConfig, RawProviderConfig};
 use super::server::{RawServer, ServerConfig};
 use super::tool::{RawTool, ToolConfig};
+use super::{CONFIG_PATH, ENV_PATH};
 use dotenvy::from_filename;
 use serde::Deserialize;
 use std::fs;
@@ -26,12 +27,15 @@ pub(super) struct RawConfig {
     pub prompt_template: Option<String>,
     #[serde(default)]
     pub providers: Vec<RawProviderConfig>,
+    /// REST server configuration
+    #[serde(default)]
+    pub server: RestServerConfig,
 }
 
 /// Ensures environment variables are loaded from config/.env
 pub fn ensure_env_loaded() {
     ENV_LOADER.call_once(|| {
-        let _ = from_filename("config/.env");
+        let _ = from_filename(ENV_PATH);
     });
 }
 
@@ -105,5 +109,6 @@ fn validate_and_build(parsed: RawConfig) -> Result<super::AppConfig, ConfigError
         servers: parsed.servers.into_iter().map(ServerConfig::from).collect(),
         prompt_template,
         providers,
+        rest_server: parsed.server,
     })
 }

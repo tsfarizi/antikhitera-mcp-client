@@ -3,6 +3,7 @@ use super::error::ServerError;
 use super::routes;
 use super::state::ServerState;
 use crate::client::McpClient;
+use crate::config::DocServerConfig;
 use crate::model::ModelProvider;
 use crate::rpc::server::handle_rpc;
 use axum::Router;
@@ -12,25 +13,41 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::info;
-use utoipa::OpenApi;
+use tracing::{info, warn};
 use utoipa_swagger_ui::SwaggerUi;
 
-pub(super) async fn serve<P>(client: Arc<McpClient<P>>, addr: SocketAddr) -> Result<(), ServerError>
+pub(super) async fn serve<P>(
+    client: Arc<McpClient<P>>,
+    addr: SocketAddr,
+    cors_origins: &[String],
+    doc_servers: &[DocServerConfig],
+) -> Result<(), ServerError>
 where
     P: ModelProvider + 'static,
 {
-    let api = ApiDoc::openapi();
+    let api = ApiDoc::with_servers(doc_servers);
     info!(%addr, "Binding REST server");
 
-    let cors = CorsLayer::new()
-        .allow_origin([
-            HeaderValue::from_static("http://localhost:5173"),
-            HeaderValue::from_static("http://127.0.0.1:5173"),
-            HeaderValue::from_static("https://tsfarizi.github.io"),
-        ])
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
-        .allow_headers(Any);
+    let origins: Vec<HeaderValue> = cors_origins
+        .iter()
+        .filter_map(|origin| {
+            origin.parse().ok().or_else(|| {
+                warn!(origin = %origin, "Invalid CORS origin, skipping");
+                None
+            })
+        })
+        .collect();
+
+    let cors = if origins.is_empty() {
+        info!("No CORS origins configured, allowing any origin");
+        CorsLayer::permissive()
+    } else {
+        info!(count = origins.len(), "CORS origins configured");
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
+            .allow_headers(Any)
+    };
 
     let state = Arc::new(ServerState::new(client));
     let app = Router::new()
