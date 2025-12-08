@@ -323,24 +323,47 @@ pub fn remove_server_from_config(server_name: &str) -> Result<(), Box<dyn Error>
 }
 
 /// Sync tools from a server
+/// Removes existing tools with the same names before adding new ones
 pub fn sync_tools_from_server(
     server_name: &str,
     tools: Vec<(String, String)>,
 ) -> Result<(), Box<dyn Error>> {
+    use std::collections::HashSet;
+
     let config_path = Path::new("config/client.toml");
-    let mut content = fs::read_to_string(config_path)?;
+    let content = fs::read_to_string(config_path)?;
+
+    // Collect tool names we're about to sync
+    let syncing_names: HashSet<&str> = tools.iter().map(|(name, _)| name.as_str()).collect();
+
     let mut new_content = String::new();
     let mut skip_tool = false;
+    let mut pending_header = false;
 
     for line in content.lines() {
+        // Detect start of a new tool block
         if line.trim() == "[[tools]]" {
+            // If we were skipping, we're done with that tool
             skip_tool = false;
+            pending_header = true;
+            continue; // Don't write header yet, wait to check the name
         }
-        if line.contains(&format!("server = \"{}\"", server_name)) {
-            skip_tool = true;
-            if new_content.ends_with("[[tools]]\n") {
-                new_content.truncate(new_content.len() - "[[tools]]\n".len());
+
+        // Check if this line defines the tool name
+        if pending_header {
+            if let Some(name) = extract_tool_name(line) {
+                // Skip this tool if it has the same name as one we're syncing
+                if syncing_names.contains(name.as_str()) {
+                    skip_tool = true;
+                    pending_header = false;
+                    continue;
+                }
             }
+            // Write the pending header since we're not skipping
+            if !skip_tool {
+                new_content.push_str("[[tools]]\n");
+            }
+            pending_header = false;
         }
 
         if !skip_tool {
@@ -349,7 +372,7 @@ pub fn sync_tools_from_server(
         }
     }
 
-    content = new_content;
+    // Add new tools from the server
     for (tool_name, description) in tools {
         let escaped_desc = description.replace('\"', "\\\"");
         let tool_block = format!(
@@ -360,11 +383,23 @@ description = "{}"
 server = "{}""#,
             tool_name, escaped_desc, server_name
         );
-        content.push_str(&tool_block);
+        new_content.push_str(&tool_block);
     }
 
-    fs::write(config_path, content.trim_end())?;
+    fs::write(config_path, new_content.trim_end())?;
     Ok(())
+}
+
+/// Extract tool name from a line like `name = "tool_name"`
+fn extract_tool_name(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("name = \"") && trimmed.ends_with("\"") {
+        let start = "name = \"".len();
+        let end = trimmed.len() - 1;
+        Some(trimmed[start..end].to_string())
+    } else {
+        None
+    }
 }
 
 /// Update the prompt template

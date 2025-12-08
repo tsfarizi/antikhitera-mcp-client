@@ -61,6 +61,22 @@ models = [
 ]
 
 # =============================================================================
+# REST SERVER - CORS and API documentation
+# =============================================================================
+
+[server]
+# CORS allowed origins (leave empty for permissive)
+cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# API documentation servers (shown in Swagger UI)
+[[server.docs]]
+url = "http://localhost:8080"
+description = "Local development"
+
+# =============================================================================
 # MCP SERVERS - Define your tool servers
 # =============================================================================
 
@@ -74,12 +90,14 @@ models = [
 # env = { KEY = "value" }             # Optional environment variables
 
 # =============================================================================
-# TOOLS - Bind tools to servers
+# TOOLS - Bind tools to servers (synced from tools/list)
 # =============================================================================
 
 # Example tool binding:
 #
 # [[tools]]
 # name = "tool_name"                  # Tool name (from server)
-# description = "What this tool does" # Override server description
+# description = "What this tool does" # Description from server
 # server = "example"                  # Server that provides this tool
+# input_schema = '{"type":"object"}'  # JSON Schema for inputs
+

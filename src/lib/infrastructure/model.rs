@@ -1,4 +1,5 @@
 use crate::config::ModelProviderConfig;
+use crate::constants::DEFAULT_GEMINI_API_PATH;
 use crate::types::{ChatMessage, MessageRole};
 use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
@@ -7,8 +8,6 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use thiserror::Error;
 use tracing::{debug, info, warn};
-
-const GEMINI_GENERATE_CONTENT_PATH: &str = "v1beta/models";
 
 #[derive(Debug, Clone)]
 pub struct ModelRequest {
@@ -170,10 +169,15 @@ impl DynamicModelProvider {
                 )),
                 "gemini" => {
                     let resolved = resolve_api_key(config.id.as_str(), config.api_key.as_deref());
+                    let api_path = config
+                        .api_path
+                        .clone()
+                        .unwrap_or_else(|| DEFAULT_GEMINI_API_PATH.to_string());
                     ProviderBackend::Gemini(GeminiClient::new(
                         config.id.clone(),
                         config.endpoint.clone(),
                         resolved,
+                        api_path,
                     ))
                 }
                 other => {
@@ -353,6 +357,7 @@ pub struct GeminiClient {
     id: String,
     endpoint: String,
     api_key: Option<String>,
+    api_path: String,
     http: Client,
 }
 
@@ -361,27 +366,30 @@ impl GeminiClient {
         id: impl Into<String>,
         endpoint: impl Into<String>,
         api_key: Option<String>,
+        api_path: impl Into<String>,
     ) -> Self {
-        Self::with_client(id, endpoint, api_key, Client::new())
+        Self::with_client(id, endpoint, api_key, api_path, Client::new())
     }
 
     pub fn with_client(
         id: impl Into<String>,
         endpoint: impl Into<String>,
         api_key: Option<String>,
+        api_path: impl Into<String>,
         client: Client,
     ) -> Self {
         Self {
             id: id.into(),
             endpoint: endpoint.into(),
             api_key,
+            api_path: api_path.into(),
             http: client,
         }
     }
 
     fn endpoint(&self, model: &str) -> String {
         let base = self.endpoint.trim_end_matches('/');
-        format!("{base}/{GEMINI_GENERATE_CONTENT_PATH}/{model}:generateContent")
+        format!("{base}/{}/{model}:generateContent", self.api_path)
     }
 
     async fn chat(&self, request: ModelRequest) -> Result<ModelResponse, ModelError> {

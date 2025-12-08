@@ -7,10 +7,9 @@ pub mod server;
 pub mod tool;
 pub mod wizard;
 
-/// Default config file path - can be overridden via CLI argument
-pub const CONFIG_PATH: &str = "config/client.toml";
+pub use crate::constants::{CONFIG_PATH, ENV_PATH};
 
-pub use app::AppConfig;
+pub use app::{AppConfig, DocServerConfig};
 pub use error::ConfigError;
 pub use provider::{ModelInfo, ModelProviderConfig};
 pub use server::ServerConfig;

@@ -9,7 +9,6 @@ use tokio::sync::Mutex;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-const LANGUAGE_GUIDANCE: &str = "Kamu memahami permintaan dalam bahasa apa pun. Jawablah menggunakan bahasa yang sama dengan warga kecuali mereka secara eksplisit meminta sebaliknya. Jangan gunakan tool apa pun hanya untuk menerjemahkan; tangani kebutuhan bahasa secara internal.";
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
     pub default_provider: String,
@@ -76,6 +75,7 @@ impl ClientConfig {
             servers: self.servers.clone(),
             prompt_template: self.prompt_template.clone().unwrap_or_default(),
             providers: self.providers.clone(),
+            rest_server: Default::default(),
         }
     }
 }
@@ -297,7 +297,7 @@ impl<P: ModelProvider> McpClient<P> {
         };
 
         let mut prompt = template
-            .replace("{{language_guidance}}", LANGUAGE_GUIDANCE)
+            .replace("{{language_guidance}}", "")
             .replace("{{tool_guidance}}", tool_guidance.trim())
             .replace("{{custom_instruction}}", custom_instruction.trim());
         prompt = prompt

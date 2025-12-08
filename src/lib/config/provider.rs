@@ -28,6 +28,9 @@ pub struct ModelProviderConfig {
     pub endpoint: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    /// Custom API path (e.g., "v1beta/models" for Gemini)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_path: Option<String>,
     pub models: Vec<ModelInfo>,
 }
 
@@ -38,6 +41,8 @@ pub(super) struct RawProviderConfig {
     pub(super) provider_type: String,
     pub(super) endpoint: Option<String>,
     pub(super) api_key: Option<String>,
+    #[serde(default)]
+    pub(super) api_path: Option<String>,
     #[serde(default)]
     pub(super) models: Vec<RawModelInfo>,
 }
@@ -74,6 +79,7 @@ impl From<RawProviderConfig> for ModelProviderConfig {
             provider_type: raw.provider_type,
             endpoint,
             api_key: raw.api_key,
+            api_path: raw.api_path,
             models: raw.models.into_iter().map(ModelInfo::from).collect(),
         }
     }
@@ -102,6 +108,7 @@ impl ModelProviderConfig {
     ///     provider_type: "ollama".to_string(),
     ///     endpoint: "http://localhost:11434".to_string(),
     ///     api_key: None,
+    ///     api_path: None,
     ///     models: vec![],
     /// };
     /// assert!(provider.is_ollama());
@@ -123,6 +130,7 @@ impl ModelProviderConfig {
     ///     provider_type: "GEMINI".to_string(),
     ///     endpoint: "https://example.com".to_string(),
     ///     api_key: Some("key".to_string()),
+    ///     api_path: None,
     ///     models: vec![],
     /// };
     /// assert!(provider.is_gemini());

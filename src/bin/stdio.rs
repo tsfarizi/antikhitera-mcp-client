@@ -4,7 +4,7 @@
 //! Optimized for production deployment and CLI usage.
 
 use antikhitera_mcp_client::application::client::{ClientConfig, McpClient};
-use antikhitera_mcp_client::config::{AppConfig, CONFIG_PATH};
+use antikhitera_mcp_client::config::AppConfig;
 use antikhitera_mcp_client::infrastructure::model::DynamicModelProvider;
 use antikhitera_mcp_client::tui::screens::run_chat;
 use clap::Parser;
