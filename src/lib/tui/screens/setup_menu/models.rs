@@ -13,8 +13,6 @@ use std::error::Error;
 /// Manage models screen (uses existing terminal)
 pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
     use crate::config::wizard::generator;
-
-    // First, select provider
     let provider_idx: usize;
     let mut prov_selected: usize = 0;
     loop {
@@ -63,14 +61,10 @@ pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn
             NavAction::None => {}
         }
     }
-
-    // Show models for selected provider
     let mut model_selected: usize = 0;
     loop {
         let config = load_config()?;
         let provider = &config.providers[provider_idx];
-
-        // Build table rows - Name | Display Name
         let rows: Vec<TableRow> = provider
             .models
             .iter()
@@ -111,13 +105,11 @@ pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn
             }
             NavAction::Select => {
                 if menu.is_row_selected() {
-                    // Set this model as default
                     let model_name = &provider.models[menu.selected_index()].name;
                     generator::update_default_model(model_name)?;
                 } else if let Some(action_idx) = menu.selected_action_index() {
                     match action_idx {
                         0 => {
-                            // Add Model - stay in TUI
                             let provider_id = provider.id.clone();
                             run_add_models_tui(terminal, &provider_id)?;
                         }
@@ -137,8 +129,6 @@ pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn
 /// Add models using TUI (no native terminal)
 fn run_add_models_tui(terminal: &mut Tui, provider_id: &str) -> Result<(), Box<dyn Error>> {
     use crate::config::wizard::generator;
-
-    // Show common model presets based on provider type
     let model_presets = vec![
         "gemini-2.0-flash-exp",
         "gemini-1.5-pro",

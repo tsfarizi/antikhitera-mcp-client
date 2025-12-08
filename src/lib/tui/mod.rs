@@ -3,9 +3,9 @@
 //! Provides full-screen interactive menus with arrow key navigation.
 
 pub mod screens;
-mod terminal;
-mod widgets;
+pub mod terminal;
+pub mod widgets;
 
-pub use terminal::{Tui, restore_terminal};
-pub use widgets::Menu;
+pub use terminal::{NavAction, Tui, restore_terminal};
+pub use widgets::{Menu, MenuItem};
 pub use widgets::{TableMenu, TableRow, TextInput};

@@ -67,7 +67,6 @@ fn read_config(path: &Path) -> Result<super::AppConfig, ConfigError> {
 }
 
 fn validate_and_build(parsed: RawConfig) -> Result<super::AppConfig, ConfigError> {
-    // Required fields validation
     let model = parsed.model.ok_or(ConfigError::MissingModel)?;
     let default_provider = parsed
         .default_provider
@@ -89,15 +88,11 @@ fn validate_and_build(parsed: RawConfig) -> Result<super::AppConfig, ConfigError
         }
         providers.push(ModelProviderConfig::from(raw_provider));
     }
-
-    // Validate default provider exists
     if !providers.iter().any(|p| p.id == default_provider) {
         return Err(ConfigError::ProviderNotFound {
             provider: default_provider,
         });
     }
-
-    // Ensure model exists in default provider
     if let Some(provider) = providers.iter_mut().find(|p| p.id == default_provider) {
         provider.ensure_model(&model);
     }

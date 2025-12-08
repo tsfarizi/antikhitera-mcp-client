@@ -95,7 +95,6 @@ impl ChatState {
     /// Add a message to history
     pub fn add_message(&mut self, message: ChatMessage) {
         self.messages.push(message);
-        // Auto-scroll to bottom
         self.scroll_to_bottom();
     }
 
@@ -166,7 +165,6 @@ impl ChatState {
 
     /// Scroll to bottom of messages
     pub fn scroll_to_bottom(&mut self) {
-        // Will be calculated during render based on content height
         self.scroll_offset = u16::MAX;
     }
 

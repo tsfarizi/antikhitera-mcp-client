@@ -12,8 +12,6 @@ use crate::tui::widgets::{Menu, MenuItem};
 use std::error::Error;
 use std::path::Path;
 
-// Re-exports for backwards compatibility
-
 /// Setup menu result
 pub enum SetupResult {
     Back,
@@ -73,10 +71,6 @@ pub fn run_setup_menu() -> Result<SetupResult, Box<dyn Error>> {
 pub(crate) fn load_config() -> Result<AppConfig, Box<dyn Error>> {
     AppConfig::load(Some(Path::new(CONFIG_PATH))).map_err(|e| Box::new(e) as Box<dyn Error>)
 }
-
-// ============================================================================
-// TUI versions that accept terminal reference (no flicker)
-// ============================================================================
 
 fn run_manage_providers_tui(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
     providers::run_manage_providers_with_terminal(terminal)

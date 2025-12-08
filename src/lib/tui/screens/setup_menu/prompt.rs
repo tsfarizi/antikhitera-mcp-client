@@ -25,8 +25,6 @@ pub fn run_edit_prompt_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn E
 
     loop {
         let config = load_config()?;
-
-        // Truncate template preview
         let preview: String = config
             .prompt_template
             .lines()
@@ -64,31 +62,22 @@ pub fn run_edit_prompt_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn E
                 menu.next();
                 selected_idx = menu.selected_index().unwrap_or(0);
             }
-            NavAction::Select => {
-                match menu.selected_index() {
-                    Some(0) => {
-                        // Reset to Default - with double confirmation in TUI
-                        if run_reset_confirmation_tui(terminal)? {
-                            generator::update_prompt_template(DEFAULT_TEMPLATE)?;
-                            run_message_tui(
-                                terminal,
-                                "✓ Template reset to default!",
-                                Color::Green,
-                            )?;
-                        }
+            NavAction::Select => match menu.selected_index() {
+                Some(0) => {
+                    if run_reset_confirmation_tui(terminal)? {
+                        generator::update_prompt_template(DEFAULT_TEMPLATE)?;
+                        run_message_tui(terminal, "✓ Template reset to default!", Color::Green)?;
                     }
-                    Some(1) => {
-                        // Edit Template - show editor in TUI
-                        run_edit_template_tui(terminal, &config.prompt_template)?;
-                    }
-                    Some(2) => {
-                        // View Current Template in TUI
-                        run_view_template_tui(terminal, &config.prompt_template)?;
-                    }
-                    Some(3) => break,
-                    _ => {}
                 }
-            }
+                Some(1) => {
+                    run_edit_template_tui(terminal, &config.prompt_template)?;
+                }
+                Some(2) => {
+                    run_view_template_tui(terminal, &config.prompt_template)?;
+                }
+                Some(3) => break,
+                _ => {}
+            },
             NavAction::ForceQuit | NavAction::Back => break,
             NavAction::None => {}
         }
@@ -146,7 +135,6 @@ fn run_message_tui(
 fn run_reset_confirmation_tui(
     terminal: &mut crate::tui::terminal::Tui,
 ) -> Result<bool, Box<dyn Error>> {
-    // First confirmation
     let items = vec![
         MenuItem::new("❌ Cancel"),
         MenuItem::new("⚠️  Yes, Reset Template"),
@@ -174,8 +162,6 @@ fn run_reset_confirmation_tui(
             NavAction::None => {}
         }
     }
-
-    // Second confirmation
     let items2 = vec![
         MenuItem::new("❌ Cancel - Keep Current Template"),
         MenuItem::new("🔥 CONFIRM RESET"),
@@ -211,16 +197,12 @@ fn run_view_template_tui(
     template: &str,
 ) -> Result<(), Box<dyn Error>> {
     let mut scroll: u16 = 0;
-
-    // Build lines with simple formatting
     let template_lines: Vec<&str> = template.lines().collect();
     let total_lines = template_lines.len() as u16;
 
     loop {
         terminal.draw(|frame| {
             let area = frame.area();
-
-            // Build display lines - plain text, no line numbers
             let display_lines: Vec<Line> = template_lines
                 .iter()
                 .map(|line| Line::from(*line))
@@ -266,8 +248,6 @@ fn run_edit_template_tui(
     current: &str,
 ) -> Result<(), Box<dyn Error>> {
     use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-
-    // Start with current template content
     let mut lines: Vec<String> = current.lines().map(|s| s.to_string()).collect();
     if lines.is_empty() {
         lines.push(String::new());
@@ -278,25 +258,20 @@ fn run_edit_template_tui(
     let mut scroll: u16 = 0;
 
     loop {
-        // Ensure cursor is within bounds
         cursor_row = cursor_row.min(lines.len().saturating_sub(1));
         cursor_col = cursor_col.min(lines.get(cursor_row).map(|l| l.len()).unwrap_or(0));
 
         terminal.draw(|frame| {
             let area = frame.area();
-
-            // Build display with cursor indicator
             let display_lines: Vec<Line> = lines
                 .iter()
                 .enumerate()
                 .map(|(i, line)| {
                     if i == cursor_row {
-                        // Show cursor position with underscore or pipe
                         let mut display = line.clone();
                         if cursor_col >= display.len() {
                             display.push('_');
                         } else {
-                            // Insert cursor marker
                             let mut chars: Vec<char> = display.chars().collect();
                             chars.insert(cursor_col, '|');
                             display = chars.into_iter().collect();
@@ -321,21 +296,15 @@ fn run_edit_template_tui(
 
             frame.render_widget(para, area);
         })?;
-
-        // Read raw key events for typing
         if let Event::Key(key) = event::read()? {
             if key.kind != crossterm::event::KeyEventKind::Press {
                 continue;
             }
-
-            // Handle Ctrl+S to save
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
                 let new_template = lines.join("\n");
                 generator::update_prompt_template(&new_template)?;
                 break;
             }
-
-            // Handle Ctrl+Q to force quit
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
                 break;
             }
@@ -343,7 +312,6 @@ fn run_edit_template_tui(
             match key.code {
                 KeyCode::Esc => break, // Cancel without saving
                 KeyCode::Enter => {
-                    // Split line at cursor and insert new line
                     let current_line = lines.get(cursor_row).cloned().unwrap_or_default();
                     let (before, after) = current_line.split_at(cursor_col.min(current_line.len()));
                     lines[cursor_row] = before.to_string();
@@ -353,7 +321,6 @@ fn run_edit_template_tui(
                 }
                 KeyCode::Backspace => {
                     if cursor_col > 0 {
-                        // Delete char before cursor
                         if let Some(line) = lines.get_mut(cursor_row) {
                             let mut chars: Vec<char> = line.chars().collect();
                             if cursor_col <= chars.len() {
@@ -363,7 +330,6 @@ fn run_edit_template_tui(
                             }
                         }
                     } else if cursor_row > 0 {
-                        // Merge with previous line
                         let current_line = lines.remove(cursor_row);
                         cursor_row -= 1;
                         cursor_col = lines[cursor_row].len();
@@ -378,7 +344,6 @@ fn run_edit_template_tui(
                             chars.remove(cursor_col);
                             *line = chars.into_iter().collect();
                         } else if cursor_row + 1 < lines.len() {
-                            // Merge with next line
                             let next_line = lines.remove(cursor_row + 1);
                             lines[cursor_row].push_str(&next_line);
                         }
@@ -421,7 +386,6 @@ fn run_edit_template_tui(
                     cursor_col = lines.get(cursor_row).map(|l| l.len()).unwrap_or(0);
                 }
                 KeyCode::Char(c) => {
-                    // Insert character at cursor
                     if let Some(line) = lines.get_mut(cursor_row) {
                         let mut chars: Vec<char> = line.chars().collect();
                         chars.insert(cursor_col.min(chars.len()), c);

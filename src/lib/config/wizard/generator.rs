@@ -111,8 +111,6 @@ pub fn add_provider(
 ) -> Result<(), Box<dyn Error>> {
     let config_path = Path::new("config/client.toml");
     let content = fs::read_to_string(config_path)?;
-
-    // Build new provider TOML block
     let mut new_provider = format!(
         r#"
 [[providers]]
@@ -125,8 +123,6 @@ endpoint = "{}""#,
     if let Some(key) = api_key_env {
         new_provider.push_str(&format!("\napi_key = \"{}\"", key));
     }
-
-    // Append to file
     let updated = format!("{}\n{}", content.trim_end(), new_provider);
     fs::write(config_path, updated)?;
 
@@ -141,13 +137,10 @@ pub fn update_provider(
 ) -> Result<(), Box<dyn Error>> {
     let config_path = Path::new("config/client.toml");
     let content = fs::read_to_string(config_path)?;
-
-    // Simple regex-free replacement using line-by-line parsing
     let mut lines: Vec<String> = content.lines().map(String::from).collect();
     let mut in_target_provider = false;
 
     for line in &mut lines {
-        // Check if we're entering the target provider section
         if line.contains("[[providers]]") {
             in_target_provider = false;
         }
@@ -177,14 +170,10 @@ pub fn add_model_to_provider(
 ) -> Result<(), Box<dyn Error>> {
     let config_path = Path::new("config/client.toml");
     let content = fs::read_to_string(config_path)?;
-
-    // Find the models array for this provider and add the new model
     let new_model = format!(
         "    {{ name = \"{}\", display_name = \"{}\" }}",
         model_name, display_name
     );
-
-    // Simple approach: find the closing bracket of models array and insert before it
     let mut result = String::new();
     let mut in_target_provider = false;
     let mut found_models = false;
@@ -200,8 +189,6 @@ pub fn add_model_to_provider(
         if in_target_provider && line.starts_with("models = [") {
             found_models = true;
         }
-
-        // Insert new model before closing bracket
         if in_target_provider && found_models && line.trim() == "]" {
             result.push_str(",\n");
             result.push_str(&new_model);
@@ -243,8 +230,6 @@ pub fn remove_model_from_provider(
         if in_models_array && line.trim() == "]" {
             in_models_array = false;
         }
-
-        // Skip lines containing the model to remove
         if in_models_array && line.contains(&format!("name = \"{}\"", model_name)) {
             continue;
         }
@@ -308,24 +293,18 @@ pub fn remove_server_from_config(server_name: &str) -> Result<(), Box<dyn Error>
     let mut blank_line_buffer = String::new();
 
     for line in content.lines() {
-        // Check if we're starting a new server section
         if line.trim() == "[[servers]]" {
             if skip_section {
                 skip_section = false;
             }
             blank_line_buffer.clear();
         }
-
-        // Check if this is the server to remove
         if line.contains(&format!("name = \"{}\"", server_name)) {
             skip_section = true;
-            // Remove the [[servers]] line we just added
             if result.ends_with("[[servers]]\n") {
                 result.truncate(result.len() - "[[servers]]\n".len());
             }
         }
-
-        // Handle blank lines
         if line.is_empty() {
             blank_line_buffer.push('\n');
             continue;
@@ -350,8 +329,6 @@ pub fn sync_tools_from_server(
 ) -> Result<(), Box<dyn Error>> {
     let config_path = Path::new("config/client.toml");
     let mut content = fs::read_to_string(config_path)?;
-
-    // First, remove existing tools for this server
     let mut new_content = String::new();
     let mut skip_tool = false;
 
@@ -361,7 +338,6 @@ pub fn sync_tools_from_server(
         }
         if line.contains(&format!("server = \"{}\"", server_name)) {
             skip_tool = true;
-            // Remove the [[tools]] line we just added
             if new_content.ends_with("[[tools]]\n") {
                 new_content.truncate(new_content.len() - "[[tools]]\n".len());
             }
@@ -374,8 +350,6 @@ pub fn sync_tools_from_server(
     }
 
     content = new_content;
-
-    // Add new tools
     for (tool_name, description) in tools {
         let escaped_desc = description.replace('\"', "\\\"");
         let tool_block = format!(
@@ -397,8 +371,6 @@ server = "{}""#,
 pub fn update_prompt_template(template: &str) -> Result<(), Box<dyn Error>> {
     let config_path = Path::new("config/client.toml");
     let content = fs::read_to_string(config_path)?;
-
-    // Find and replace the prompt_template section
     let mut result = String::new();
     let mut in_template = false;
     let mut template_written = false;
@@ -410,7 +382,6 @@ pub fn update_prompt_template(template: &str) -> Result<(), Box<dyn Error>> {
                 result.push_str(&format!("prompt_template = \"\"\"\n{}\n\"\"\"\n", template));
                 template_written = true;
             }
-            // Handle single-line template
             if !line.contains("\"\"\"") {
                 in_template = false;
             }
@@ -418,7 +389,6 @@ pub fn update_prompt_template(template: &str) -> Result<(), Box<dyn Error>> {
         }
 
         if in_template {
-            // Count triple quotes to know when template ends
             if line.contains("\"\"\"") {
                 in_template = false;
             }

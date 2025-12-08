@@ -11,7 +11,5 @@ mod input;
 mod runner;
 mod state;
 mod ui;
-
-// Re-exports
 pub use runner::{ChatResult, run_chat};
 pub use state::{ChatMessage, ChatState, MessageRole};

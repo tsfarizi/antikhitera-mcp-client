@@ -535,8 +535,6 @@ pub async fn spawn_and_list_tools(
 ) -> Result<Vec<(String, String)>, ToolInvokeError> {
     let process = McpProcess::new(config.clone());
     process.ensure_running().await?;
-
-    // Access the tool cache after initialization
     let cache = process.inner.tool_cache.lock().await;
     let tools: Vec<(String, String)> = cache
         .values()

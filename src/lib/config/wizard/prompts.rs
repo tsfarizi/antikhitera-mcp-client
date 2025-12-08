@@ -32,9 +32,6 @@ pub fn prompt_text(label: &str, default: Option<&str>) -> Result<String, Box<dyn
 pub fn prompt_password(label: &str) -> Result<String, Box<dyn Error>> {
     print!("  {}: ", label);
     io::stdout().flush()?;
-
-    // Note: For true hidden input, would need rpassword crate
-    // For now, just read normal input
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 

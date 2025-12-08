@@ -14,8 +14,6 @@ impl ChatUI {
     /// Render the complete chat interface
     pub fn render(frame: &mut Frame, state: &ChatState, provider: &str, model: &str) {
         let area = frame.area();
-
-        // Layout: Status bar, Messages, Input, Help bar
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -99,8 +97,6 @@ impl ChatUI {
     /// Render messages area
     fn render_messages(frame: &mut Frame, area: Rect, state: &ChatState) {
         let inner_height = area.height.saturating_sub(2) as usize;
-
-        // Build message lines
         let mut lines: Vec<Line> = Vec::new();
 
         for msg in &state.messages {
@@ -119,8 +115,6 @@ impl ChatUI {
                         .add_modifier(Modifier::ITALIC),
                 ),
             };
-
-            // First line with prefix
             let content_lines: Vec<&str> = msg.content.lines().collect();
             if let Some(first_line) = content_lines.first() {
                 lines.push(Line::from(vec![
@@ -128,18 +122,12 @@ impl ChatUI {
                     Span::raw(*first_line),
                 ]));
             }
-
-            // Continuation lines with indent
             for line in content_lines.iter().skip(1) {
                 let indent = " ".repeat(prefix.len());
                 lines.push(Line::from(format!("{}{}", indent, line)));
             }
-
-            // Empty line between messages
             lines.push(Line::from(""));
         }
-
-        // Show loading indicator if waiting
         if state.loading {
             let frames = ["⠋", "⠙", "⠹", "⠸"];
             lines.push(Line::from(Span::styled(
@@ -147,8 +135,6 @@ impl ChatUI {
                 Style::default().fg(Color::Yellow),
             )));
         }
-
-        // Calculate scroll
         let total_lines = lines.len();
         let max_scroll = total_lines.saturating_sub(inner_height);
         let scroll = if state.scroll_offset == u16::MAX {
@@ -176,14 +162,11 @@ impl ChatUI {
         } else {
             Style::default().fg(Color::White)
         };
-
-        // Build input display with cursor
         let display_input = if state.loading {
             "Waiting for response...".to_string()
         } else if state.input.is_empty() {
             "Type your message...".to_string()
         } else {
-            // Insert cursor indicator
             let mut chars: Vec<char> = state.input.chars().collect();
             if state.cursor_pos >= chars.len() {
                 chars.push('_');

@@ -67,7 +67,6 @@ impl From<RawModelInfo> for ModelInfo {
 
 impl From<RawProviderConfig> for ModelProviderConfig {
     fn from(raw: RawProviderConfig) -> Self {
-        // Endpoint is required - validation happens in app.rs before this conversion
         let endpoint = raw.endpoint.unwrap_or_default();
 
         Self {

@@ -30,8 +30,6 @@ where
 {
     let mut terminal = init_terminal()?;
     let mut state = ChatState::new();
-
-    // Add welcome message
     state.add_message(ChatMessage::system(
         "Welcome to MCP Chat! Type /help for commands, or start chatting.",
     ));
@@ -53,16 +51,12 @@ async fn run_chat_loop<P>(
 where
     P: ModelProvider + 'static,
 {
-    // Channel for async responses
     let (response_tx, mut response_rx) = mpsc::channel::<ResponseEvent>(10);
 
     loop {
-        // Render UI
         terminal.draw(|frame| {
             ChatUI::render(frame, state, provider, model);
         })?;
-
-        // Check for async responses
         while let Ok(event) = response_rx.try_recv() {
             match event {
                 ResponseEvent::Message(content) => {
@@ -88,8 +82,6 @@ where
                 }
             }
         }
-
-        // Poll for input events with timeout (for loading animation)
         let timeout = if state.loading {
             Duration::from_millis(100)
         } else {
@@ -111,8 +103,6 @@ where
                         state.add_message(ChatMessage::user(&input));
                         state.loading = true;
                         state.status_message = None;
-
-                        // Spawn async task to send message
                         let client_clone = client.clone();
                         let session_id = state.session_id.clone();
                         let agent_mode = state.agent_mode;
@@ -147,14 +137,9 @@ where
                 InputAction::None => {}
             }
         } else if state.loading {
-            // Tick loading animation
             state.tick_loading();
         }
-
-        // Clear status message after a while
-        if state.status_message.is_some() && !state.loading {
-            // TODO: Add timer to clear status
-        }
+        if state.status_message.is_some() && !state.loading {}
     }
 }
 
@@ -178,7 +163,6 @@ async fn send_message<P>(
     P: ModelProvider + 'static,
 {
     if agent_mode {
-        // Use agent mode
         let agent = Agent::new(client.clone());
         let mut options = AgentOptions::default();
         options.session_id = session_id;
@@ -201,7 +185,6 @@ async fn send_message<P>(
             }
         }
     } else {
-        // Use simple chat mode
         let request = ChatRequest {
             prompt,
             session_id,
@@ -286,9 +269,7 @@ fn handle_command(state: &mut ChatState, input: &str) {
             }
         }
 
-        CommandResult::Exit => {
-            // Will be handled by InputAction::Exit
-        }
+        CommandResult::Exit => {}
 
         CommandResult::Unknown(cmd) => {
             state.add_message(ChatMessage::system(format!(

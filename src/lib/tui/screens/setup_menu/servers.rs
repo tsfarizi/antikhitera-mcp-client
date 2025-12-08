@@ -17,8 +17,6 @@ pub fn run_manage_servers_with_terminal(terminal: &mut Tui) -> Result<(), Box<dy
 
     loop {
         let config = load_config()?;
-
-        // Build table rows - Name | Command (truncated)
         let rows: Vec<TableRow> = config
             .servers
             .iter()
@@ -53,13 +51,11 @@ pub fn run_manage_servers_with_terminal(terminal: &mut Tui) -> Result<(), Box<dy
             }
             NavAction::Select => {
                 if menu.is_row_selected() {
-                    // Show server details in TUI
                     let server = config.servers[menu.selected_index()].clone();
                     run_server_details_tui(terminal, &server, &config)?;
                 } else if let Some(action_idx) = menu.selected_action_index() {
                     match action_idx {
                         0 => {
-                            // Sync all servers - stay in TUI
                             run_sync_all_servers_tui(terminal, &config)?;
                         }
                         1 => break, // Back
@@ -92,14 +88,11 @@ fn run_server_details_tui(
     server: &crate::config::ServerConfig,
     config: &crate::config::AppConfig,
 ) -> Result<(), Box<dyn Error>> {
-    // Find tools for this server
     let server_tools: Vec<_> = config
         .tools
         .iter()
         .filter(|t| t.server.as_deref() == Some(&server.name))
         .collect();
-
-    // Build the server details display
     let mut lines = vec![
         Line::from(vec![
             Span::styled("📛 Name:    ", Style::default().fg(Color::Yellow)),
@@ -152,8 +145,6 @@ fn run_server_details_tui(
             )));
         }
     }
-
-    // Action menu items
     let action_items = vec![
         MenuItem::new("🔄 Sync tools from this server"),
         MenuItem::new("← Back"),
@@ -164,11 +155,7 @@ fn run_server_details_tui(
     loop {
         terminal.draw(|frame| {
             let area = frame.area();
-
-            // Split area: top for details, bottom for action menu
             let chunks = Layout::vertical([Constraint::Min(15), Constraint::Length(8)]).split(area);
-
-            // Server details
             let block = Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
@@ -178,8 +165,6 @@ fn run_server_details_tui(
                 .block(block)
                 .wrap(Wrap { trim: true });
             frame.render_widget(para, chunks[0]);
-
-            // Action menu
             action_menu.render(frame, chunks[1]);
         })?;
 
@@ -190,7 +175,6 @@ fn run_server_details_tui(
             NavAction::Select => {
                 match action_menu.selected_index() {
                     Some(0) => {
-                        // Sync this server
                         run_sync_single_server_tui(
                             terminal,
                             &server.name,
