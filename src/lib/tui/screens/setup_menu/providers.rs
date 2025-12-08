@@ -79,28 +79,41 @@ pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<
     Ok(())
 }
 
-/// Add providers using TUI (no native terminal)
+/// Add providers using TUI with clear format groups.
 fn run_add_providers_tui(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
     use crate::config::wizard::generators::client;
-    let provider_types = vec![
+
+    // 3 API format types with descriptions
+    // (display_name, type_name, default_endpoint, needs_api_key)
+    let format_types = vec![
         (
-            "Gemini (Google)",
+            "Gemini-compatible    - Google AI, requires API key",
             "gemini",
             "https://generativelanguage.googleapis.com",
+            true,
         ),
-        ("OpenAI", "openai", "https://api.openai.com"),
-        ("Ollama (Local)", "ollama", "http://localhost:11434"),
-        ("Anthropic", "anthropic", "https://api.anthropic.com"),
-        ("Custom", "custom", ""),
+        (
+            "OpenAI-compatible    - OpenAI, Anthropic, Mistral, Groq, etc. Requires API key",
+            "openai",
+            "https://api.openai.com",
+            true,
+        ),
+        (
+            "Ollama-compatible    - Local models (Ollama, LocalAI), no API key needed",
+            "ollama",
+            "http://localhost:11434",
+            false,
+        ),
     ];
 
-    let items: Vec<MenuItem> = provider_types
+    let items: Vec<MenuItem> = format_types
         .iter()
-        .map(|(name, _, _)| MenuItem::new(*name))
+        .map(|(name, _, _, _)| MenuItem::new(*name))
         .chain(std::iter::once(MenuItem::new("← Cancel")))
         .collect();
 
-    let mut menu = Menu::new("+ Add Provider", items).with_subtitle("Select provider type to add");
+    let subtitle = "Select API format for your provider";
+    let mut menu = Menu::new("+ Add Provider", items).with_subtitle(subtitle);
 
     loop {
         terminal.draw(|frame| {
@@ -113,16 +126,23 @@ fn run_add_providers_tui(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
             NavAction::Down => menu.next(),
             NavAction::Select => {
                 if let Some(idx) = menu.selected_index() {
-                    if idx < provider_types.len() {
-                        let (_, ptype, endpoint) = provider_types[idx];
+                    if idx < format_types.len() {
+                        let (_, ptype, endpoint, needs_key) = format_types[idx];
                         let config = load_config()?;
                         let id = format!("{}-{}", ptype, config.providers.len() + 1);
-                        client::add_provider(
-                            &id,
-                            ptype,
-                            endpoint,
-                            Some(&format!("{}_API_KEY", ptype.to_uppercase())),
-                        )?;
+
+                        // Only set API key for providers that need it
+                        let api_key = if needs_key {
+                            Some(
+                                format!("{}_API_KEY", ptype.to_uppercase())
+                                    .as_str()
+                                    .to_string(),
+                            )
+                        } else {
+                            None
+                        };
+
+                        client::add_provider(&id, ptype, endpoint, api_key.as_deref())?;
                         show_message_tui(
                             terminal,
                             &format!("✓ Provider '{}' added!", id),
