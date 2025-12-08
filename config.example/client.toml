@@ -9,29 +9,55 @@
 # =============================================================================
 # PROVIDERS - Configure your LLM backends
 # =============================================================================
+#
+# Supported 'type' values determine API format:
+#   - "gemini", "google"  : Google Gemini API format
+#   - "ollama", "localai" : Ollama local API format
+#   - "openai", "anthropic", "mistral", "groq", etc. : OpenAI-compatible format
+#
 
-# Cloud/External API Provider
-# Supported types: gemini, openai, anthropic, etc.
+# Google Gemini
 [[providers]]
-id = "cloud"
-type = "gemini"                                      # Provider type
-endpoint = "https://api.example.com"                 # API endpoint
-api_key = "API_KEY_ENV_VAR"                          # Environment variable name
+id = "gemini"
+type = "gemini"
+endpoint = "https://generativelanguage.googleapis.com"
+api_key = "GEMINI_API_KEY"
 models = [
-    { name = "default-model", display_name = "Default Model" },
-    { name = "fast-model", display_name = "Fast Model" },
-    { name = "pro-model", display_name = "Pro Model" },
+    { name = "gemini-2.0-flash", display_name = "Gemini 2.0 Flash" },
+    { name = "gemini-2.5-pro", display_name = "Gemini 2.5 Pro" },
 ]
 
-# Local Provider (e.g., Ollama)
+# Ollama Local
 [[providers]]
-id = "local"
+id = "ollama"
 type = "ollama"
 endpoint = "http://127.0.0.1:11434"
 models = [
     { name = "llama3", display_name = "Llama 3" },
     { name = "mistral", display_name = "Mistral" },
 ]
+
+# OpenAI
+[[providers]]
+id = "openai"
+type = "openai"
+endpoint = "https://api.openai.com"
+api_key = "OPENAI_API_KEY"
+models = [
+    { name = "gpt-4o", display_name = "GPT-4o" },
+    { name = "gpt-4o-mini", display_name = "GPT-4o Mini" },
+]
+
+# Other OpenAI-compatible providers
+# [[providers]]
+# id = "anthropic"
+# type = "anthropic"                      # Uses OpenAI-compatible format
+# endpoint = "https://api.anthropic.com"
+# api_key = "ANTHROPIC_API_KEY"
+# api_path = "/v1/messages"               # Custom API path if needed
+# models = [{ name = "claude-3-5-sonnet", display_name = "Claude 3.5 Sonnet" }]
+
+
 
 # =============================================================================
 # REST SERVER - CORS and API documentation
