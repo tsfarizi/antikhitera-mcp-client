@@ -4,6 +4,7 @@
 
 pub mod screens;
 pub mod terminal;
+pub mod theme;
 pub mod widgets;
 
 pub use terminal::{NavAction, Tui, restore_terminal};

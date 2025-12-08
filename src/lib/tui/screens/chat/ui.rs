@@ -1,9 +1,10 @@
 //! Chat UI rendering components
 
 use super::state::{ChatState, MessageRole};
+use crate::tui::theme;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
@@ -45,19 +46,16 @@ impl ChatUI {
             .unwrap_or_else(|| "new".into());
 
         let mode_indicator = if state.agent_mode {
-            Span::styled(
-                " Agent ",
-                Style::default().fg(Color::Black).bg(Color::Green),
-            )
+            Span::styled(" Agent ", theme::mode_agent())
         } else {
-            Span::styled(" Chat ", Style::default().fg(Color::Black).bg(Color::Cyan))
+            Span::styled(" Chat ", theme::mode_chat())
         };
 
         let loading_indicator = if state.loading {
             let frames = ["⠋", "⠙", "⠹", "⠸"];
             Span::styled(
                 format!(" {} ", frames[state.loading_frame]),
-                Style::default().fg(Color::Yellow),
+                theme::loading(),
             )
         } else {
             Span::raw("")
@@ -66,21 +64,18 @@ impl ChatUI {
         let status_msg = state
             .status_message
             .as_ref()
-            .map(|s| Span::styled(format!(" │ {} ", s), Style::default().fg(Color::DarkGray)))
+            .map(|s| Span::styled(format!(" │ {} ", s), theme::subtitle()))
             .unwrap_or_else(|| Span::raw(""));
 
         let status_line = Line::from(vec![
-            Span::styled(" 💬 ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                format!("Session: {} ", session_display),
-                Style::default().fg(Color::White),
-            ),
-            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" 💬 ", theme::title()),
+            Span::styled(format!("Session: {} ", session_display), theme::text()),
+            Span::styled("│ ", theme::subtitle()),
             mode_indicator,
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" │ ", theme::subtitle()),
             Span::styled(
                 format!("{}/{}", provider, model),
-                Style::default().fg(Color::Magenta),
+                Style::default().fg(theme::HIGHLIGHT),
             ),
             loading_indicator,
             status_msg,
@@ -88,7 +83,7 @@ impl ChatUI {
 
         let block = Block::default()
             .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(Color::DarkGray));
+            .border_style(theme::border());
 
         let para = Paragraph::new(status_line).block(block);
         frame.render_widget(para, area);
@@ -101,19 +96,9 @@ impl ChatUI {
 
         for msg in &state.messages {
             let (prefix, style) = match msg.role {
-                MessageRole::User => (
-                    "You: ",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                MessageRole::Assistant => ("AI: ", Style::default().fg(Color::Green)),
-                MessageRole::System => (
-                    "System: ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::ITALIC),
-                ),
+                MessageRole::User => ("You: ", theme::user_prefix()),
+                MessageRole::Assistant => ("AI: ", theme::ai_prefix()),
+                MessageRole::System => ("System: ", theme::system_prefix()),
             };
             let content_lines: Vec<&str> = msg.content.lines().collect();
             if let Some(first_line) = content_lines.first() {
@@ -132,7 +117,7 @@ impl ChatUI {
             let frames = ["⠋", "⠙", "⠹", "⠸"];
             lines.push(Line::from(Span::styled(
                 format!("AI: {} Thinking...", frames[state.loading_frame]),
-                Style::default().fg(Color::Yellow),
+                theme::loading(),
             )));
         }
         let total_lines = lines.len();
@@ -145,7 +130,7 @@ impl ChatUI {
 
         let block = Block::default()
             .borders(Borders::LEFT | Borders::RIGHT)
-            .border_style(Style::default().fg(Color::DarkGray));
+            .border_style(theme::border());
 
         let para = Paragraph::new(lines)
             .block(block)
@@ -158,9 +143,9 @@ impl ChatUI {
     /// Render input area
     fn render_input(frame: &mut Frame, area: Rect, state: &ChatState) {
         let input_style = if state.loading {
-            Style::default().fg(Color::DarkGray)
+            theme::subtitle()
         } else {
-            Style::default().fg(Color::White)
+            theme::text()
         };
         let display_input = if state.loading {
             "Waiting for response...".to_string()
@@ -177,21 +162,16 @@ impl ChatUI {
         };
 
         let input_line = Line::from(vec![
-            Span::styled(
-                "> ",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("> ", theme::title()),
             Span::styled(display_input, input_style),
         ]);
 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(if state.loading {
-                Style::default().fg(Color::DarkGray)
+                theme::border()
             } else {
-                Style::default().fg(Color::Cyan)
+                theme::border_active()
             })
             .title(if state.is_command() {
                 " Command "
@@ -208,17 +188,17 @@ impl ChatUI {
         let help_text = if state.loading {
             Line::from(Span::styled(
                 " Processing... Please wait ",
-                Style::default().fg(Color::Yellow),
+                theme::loading(),
             ))
         } else {
             Line::from(vec![
-                Span::styled(" Enter", Style::default().fg(Color::Green)),
+                Span::styled(" Enter", theme::key_hint()),
                 Span::raw(": Send │ "),
-                Span::styled("/help", Style::default().fg(Color::Green)),
+                Span::styled("/help", theme::key_hint()),
                 Span::raw(": Commands │ "),
-                Span::styled("PageUp/Down", Style::default().fg(Color::Green)),
+                Span::styled("PageUp/Down", theme::key_hint()),
                 Span::raw(": Scroll │ "),
-                Span::styled("q", Style::default().fg(Color::Red)),
+                Span::styled("q", theme::key_destructive()),
                 Span::raw(": Exit "),
             ])
         };
