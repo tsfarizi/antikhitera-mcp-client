@@ -22,7 +22,7 @@
 src/
 ├── bin/                    # Entry points
 │   ├── menu.rs            # Main TUI entry (cargo run)
-│   ├── rest.rs            # REST-only mode
+│   ├── rest.rs            # REST-only mode (uses config bind)
 │   └── stdio.rs           # STDIO-only mode
 │
 └── lib/                    # Main library
@@ -40,9 +40,17 @@ src/
     ├── cli/               # CLI argument parsing (clap)
     │
     ├── config/            # Configuration loading & wizard
-    │   ├── loader.rs      # TOML config parsing
+    │   ├── app.rs         # AppConfig, RestServerConfig structs
+    │   ├── loader.rs      # Loads BOTH client.toml + model.toml
     │   ├── wizard/        # Interactive setup wizard
-    │   └── generator.rs   # Config file generation
+    │   │   ├── mod.rs     # Wizard orchestration
+    │   │   └── generators/    # ⭐ SPLIT GENERATORS
+    │   │       ├── mod.rs
+    │   │       ├── client.rs  # Writes to client.toml
+    │   │       └── model.rs   # Writes to model.toml
+    │   └── generator.rs   # Legacy (kept for compatibility)
+    │
+    ├── constants.rs       # CONFIG_PATH, MODEL_CONFIG_PATH, etc.
     │
     ├── domain/            # Domain types (tool definitions, etc.)
     │
@@ -55,7 +63,7 @@ src/
     │   ├── server/        # REST API server (Axum)
     │   └── rpc/           # JSON-RPC for MCP communication
     │
-    └── tui/               # TUI layer (Ratatui)  ⭐ NEW
+    └── tui/               # TUI layer (Ratatui)
         ├── terminal.rs    # Terminal init/restore, NavAction enum
         ├── widgets/       # Reusable widgets (Menu, TableMenu)
         └── screens/       # Screen modules
@@ -67,11 +75,16 @@ src/
             │   ├── servers.rs     # Manage MCP servers
             │   ├── sync.rs        # Sync tools from servers
             │   └── prompt.rs      # Manage Prompt Template
-            └── chat/              # Interactive chat ⭐ NEW (SOLID)
+            └── chat/              # Interactive chat (SOLID)
                 ├── state.rs       # ChatState, ChatMessage
                 ├── ui.rs          # Rendering (status, messages, input)
                 ├── input.rs       # Keyboard handling
                 └── runner.rs      # Async event loop
+
+config/                         # ⭐ SPLIT CONFIGURATION
+├── client.toml                # Infrastructure: providers, servers, REST
+├── model.toml                 # Model: default_provider, model, prompt, tools
+└── .env                       # API keys (gitignored)
 ```
 
 ---
@@ -102,13 +115,32 @@ tokio::spawn(async move { send_message(..., tx).await; });
 // In loop: response_rx.try_recv()
 ```
 
-### 4. Configuration Loading
+### 4. Split Configuration Loading
 ```rust
-let config = AppConfig::load(Some(Path::new(CONFIG_PATH)))?;
+// Loader reads from BOTH files
+let config = AppConfig::load(Some(Path::new("config/client.toml")))?;
+// Internally derives model.toml from same directory
 ```
-Config at `config/client.toml`, API keys in `config/.env`.
 
-### 5. Agent ReAct Loop
+**Config files:**
+- `config/client.toml` → providers, servers, `[server]` (bind, cors)
+- `config/model.toml` → default_provider, model, prompt_template, tools
+- `config/.env` → API key values
+
+### 5. Split Generators
+```rust
+// For model.toml (default_provider, model, prompt_template, tools)
+use crate::config::wizard::generators::model;
+model::update_default_provider("gemini")?;
+model::sync_tools_from_server("time", tools)?;
+
+// For client.toml (providers, servers, REST settings)
+use crate::config::wizard::generators::client;
+client::add_provider("ollama", "ollama", "http://localhost:11434", None)?;
+client::add_server("time", "/path/to/server", &[])?;
+```
+
+### 6. Agent ReAct Loop
 Agent expects JSON responses from LLM:
 ```json
 {"action": "call_tool", "tool": "tool_name", "arguments": {...}}
@@ -134,9 +166,17 @@ Agent expects JSON responses from LLM:
 3. Handle in `handle_command()` in `chat/runner.rs`
 
 ### Modify config structure
-1. Update structs in `config/loader.rs`
-2. Update wizard in `config/wizard/`
-3. Update `config.example/client.toml`
+1. Update structs in `config/app.rs` (RestServerConfig, AppConfig)
+2. Update loader in `config/loader.rs`
+3. Update generators:
+   - `config/wizard/generators/client.rs` for client.toml changes
+   - `config/wizard/generators/model.rs` for model.toml changes
+4. Update `config.example/client.toml` and `config.example/model.toml`
+
+### Add REST server configuration
+1. Add field to `RestServerConfig` in `config/app.rs`
+2. Update CLI args in `cli/mod.rs` and `bin/rest.rs`
+3. Update `lib/mod.rs` to use config as default
 
 ---
 
@@ -152,6 +192,12 @@ Agent expects JSON responses from LLM:
 
 5. **Windows line endings**: Files may have CRLF endings.
 
+6. **Split config files**: `client.toml` and `model.toml` must both exist. Loader derives `model.toml` path from `client.toml`'s parent directory.
+
+7. **REST bind address**: Configured in `[server].bind` in `client.toml`. CLI `--addr` flag overrides it.
+
+8. **Generator separation**: Use `generators::model` for model.toml updates, `generators::client` for client.toml updates.
+
 ---
 
 ## 🔧 Quick Commands
@@ -159,8 +205,12 @@ Agent expects JSON responses from LLM:
 ```bash
 cargo run                    # TUI mode selector
 cargo run --bin stdio        # Direct STDIO mode
-cargo run --bin rest         # Direct REST mode
+cargo run --bin mcp-rest     # Direct REST mode (uses config bind)
+cargo run --bin mcp-rest -- --addr 0.0.0.0:3000  # Override bind
+cargo run -- --mode rest     # REST via main binary
+cargo run -- --mode all      # STDIO + REST together
 cargo build                  # Build debug
+cargo build --release        # Build production
 cargo clippy                 # Lint
 cargo fmt                    # Format
 ```
