@@ -22,7 +22,7 @@ pub struct ModelInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ModelProviderConfig {
     pub id: String,
-    /// The provider type (e.g., "ollama", "gemini", "openai", etc.)
+    /// The provider type determines API format: "ollama", "gemini", "openai", etc.
     #[serde(rename = "type")]
     pub provider_type: String,
     pub endpoint: String,
