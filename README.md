@@ -229,37 +229,280 @@ flowchart TD
 
 ```
 config/
-├── client.toml    # Main configuration
+├── client.toml    # Infrastructure: providers, servers, REST settings
+├── model.toml     # Model settings: provider, model, prompt, tools
 └── .env           # API keys (gitignored)
 ```
 
-### Provider Configuration
+### Split Configuration Design
 
 ```mermaid
-graph LR
-    subgraph Config["client.toml"]
-        P1["[[providers]]<br/>id = 'gemini'<br/>type = 'gemini'"]
-        P2["[[providers]]<br/>id = 'ollama'<br/>type = 'ollama'"]
-        P3["[[providers]]<br/>id = 'openai'<br/>type = 'openai'"]
+flowchart TB
+    subgraph ConfigFiles["📁 Configuration Files"]
+        direction LR
+        CLIENT["📄 client.toml<br/>Infrastructure"]
+        MODEL["📄 model.toml<br/>Model Settings"]
+        ENV["🔐 .env<br/>Secrets"]
     end
     
-    subgraph Backends["Backends"]
-        B1["☁️ Google AI"]
-        B2["🏠 Local Ollama"]
-        B3["☁️ OpenAI API"]
+    subgraph ClientFile["client.toml"]
+        C1["[server]<br/>bind, cors_origins, docs"]
+        C2["[[providers]]<br/>id, type, endpoint, models"]
+        C3["[[servers]]<br/>name, command, args"]
     end
     
-    P1 --> B1
-    P2 --> B2
-    P3 --> B3
+    subgraph ModelFile["model.toml"]
+        M1["default_provider"]
+        M2["model"]
+        M3["prompt_template"]
+        M4["[[tools]]<br/>name, description, server"]
+    end
     
-    style Config fill:#2d3436,stroke:#636e72,color:#fff
-    style Backends fill:#0984e3,stroke:#74b9ff,color:#fff
+    CLIENT --> ClientFile
+    MODEL --> ModelFile
+    
+    style ConfigFiles fill:#2d3436,stroke:#636e72,color:#fff
+    style ClientFile fill:#0984e3,stroke:#74b9ff,color:#fff
+    style ModelFile fill:#6c5ce7,stroke:#a29bfe,color:#fff
 ```
 
-### Full Configuration Example
+### client.toml - Infrastructure
 
-See [config.example/client.toml](config.example/client.toml) for the complete configuration reference.
+```toml
+# REST Server Settings
+[server]
+bind = "127.0.0.1:8080"          # Server bind address
+cors_origins = [
+    "http://localhost:5173",
+]
+
+[[server.docs]]
+url = "http://localhost:8080"
+description = "Local development"
+
+# LLM Providers
+[[providers]]
+id = "gemini"
+type = "gemini"
+endpoint = "https://generativelanguage.googleapis.com"
+api_key = "GEMINI_API_KEY"         # Environment variable name
+models = [
+    { name = "gemini-2.0-flash", display_name = "Gemini 2.0 Flash" }
+]
+
+# MCP Servers
+[[servers]]
+name = "time"
+command = "/path/to/mcp-server-time"
+default_timezone = "Asia/Jakarta"
+```
+
+### model.toml - Model Settings
+
+```toml
+# Default provider and model
+default_provider = "gemini"
+model = "gemini-2.0-flash"
+
+# System prompt template
+prompt_template = """
+You are a helpful AI assistant.
+
+{{custom_instruction}}
+
+{{language_guidance}}
+
+{{tool_guidance}}
+"""
+
+# Tools (synced from MCP servers)
+[[tools]]
+name = "get_current_time"
+description = "Get current time"
+server = "time"
+```
+
+### Configuration Flow
+
+```mermaid
+sequenceDiagram
+    participant App as 🚀 Application
+    participant Loader as 📂 Config Loader
+    participant Client as 📄 client.toml
+    participant Model as 📄 model.toml
+    participant Env as 🔐 .env
+    
+    App->>Loader: load_config()
+    Loader->>Env: Load environment variables
+    Loader->>Client: Parse infrastructure config
+    Loader->>Model: Parse model settings
+    Loader->>Loader: Validate & merge configs
+    Loader-->>App: AppConfig (complete)
+```
+
+### Full Configuration Reference
+
+See example files:
+- [config.example/client.toml](config.example/client.toml) - Infrastructure template
+- [config.example/model.toml](config.example/model.toml) - Model settings template
+
+---
+
+## 🚀 Execution Modes
+
+### Mode Overview
+
+```mermaid
+flowchart LR
+    subgraph Binaries["📦 Available Binaries"]
+        MENU["menu<br/>(default)"]
+        STDIO["stdio"]
+        REST["mcp-rest"]
+    end
+    
+    subgraph Modes["🔄 Run Modes"]
+        M1["💬 STDIO Only"]
+        M2["🌐 REST Only"]
+        M3["⚡ Both (STDIO + REST)"]
+        M4["⚙️ Setup Menu"]
+    end
+    
+    MENU -->|"Mode Selector"| M1
+    MENU -->|"Mode Selector"| M2
+    MENU -->|"Mode Selector"| M3
+    MENU -->|"Mode Selector"| M4
+    STDIO --> M1
+    REST --> M2
+    
+    style Binaries fill:#2d3436,stroke:#636e72,color:#fff
+    style Modes fill:#0984e3,stroke:#74b9ff,color:#fff
+```
+
+### Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant User as 👤 User
+    participant CLI as 🖥️ CLI
+    participant Config as 📂 Config
+    participant App as 🚀 Application
+    participant LLM as ☁️ LLM Provider
+    participant MCP as 🔧 MCP Servers
+    
+    User->>CLI: cargo run [--mode rest]
+    CLI->>Config: Load client.toml + model.toml
+    Config-->>CLI: AppConfig
+    
+    alt STDIO Mode
+        CLI->>App: Initialize TUI
+        App->>MCP: Connect to servers
+        MCP-->>App: Tools available
+        loop Chat Loop
+            User->>App: Send message
+            App->>LLM: Request completion
+            LLM-->>App: Response (may include tool calls)
+            opt Tool Call
+                App->>MCP: Execute tool
+                MCP-->>App: Tool result
+                App->>LLM: Send tool result
+                LLM-->>App: Final response
+            end
+            App-->>User: Display response
+        end
+    else REST Mode
+        CLI->>App: Start HTTP server
+        App->>MCP: Connect to servers
+        Note over App: Listening on config bind address
+        loop Request Loop
+            User->>App: HTTP POST /chat
+            App->>LLM: Request completion
+            LLM-->>App: Response
+            App-->>User: JSON response
+        end
+    end
+```
+
+### Running Different Modes
+
+```bash
+# Default: TUI Mode Selector
+cargo run
+
+# Direct STDIO mode
+cargo run --bin stdio
+
+# Direct REST mode (uses config bind address)
+cargo run --bin mcp-rest
+
+# REST with CLI override
+cargo run --bin mcp-rest -- --addr 0.0.0.0:3000
+
+# Using mode flag
+cargo run -- --mode rest
+cargo run -- --mode stdio
+cargo run -- --mode all
+```
+
+### Production Deployment
+
+```mermaid
+flowchart TB
+    subgraph Production["🏭 Production Setup"]
+        direction TB
+        
+        subgraph REST_OPT["REST API Optimization"]
+            R1["Use mcp-rest binary"]
+            R2["Configure bind in client.toml"]
+            R3["Set CORS origins"]
+            R4["Deploy behind reverse proxy"]
+        end
+        
+        subgraph STDIO_OPT["STDIO/TUI Optimization"]
+            S1["Use release build"]
+            S2["Preload MCP servers"]
+            S3["Configure default provider"]
+        end
+    end
+    
+    subgraph Config["📁 client.toml"]
+        CFG["[server]<br/>bind = '0.0.0.0:8080'"]
+    end
+    
+    REST_OPT --> CFG
+    
+    style Production fill:#1a1a2e,stroke:#6c5ce7,color:#fff
+    style REST_OPT fill:#0984e3,stroke:#74b9ff,color:#fff
+    style STDIO_OPT fill:#00b894,stroke:#00cec9,color:#fff
+    style Config fill:#2d3436,stroke:#636e72,color:#fff
+```
+
+### REST API Optimization
+
+| Aspect | Configuration | Description |
+|:-------|:--------------|:------------|
+| **Bind Address** | `[server].bind` | Configure in `client.toml` |
+| **CORS** | `[server].cors_origins` | Whitelist allowed origins |
+| **Binary** | `mcp-rest` | Optimized REST-only binary |
+| **Logging** | `RUST_LOG=info` | Control log verbosity |
+
+```bash
+# Production REST deployment
+RUST_LOG=info ./target/release/mcp-rest
+```
+
+### STDIO/TUI Optimization
+
+| Aspect | Configuration | Description |
+|:-------|:--------------|:------------|
+| **Default Provider** | `model.toml` | Set preferred LLM |
+| **Prompt Template** | `model.toml` | Customize system prompt |
+| **Tools** | `model.toml` | Pre-configure available tools |
+| **Binary** | `stdio` | Optimized STDIO-only binary |
+
+```bash
+# Production STDIO deployment
+./target/release/stdio
+```
 
 ---
 
@@ -341,6 +584,12 @@ graph TD
     LIB --> TUI[🖼️ tui]
     LIB --> INF[🔧 infrastructure]
     
+    subgraph ConfigMod["Config Module"]
+        LOADER["loader.rs<br/>Loads client.toml + model.toml"]
+        WIZARD["wizard/"]
+        GENS["generators/<br/>client.rs, model.rs"]
+    end
+    
     subgraph TUImod["TUI Modules (SOLID)"]
         SCREENS["screens/"]
         CHAT["chat/<br/>state, ui, input, runner"]
@@ -348,12 +597,15 @@ graph TD
         WIDGETS["widgets/<br/>Menu, TableMenu"]
     end
     
+    CFG --> ConfigMod
     TUI --> TUImod
+    WIZARD --> GENS
     
     style SRC fill:#2d3436,stroke:#636e72,color:#fff
     style BIN fill:#0984e3,stroke:#74b9ff,color:#fff
     style LIB fill:#6c5ce7,stroke:#a29bfe,color:#fff
     style TUImod fill:#00b894,stroke:#00cec9,color:#fff
+    style ConfigMod fill:#fd79a8,stroke:#e84393,color:#fff
 ```
 
 ### Chat Module Architecture (SOLID)
