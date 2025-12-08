@@ -2,8 +2,11 @@
 //!
 //! Single source of truth for paths and other constants.
 
-/// Default configuration file path
+/// Client configuration file path (providers, servers, REST settings)
 pub const CONFIG_PATH: &str = "config/client.toml";
+
+/// Model configuration file path (default_provider, model, prompt_template, tools)
+pub const MODEL_CONFIG_PATH: &str = "config/model.toml";
 
 /// Default environment file path
 pub const ENV_PATH: &str = "config/.env";

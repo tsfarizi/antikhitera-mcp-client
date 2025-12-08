@@ -1,24 +1,25 @@
 // Config parsing tests - testing successful config parsing
 //
 // Tests for valid configuration parsing including providers, servers, and tools.
+// Updated to use split config: client.toml + model.toml
 
 use antikhitera_mcp_client::config::AppConfig;
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
 
-fn write_config(dir: &Path, content: &str) -> std::path::PathBuf {
-    let path = dir.join("client.toml");
-    fs::write(&path, content).expect("Failed to write config");
-    path
+/// Write both client.toml and model.toml to the temp directory
+fn write_configs(dir: &Path, client_content: &str, model_content: &str) -> std::path::PathBuf {
+    let client_path = dir.join("client.toml");
+    let model_path = dir.join("model.toml");
+    fs::write(&client_path, client_content).expect("Failed to write client.toml");
+    fs::write(&model_path, model_content).expect("Failed to write model.toml");
+    client_path
 }
 
-fn minimal_valid_config() -> &'static str {
+/// Minimal client.toml content
+fn minimal_client_config() -> &'static str {
     r#"
-default_provider = "gemini"
-model = "gemini-1.5-flash"
-prompt_template = "You are a helpful assistant."
-
 [[providers]]
 id = "gemini"
 type = "gemini"
@@ -28,10 +29,19 @@ models = [{ name = "gemini-1.5-flash" }]
 "#
 }
 
+/// Minimal model.toml content
+fn minimal_model_config() -> &'static str {
+    r#"
+default_provider = "gemini"
+model = "gemini-1.5-flash"
+prompt_template = "You are a helpful assistant."
+"#
+}
+
 #[test]
 fn parses_minimal_valid_config() {
     let dir = tempdir().expect("tempdir");
-    let path = write_config(dir.path(), minimal_valid_config());
+    let path = write_configs(dir.path(), minimal_client_config(), minimal_model_config());
 
     let config = AppConfig::load(Some(&path)).expect("load config");
 
@@ -44,13 +54,7 @@ fn parses_minimal_valid_config() {
 #[test]
 fn parses_multiple_providers() {
     let dir = tempdir().expect("tempdir");
-    let path = write_config(
-        dir.path(),
-        r#"
-default_provider = "gemini"
-model = "gemini-1.5-flash"
-prompt_template = "test"
-
+    let client_content = r#"
 [[providers]]
 id = "ollama"
 type = "ollama"
@@ -63,9 +67,15 @@ type = "gemini"
 endpoint = "https://generativelanguage.googleapis.com"
 api_key = "secret"
 models = [{ name = "gemini-1.5-flash", display_name = "Gemini Flash" }]
-"#,
-    );
+"#;
 
+    let model_content = r#"
+default_provider = "gemini"
+model = "gemini-1.5-flash"
+prompt_template = "test"
+"#;
+
+    let path = write_configs(dir.path(), client_content, model_content);
     let config = AppConfig::load(Some(&path)).expect("load config");
 
     assert_eq!(config.providers.len(), 2);
@@ -83,13 +93,7 @@ models = [{ name = "gemini-1.5-flash", display_name = "Gemini Flash" }]
 #[test]
 fn parses_servers_and_tools() {
     let dir = tempdir().expect("tempdir");
-    let path = write_config(
-        dir.path(),
-        r#"
-model = "mistral"
-default_provider = "ollama"
-prompt_template = "Be helpful."
-
+    let client_content = r#"
 [[providers]]
 id = "ollama"
 type = "ollama"
@@ -107,14 +111,20 @@ default_city = "Jakarta"
 [[servers]]
 name = "other"
 command = "other.exe"
+"#;
+
+    let model_content = r#"
+model = "mistral"
+default_provider = "ollama"
+prompt_template = "Be helpful."
 
 [[tools]]
 name = "get_time"
 description = "Fetch time"
 server = "time"
-"#,
-    );
+"#;
 
+    let path = write_configs(dir.path(), client_content, model_content);
     let config = AppConfig::load(Some(&path)).expect("load config");
 
     assert_eq!(config.servers.len(), 2);

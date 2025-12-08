@@ -12,7 +12,7 @@ use std::error::Error;
 
 /// Manage providers screen (uses existing terminal)
 pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
-    use crate::config::wizard::generator;
+    use crate::config::wizard::generators::model;
 
     let mut selected_idx: usize = 0;
 
@@ -60,7 +60,7 @@ pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<
             NavAction::Select => {
                 if menu.is_row_selected() {
                     let provider_id = &config.providers[menu.selected_index()].id;
-                    generator::update_default_provider(provider_id)?;
+                    model::update_default_provider(provider_id)?;
                 } else if let Some(action_idx) = menu.selected_action_index() {
                     match action_idx {
                         0 => {
@@ -81,7 +81,7 @@ pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<
 
 /// Add providers using TUI (no native terminal)
 fn run_add_providers_tui(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
-    use crate::config::wizard::generator;
+    use crate::config::wizard::generators::client;
     let provider_types = vec![
         (
             "Gemini (Google)",
@@ -117,7 +117,7 @@ fn run_add_providers_tui(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
                         let (_, ptype, endpoint) = provider_types[idx];
                         let config = load_config()?;
                         let id = format!("{}-{}", ptype, config.providers.len() + 1);
-                        generator::add_provider(
+                        client::add_provider(
                             &id,
                             ptype,
                             endpoint,

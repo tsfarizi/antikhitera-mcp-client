@@ -1,0 +1,24 @@
+# Model Configuration
+# This file contains LLM model settings and tools configuration
+
+# Default provider and model to use
+default_provider = "gemini"
+model = "gemini-2.0-flash"
+
+# System prompt template
+# Available placeholders: {{custom_instruction}}, {{language_guidance}}, {{tool_guidance}}
+prompt_template = """
+You are a helpful AI assistant.
+
+{{custom_instruction}}
+
+{{language_guidance}}
+
+{{tool_guidance}}
+"""
+
+# Tool configurations (synced from MCP servers)
+# [[tools]]
+# name = "tool_name"
+# description = "Tool description"
+# server = "server_name"
