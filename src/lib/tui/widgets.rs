@@ -1,9 +1,10 @@
 //! Reusable TUI widgets
 
+use super::theme;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
@@ -107,21 +108,27 @@ impl Menu {
             Constraint::Length(2), // Footer
         ])
         .split(area);
+
+        // Header with theme styling
         let header = Paragraph::new(self.title.clone())
-            .style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .style(theme::title())
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::BOTTOM));
+            .block(
+                Block::default()
+                    .borders(Borders::BOTTOM)
+                    .border_style(theme::border()),
+            );
         frame.render_widget(header, chunks[0]);
+
+        // Subtitle with muted style
         if let Some(subtitle) = &self.subtitle {
             let sub = Paragraph::new(subtitle.clone())
-                .style(Style::default().fg(Color::DarkGray))
+                .style(theme::subtitle())
                 .alignment(Alignment::Center);
             frame.render_widget(sub, chunks[1]);
         }
+
+        // List items with refined styling
         let items: Vec<ListItem> = self
             .items
             .iter()
@@ -129,7 +136,7 @@ impl Menu {
                 let marker = if item.is_default { " ★" } else { "" };
                 let content = Line::from(vec![
                     Span::raw(&item.label),
-                    Span::styled(marker, Style::default().fg(Color::Yellow)),
+                    Span::styled(marker, theme::default_marker()),
                 ]);
                 ListItem::new(content)
             })
@@ -137,17 +144,14 @@ impl Menu {
 
         let list = List::new(items)
             .block(Block::default().borders(Borders::NONE))
-            .highlight_style(
-                Style::default()
-                    .bg(Color::Blue)
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .highlight_style(theme::selected())
             .highlight_symbol("▶ ");
 
         frame.render_stateful_widget(list, chunks[2], &mut self.state);
+
+        // Footer with muted style
         let footer = Paragraph::new("↑↓ Navigate  Enter Select  Esc Back  q Quit")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(theme::footer())
             .alignment(Alignment::Center);
         frame.render_widget(footer, chunks[3]);
     }
@@ -212,15 +216,15 @@ impl TextInput {
         ])
         .split(area);
 
-        let label = Paragraph::new(self.label.clone()).style(Style::default().fg(Color::Yellow));
+        let label = Paragraph::new(self.label.clone()).style(theme::default_marker());
         frame.render_widget(label, chunks[0]);
 
         let input = Paragraph::new(self.value.clone())
-            .style(Style::default().fg(Color::White))
+            .style(theme::text())
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Blue)),
+                    .border_style(theme::border_active()),
             );
         frame.render_widget(input, chunks[1]);
     }
@@ -326,32 +330,40 @@ impl TableMenu {
             Constraint::Length(2), // Footer
         ])
         .split(area);
+
+        // Header with theme styling
         let header = Paragraph::new(self.title.clone())
-            .style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .style(theme::title())
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::BOTTOM));
+            .block(
+                Block::default()
+                    .borders(Borders::BOTTOM)
+                    .border_style(theme::border()),
+            );
         frame.render_widget(header, chunks[0]);
+
+        // Subtitle
         if let Some(subtitle) = &self.subtitle {
             let sub = Paragraph::new(subtitle.clone())
-                .style(Style::default().fg(Color::DarkGray))
+                .style(theme::subtitle())
                 .alignment(Alignment::Center);
             frame.render_widget(sub, chunks[1]);
         }
+
         let content_chunks = Layout::vertical([
             Constraint::Min(0),                                  // Table
             Constraint::Length((self.actions.len() + 1) as u16), // Actions
         ])
         .split(chunks[2]);
+
+        // Table header row
         let header_row = Row::new(
             self.headers
                 .iter()
-                .map(|h| Span::styled(h.clone(), Style::default().add_modifier(Modifier::BOLD))),
+                .map(|h| Span::styled(h.clone(), theme::title())),
         );
 
+        // Table data rows
         let table_rows: Vec<Row> = self
             .rows
             .iter()
@@ -363,13 +375,13 @@ impl TableMenu {
                     let last_idx = cells.len() - 1;
                     let last_text = format!("{}{}", cells[last_idx].content, marker);
                     cells[last_idx] = if row.is_default {
-                        Span::styled(last_text, Style::default().fg(Color::Yellow))
+                        Span::styled(last_text, theme::default_marker())
                     } else {
                         Span::raw(last_text)
                     };
                 }
                 let style = if i == self.selected {
-                    Style::default().bg(Color::Blue).fg(Color::White)
+                    theme::selected()
                 } else {
                     Style::default()
                 };
@@ -384,21 +396,24 @@ impl TableMenu {
             .collect();
 
         let table = Table::new(table_rows, widths)
-            .header(header_row.style(Style::default().fg(Color::Cyan)))
-            .block(Block::default().borders(Borders::ALL));
+            .header(header_row.style(theme::title()))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(theme::border()),
+            );
         frame.render_widget(table, content_chunks[0]);
+
+        // Action items
         let action_items: Vec<ListItem> = self
             .actions
             .iter()
             .enumerate()
             .map(|(i, action)| {
                 let style = if self.selected == self.rows.len() + i {
-                    Style::default()
-                        .bg(Color::Blue)
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD)
+                    theme::selected()
                 } else {
-                    Style::default().fg(Color::Green)
+                    theme::action()
                 };
                 ListItem::new(format!("  {}", action)).style(style)
             })
@@ -406,8 +421,10 @@ impl TableMenu {
 
         let actions_list = List::new(action_items);
         frame.render_widget(actions_list, content_chunks[1]);
+
+        // Footer
         let footer = Paragraph::new("↑↓ Navigate  Enter Select  Esc Back  q Quit")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(theme::footer())
             .alignment(Alignment::Center);
         frame.render_widget(footer, chunks[3]);
     }
