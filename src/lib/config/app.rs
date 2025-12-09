@@ -40,6 +40,69 @@ pub struct DocServerConfig {
     pub description: String,
 }
 
+/// Configurable prompts for agent behavior
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PromptsConfig {
+    /// Guidance when tools are available
+    pub tool_guidance: Option<String>,
+    /// Guidance when no tools match the request
+    pub fallback_guidance: Option<String>,
+    /// Message sent to LLM when JSON parsing fails (retry prompt)
+    pub json_retry_message: Option<String>,
+    /// Instruction for tool result formatting
+    pub tool_result_instruction: Option<String>,
+}
+
+impl PromptsConfig {
+    /// Default tool guidance (English)
+    pub fn default_tool_guidance() -> &'static str {
+        "You have access to the following tools. Use them only when necessary to fulfill the user request:"
+    }
+
+    /// Default fallback guidance (English)
+    pub fn default_fallback_guidance() -> &'static str {
+        "If the request is outside the scope of available tools, apologize politely and explain your limitations."
+    }
+
+    /// Default JSON retry message (English)
+    pub fn default_json_retry_message() -> &'static str {
+        "System Error: Invalid JSON format returned. Please output ONLY the raw JSON object for the tool call or final response. Do not use Markdown blocks or explanations."
+    }
+
+    /// Default tool result instruction (English)
+    pub fn default_tool_result_instruction() -> &'static str {
+        "Provide a valid JSON response: use {\"action\":\"call_tool\",\"tool\":\"...\",\"input\":{...}} for tool calls or {\"action\":\"final\",\"response\":\"...\"} for final answers. Do not include any text outside the JSON structure."
+    }
+
+    /// Get tool guidance with fallback to default
+    pub fn tool_guidance(&self) -> &str {
+        self.tool_guidance
+            .as_deref()
+            .unwrap_or(Self::default_tool_guidance())
+    }
+
+    /// Get fallback guidance with fallback to default
+    pub fn fallback_guidance(&self) -> &str {
+        self.fallback_guidance
+            .as_deref()
+            .unwrap_or(Self::default_fallback_guidance())
+    }
+
+    /// Get JSON retry message with fallback to default
+    pub fn json_retry_message(&self) -> &str {
+        self.json_retry_message
+            .as_deref()
+            .unwrap_or(Self::default_json_retry_message())
+    }
+
+    /// Get tool result instruction with fallback to default
+    pub fn tool_result_instruction(&self) -> &str {
+        self.tool_result_instruction
+            .as_deref()
+            .unwrap_or(Self::default_tool_result_instruction())
+    }
+}
+
 /// Application configuration loaded from client.toml
 #[derive(Debug, Clone)]
 pub struct AppConfig {
@@ -52,6 +115,8 @@ pub struct AppConfig {
     pub providers: Vec<ModelProviderConfig>,
     /// REST server settings (CORS, docs)
     pub rest_server: RestServerConfig,
+    /// Configurable prompts for agent behavior
+    pub prompts: PromptsConfig,
 }
 
 impl AppConfig {

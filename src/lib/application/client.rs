@@ -1,5 +1,5 @@
 use super::tooling::{ServerManager, ToolServerInterface};
-use crate::config::{AppConfig, ModelProviderConfig, ServerConfig, ToolConfig};
+use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::model::{ModelError, ModelProvider, ModelRequest};
 use crate::types::{ChatMessage, MessageRole};
 use std::collections::HashMap;
@@ -18,6 +18,7 @@ pub struct ClientConfig {
     pub servers: Vec<ServerConfig>,
     pub prompt_template: Option<String>,
     pub providers: Vec<ModelProviderConfig>,
+    pub prompts: PromptsConfig,
 }
 
 impl ClientConfig {
@@ -30,6 +31,7 @@ impl ClientConfig {
             servers: Vec::new(),
             prompt_template: None,
             providers: Vec::new(),
+            prompts: PromptsConfig::default(),
         }
     }
 
@@ -76,6 +78,7 @@ impl ClientConfig {
             prompt_template: self.prompt_template.clone().unwrap_or_default(),
             providers: self.providers.clone(),
             rest_server: Default::default(),
+            prompts: self.prompts.clone(),
         }
     }
 }
@@ -175,6 +178,10 @@ impl<P: ModelProvider> McpClient<P> {
         self.config.providers()
     }
 
+    pub fn prompts(&self) -> &PromptsConfig {
+        &self.config.prompts
+    }
+
     pub fn server_bridge(&self) -> Arc<dyn ToolServerInterface> {
         self.server_bridge.clone()
     }
@@ -202,10 +209,10 @@ impl<P: ModelProvider> McpClient<P> {
         );
 
         let mut logs = Vec::new();
-        logs.push(format!("Provider '{provider}' dengan model '{model}'"));
+        logs.push(format!("Provider '{provider}' with model '{model}'"));
         if !history.is_empty() {
             logs.push(format!(
-                "Riwayat percakapan sebelumnya: {} pesan",
+                "Previous conversation history: {} messages",
                 history.len()
             ));
         }
@@ -214,7 +221,7 @@ impl<P: ModelProvider> McpClient<P> {
         let system_prompt = self.compose_system_prompt(system);
         if !system_prompt.is_empty() {
             logs.push(format!(
-                "System prompt aktif: {}",
+                "System prompt active: {}",
                 Self::summarise(&system_prompt)
             ));
             messages.push(ChatMessage::new(MessageRole::System, system_prompt));
@@ -222,13 +229,13 @@ impl<P: ModelProvider> McpClient<P> {
         let prompt_preview = Self::summarise(&request.prompt);
         messages.extend(history.iter().cloned());
         messages.push(ChatMessage::new(MessageRole::User, request.prompt.clone()));
-        logs.push(format!("Pengguna: {prompt_preview}"));
+        logs.push(format!("User: {prompt_preview}"));
 
         info!(
             session_id = session_id.as_str(),
             provider = provider.as_str(),
             model = model.as_str(),
-            "Mengirim permintaan ke penyedia model"
+            "Sending request to model provider"
         );
 
         let response = self
@@ -253,10 +260,10 @@ impl<P: ModelProvider> McpClient<P> {
             session_id = final_session.as_str(),
             provider = provider.as_str(),
             model = model.as_str(),
-            "Respons diterima dari penyedia model"
+            "Response received from model provider"
         );
         for entry in &logs {
-            info!(session_id = final_session.as_str(), %entry, "Log interaksi");
+            info!(session_id = final_session.as_str(), %entry, "Interaction log");
         }
 
         self.persist_exchange(&final_session, request.prompt, assistant_message)
@@ -279,20 +286,19 @@ impl<P: ModelProvider> McpClient<P> {
         }
 
         let tool_guidance = if self.config.tools.is_empty() {
-            "Saat warga meminta layanan khusus di luar kemampuanmu saat ini, sampaikan permintaan maaf secara sopan dan jelaskan bahwa layanan tersebut belum tersedia. Tetap berikan alternatif manual atau informasi lain yang dapat membantu."
-                .to_string()
+            // No tools available - use fallback guidance
+            self.config.prompts.fallback_guidance().to_string()
         } else {
-            let mut text = String::from(
-                "Berikut tool layanan digital yang dapat kamu panggil bila diperlukan:\n",
-            );
+            // Tools available - list them with guidance
+            let mut text = format!("{}\n", self.config.prompts.tool_guidance());
             for tool in &self.config.tools {
                 let description = tool
                     .description
                     .as_deref()
-                    .unwrap_or("Tidak ada deskripsi.");
+                    .unwrap_or("No description available.");
                 text.push_str(&format!("- {}: {}\n", tool.name, description));
             }
-            text.push_str("Gunakan tool hanya saat benar-benar membantu warga. Jika permintaan tidak tercakup oleh tool yang tersedia, sampaikan permintaan maaf dan jelaskan keterbatasan yang ada.");
+            text.push_str(self.config.prompts.fallback_guidance());
             text
         };
 
@@ -344,7 +350,7 @@ impl<P: ModelProvider> McpClient<P> {
         const SNIPPET_LIMIT: usize = 160;
         let trimmed = text.trim();
         if trimmed.is_empty() {
-            return "(kosong)".to_string();
+            return "(empty)".to_string();
         }
         let single_line = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
         let mut result = String::new();

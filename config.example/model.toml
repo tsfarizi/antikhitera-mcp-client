@@ -17,8 +17,43 @@ You are a helpful AI assistant.
 {{tool_guidance}}
 """
 
-# Tool configurations (synced from MCP servers)
+# =============================================================================
+# PROMPTS - Customize agent behavior (all fields optional)
+# =============================================================================
+# If not specified, English defaults are used.
+
+[prompts]
+# Guidance shown when tools are available
+# Default: "You have access to the following tools..."
+# tool_guidance = "You have access to the following tools. Use them only when necessary to fulfill the user request:"
+
+# Guidance when request is outside tool scope
+# Default: "If the request is outside the scope of available tools, apologize politely..."
+# fallback_guidance = "If the request is outside the scope of available tools, apologize politely and explain your limitations."
+
+# Message sent to LLM when JSON parsing fails (retry prompt)
+# Default: "System Error: Invalid JSON format returned..."
+# json_retry_message = "System Error: Invalid JSON format returned. Please output ONLY the raw JSON object."
+
+# Instruction for tool result formatting
+# Default: "Provide a valid JSON response..."
+# tool_result_instruction = "Provide a valid JSON response: use {\"action\":\"call_tool\",...} for tool calls or {\"action\":\"final\",...} for final answers."
+
+# -----------------------------------------------------------------------------
+# Example: Indonesian prompts (uncomment to customize for Indonesian users)
+# -----------------------------------------------------------------------------
+# [prompts]
+# tool_guidance = "Berikut tool layanan digital yang dapat kamu panggil bila diperlukan:"
+# fallback_guidance = "Saat warga meminta layanan khusus di luar kemampuanmu saat ini, sampaikan permintaan maaf secara sopan dan jelaskan bahwa layanan tersebut belum tersedia. Tetap berikan alternatif manual atau informasi lain yang dapat membantu."
+# json_retry_message = "Error Sistem: Format JSON tidak valid. Harap keluarkan HANYA objek JSON mentah untuk pemanggilan tool atau respons akhir. Jangan gunakan blok Markdown atau penjelasan."
+# tool_result_instruction = "Berikan respons JSON valid sesuai format instruksi: gunakan {\"action\":\"call_tool\",\"tool\":\"...\",\"input\":{...}} untuk pemanggilan berikutnya atau {\"action\":\"final\",\"response\":\"...\"} untuk jawaban akhir. Jangan sertakan teks lain di luar struktur JSON."
+
+# =============================================================================
+# TOOLS - Tool configurations (synced from MCP servers)
+# =============================================================================
+
 # [[tools]]
 # name = "tool_name"
 # description = "Tool description"
 # server = "server_name"
+

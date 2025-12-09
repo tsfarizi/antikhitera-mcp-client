@@ -8,7 +8,8 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-const TOOL_RESULT_GUIDANCE: &str = "Berikan respons JSON valid sesuai format instruksi: gunakan {\"action\":\"call_tool\",\"tool\":\"...\",\"input\":{...}} untuk pemanggilan berikutnya atau {\"action\":\"final\",\"response\":\"...\"} untuk jawaban akhir. Jangan sertakan teks lain di luar struktur JSON.";
+/// Maximum retry attempts for JSON parsing failures
+const MAX_JSON_RETRIES: u8 = 3;
 
 pub struct Agent<P: ModelProvider> {
     client: Arc<McpClient<P>>,
@@ -48,7 +49,7 @@ impl<P: ModelProvider> Agent<P> {
 
         let prompt_preview = McpClient::<P>::summarise(&prompt);
         let mut next_prompt = self.runtime.initial_user_prompt(prompt, &context);
-        logs.push(format!("Permintaan awal agent: {prompt_preview}"));
+        logs.push(format!("Initial agent request: {prompt_preview}"));
         let effective_provider = provider_override
             .clone()
             .unwrap_or_else(|| self.client.default_provider().to_string());
@@ -56,7 +57,7 @@ impl<P: ModelProvider> Agent<P> {
             .clone()
             .unwrap_or_else(|| self.client.default_model().to_string());
         logs.push(format!(
-            "Provider aktif: '{effective_provider}' | Model: '{effective_model}'"
+            "Active provider: '{effective_provider}' | Model: '{effective_model}'"
         ));
         let mut remaining_steps = options.max_steps;
         let mut system_prompt_to_send = Some(system_prompt);
@@ -84,14 +85,19 @@ impl<P: ModelProvider> Agent<P> {
             session_id = Some(result.session_id.clone());
             first_call = false;
 
-            match self.runtime.parse_agent_action(&result.content)? {
+            // Parse agent action with retry logic for malformed JSON
+            let directive = self
+                .parse_with_retry(&result.content, &mut logs, &session_id)
+                .await?;
+
+            match directive {
                 AgentDirective::Final { response } => {
                     info!(
                         session_id = result.session_id.as_str(),
                         "Agent returned final response"
                     );
                     let final_preview = McpClient::<P>::summarise(&response);
-                    logs.push(format!("Jawaban akhir agent: {final_preview}"));
+                    logs.push(format!("Agent final answer: {final_preview}"));
                     return Ok(AgentOutcome {
                         logs,
                         session_id: result.session_id,
@@ -110,12 +116,12 @@ impl<P: ModelProvider> Agent<P> {
                     info!(tool = %tool, "Agent requested tool execution");
                     let execution = self.runtime.execute(&tool, input).await?;
                     logs.push(format!(
-                        "Tool '{}' dijalankan (sukses: {})",
+                        "Tool '{}' executed (success: {})",
                         execution.tool, execution.success
                     ));
                     if let Some(message) = execution.message.as_deref() {
                         logs.push(format!(
-                            "Pesan tool: {}",
+                            "Tool message: {}",
                             McpClient::<P>::summarise(message)
                         ));
                     }
@@ -128,6 +134,8 @@ impl<P: ModelProvider> Agent<P> {
                         message: execution.message.clone(),
                     });
 
+                    // Use configurable tool result instruction
+                    let tool_result_instruction = self.client.prompts().tool_result_instruction();
                     next_prompt = json!({
                         "tool_result": {
                             "tool": execution.tool,
@@ -136,9 +144,79 @@ impl<P: ModelProvider> Agent<P> {
                             "output": execution.output,
                             "message": execution.message,
                         },
-                        "instruction": TOOL_RESULT_GUIDANCE,
+                        "instruction": tool_result_instruction,
                     })
                     .to_string();
+                }
+            }
+        }
+    }
+
+    /// Parse agent action with retry logic for malformed JSON
+    async fn parse_with_retry(
+        &self,
+        content: &str,
+        logs: &mut Vec<String>,
+        session_id: &Option<String>,
+    ) -> Result<AgentDirective, AgentError> {
+        let mut retry_count = 0u8;
+        let mut current_content = content.to_string();
+
+        loop {
+            match self.runtime.parse_agent_action(&current_content) {
+                Ok(directive) => return Ok(directive),
+                Err(e) if retry_count < MAX_JSON_RETRIES => {
+                    retry_count += 1;
+                    warn!(
+                        attempt = retry_count,
+                        max_attempts = MAX_JSON_RETRIES,
+                        error = %e,
+                        "JSON parse failed, requesting correction from model"
+                    );
+                    logs.push(format!(
+                        "JSON parse retry attempt {}/{}: {}",
+                        retry_count, MAX_JSON_RETRIES, e
+                    ));
+
+                    // Get retry message from config
+                    let retry_message = format!(
+                        "{}\n\nError details: {}",
+                        self.client.prompts().json_retry_message(),
+                        e
+                    );
+
+                    // Send correction request to model
+                    let retry_request = ChatRequest {
+                        prompt: retry_message,
+                        provider: None,
+                        model: None,
+                        system_prompt: None,
+                        session_id: session_id.clone(),
+                    };
+
+                    match self.client.chat(retry_request).await {
+                        Ok(retry_result) => {
+                            logs.extend(retry_result.logs.clone());
+                            current_content = retry_result.content;
+                        }
+                        Err(chat_err) => {
+                            warn!(error = %chat_err, "Retry chat request failed");
+                            return Err(AgentError::InvalidResponse(format!(
+                                "Failed to get correction after JSON parse error: {}",
+                                chat_err
+                            )));
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        attempts = retry_count,
+                        "JSON parse failed after max retries"
+                    );
+                    return Err(AgentError::InvalidResponse(format!(
+                        "Invalid JSON after {} retry attempts: {}",
+                        MAX_JSON_RETRIES, e
+                    )));
                 }
             }
         }
