@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "antikhitera-mcp-client"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "async-trait",
  "atty",

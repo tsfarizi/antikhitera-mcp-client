@@ -9,7 +9,7 @@ pub mod wizard;
 
 pub use crate::constants::{CONFIG_PATH, ENV_PATH, MODEL_CONFIG_PATH};
 
-pub use app::{AppConfig, DocServerConfig};
+pub use app::{AppConfig, DocServerConfig, PromptsConfig};
 pub use error::ConfigError;
 pub use provider::{ModelInfo, ModelProviderConfig};
 pub use server::ServerConfig;

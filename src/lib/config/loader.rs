@@ -1,4 +1,4 @@
-use super::app::RestServerConfig;
+use super::app::{PromptsConfig, RestServerConfig};
 use super::error::ConfigError;
 use super::provider::{ModelProviderConfig, RawProviderConfig};
 use super::server::{RawServer, ServerConfig};
@@ -27,7 +27,7 @@ struct RawClientConfig {
     pub server: RestServerConfig,
 }
 
-/// Raw configuration structure for model.toml (default_provider, model, prompt_template, tools)
+/// Raw configuration structure for model.toml (default_provider, model, prompt_template, tools, prompts)
 #[derive(Debug, Deserialize, Default)]
 struct RawModelConfig {
     pub model: Option<String>,
@@ -36,6 +36,9 @@ struct RawModelConfig {
     #[serde(default)]
     pub tools: Vec<RawTool>,
     pub prompt_template: Option<String>,
+    /// Optional prompts configuration section
+    #[serde(default)]
+    pub prompts: PromptsConfig,
 }
 
 /// Ensures environment variables are loaded from config/.env
@@ -148,5 +151,6 @@ fn validate_and_build(
         prompt_template,
         providers,
         rest_server: client.server,
+        prompts: model.prompts,
     })
 }
