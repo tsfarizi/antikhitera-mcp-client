@@ -171,8 +171,8 @@ async fn handle_command<P: ModelProvider>(
                     write_line(
                         stdout,
                         &format!(
-                            "- Prompt template: {} karakter",
-                            config.prompt_template.len()
+                            "- Prompt template: {} characters",
+                            config.prompt_template().len()
                         ),
                     )
                     .await?;

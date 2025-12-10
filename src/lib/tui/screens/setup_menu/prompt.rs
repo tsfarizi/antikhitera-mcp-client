@@ -26,7 +26,7 @@ pub fn run_edit_prompt_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn E
     loop {
         let config = load_config()?;
         let preview: String = config
-            .prompt_template
+            .prompt_template()
             .lines()
             .take(2)
             .collect::<Vec<_>>()
@@ -70,10 +70,10 @@ pub fn run_edit_prompt_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn E
                     }
                 }
                 Some(1) => {
-                    run_edit_template_tui(terminal, &config.prompt_template)?;
+                    run_edit_template_tui(terminal, config.prompt_template())?;
                 }
                 Some(2) => {
-                    run_view_template_tui(terminal, &config.prompt_template)?;
+                    run_view_template_tui(terminal, config.prompt_template())?;
                 }
                 Some(3) => break,
                 _ => {}

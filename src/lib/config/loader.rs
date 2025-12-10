@@ -27,7 +27,7 @@ struct RawClientConfig {
     pub server: RestServerConfig,
 }
 
-/// Raw configuration structure for model.toml (default_provider, model, prompt_template, tools, prompts)
+/// Raw configuration structure for model.toml (default_provider, model, tools, prompts)
 #[derive(Debug, Deserialize, Default)]
 struct RawModelConfig {
     pub model: Option<String>,
@@ -35,8 +35,7 @@ struct RawModelConfig {
     pub system_prompt: Option<String>,
     #[serde(default)]
     pub tools: Vec<RawTool>,
-    pub prompt_template: Option<String>,
-    /// Optional prompts configuration section
+    /// Optional prompts configuration section (includes template)
     #[serde(default)]
     pub prompts: PromptsConfig,
 }
@@ -116,9 +115,6 @@ fn validate_and_build(
     let default_provider = model
         .default_provider
         .ok_or(ConfigError::MissingDefaultProvider)?;
-    let prompt_template = model
-        .prompt_template
-        .ok_or(ConfigError::MissingPromptTemplate)?;
 
     if client.providers.is_empty() {
         return Err(ConfigError::NoProvidersConfigured);
@@ -148,7 +144,6 @@ fn validate_and_build(
         system_prompt: model.system_prompt,
         tools: model.tools.into_iter().map(ToolConfig::from).collect(),
         servers: client.servers.into_iter().map(ServerConfig::from).collect(),
-        prompt_template,
         providers,
         rest_server: client.server,
         prompts: model.prompts,
