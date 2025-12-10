@@ -1,3 +1,39 @@
+//! # Antikhitera MCP Client
+//!
+//! A robust Model Context Protocol (MCP) client library for building AI-powered applications.
+//! This crate provides tools for connecting to language models through multiple providers
+//! (Gemini, OpenAI, Ollama) and integrating with MCP servers for tool execution.
+//!
+//! ## Architecture
+//!
+//! The library is organized into several key modules:
+//!
+//! - [`config`] - Configuration loading and validation from TOML files
+//! - [`application`] - Core application logic including the MCP client and agent
+//! - [`infrastructure`] - Low-level implementations (model providers, RPC, REST server)
+//! - [`tui`] - Terminal User Interface components
+//! - [`cli`] - Command-line argument parsing
+//!
+//! ## Quick Start
+//!
+//! ```ignore
+//! use antikhitera_mcp_client::{Cli, run};
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let cli = Cli::parse(); // Use clap to parse CLI args
+//!     run(cli).await.expect("Failed to run client");
+//! }
+//! ```
+//!
+//! ## Configuration
+//!
+//! The client uses two configuration files:
+//! - `config/client.toml` - Provider settings, servers, CORS configuration
+//! - `config/model.toml` - Model selection, prompts, and tool definitions
+//!
+//! See [`config::AppConfig`] for details on the configuration structure.
+
 pub mod application;
 pub mod cli;
 pub mod config;

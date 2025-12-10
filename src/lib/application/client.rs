@@ -1,3 +1,26 @@
+//! # MCP Client Module
+//!
+//! This module provides the core MCP client implementation for communicating
+//! with AI language models. It handles chat sessions, tool execution, and
+//! conversation management.
+//!
+//! ## Key Types
+//!
+//! - [`McpClient`] - Main client for model communication
+//! - [`ClientConfig`] - Configuration for the client
+//! - [`ChatRequest`] - Request parameters for a chat
+//! - [`ChatResult`] - Response from a chat request
+//!
+//! ## Example
+//!
+//! ```no_run
+//! use antikhitera_mcp_client::client::{McpClient, ClientConfig, ChatRequest};
+//!
+//! async fn example() {
+//!     // Client setup would go here
+//! }
+//! ```
+
 use super::tooling::{ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::model::{ModelError, ModelProvider, ModelRequest};
@@ -9,18 +32,39 @@ use tokio::sync::Mutex;
 use tracing::{debug, info};
 use uuid::Uuid;
 
+/// Client configuration for the MCP client.
+///
+/// This struct holds all settings needed to initialize and run the client,
+/// including provider settings, tools, servers, and prompt configurations.
+///
+/// Use the builder pattern methods (`with_*`) to construct the configuration:
+///
+/// ```no_run
+/// use antikhitera_mcp_client::client::ClientConfig;
+///
+/// let config = ClientConfig::new("gemini", "gemini-2.0-flash")
+///     .with_system_prompt("You are a helpful assistant.");
+/// ```
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
+    /// Default provider ID to use
     pub default_provider: String,
+    /// Default model name
     pub default_model: String,
+    /// Optional system prompt override
     pub default_system_prompt: Option<String>,
+    /// Available tools from MCP servers
     pub tools: Vec<ToolConfig>,
+    /// MCP server configurations
     pub servers: Vec<ServerConfig>,
+    /// Available model providers
     pub providers: Vec<ModelProviderConfig>,
+    /// Configurable prompts for agent behavior
     pub prompts: PromptsConfig,
 }
 
 impl ClientConfig {
+    /// Create a new client configuration with the specified provider and model.
     pub fn new(default_provider: impl Into<String>, default_model: impl Into<String>) -> Self {
         Self {
             default_provider: default_provider.into(),
@@ -33,39 +77,47 @@ impl ClientConfig {
         }
     }
 
+    /// Set the default system prompt.
     pub fn with_system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.default_system_prompt = Some(prompt.into());
         self
     }
 
+    /// Set the available tools.
     pub fn with_tools(mut self, tools: Vec<ToolConfig>) -> Self {
         self.tools = tools;
         self
     }
 
+    /// Set the MCP server configurations.
     pub fn with_servers(mut self, servers: Vec<ServerConfig>) -> Self {
         self.servers = servers;
         self
     }
 
+    /// Set the available model providers.
     pub fn with_providers(mut self, providers: Vec<ModelProviderConfig>) -> Self {
         self.providers = providers;
         self
     }
 
+    /// Set the prompts configuration.
     pub fn with_prompts(mut self, prompts: PromptsConfig) -> Self {
         self.prompts = prompts;
         self
     }
 
+    /// Get the list of providers.
     pub fn providers(&self) -> &[ModelProviderConfig] {
         &self.providers
     }
 
+    /// Get the prompt template from prompts config.
     pub fn prompt_template(&self) -> &str {
         self.prompts.template()
     }
 
+    /// Convert to AppConfig for compatibility.
     pub fn to_app_config(&self) -> AppConfig {
         AppConfig {
             default_provider: self.default_provider.clone(),
@@ -80,21 +132,39 @@ impl ClientConfig {
     }
 }
 
+/// Request parameters for a chat interaction.
+///
+/// All fields except `prompt` are optional and will use defaults from
+/// the client configuration if not specified.
 #[derive(Debug, Default)]
 pub struct ChatRequest {
+    /// The user's message/prompt
     pub prompt: String,
+    /// Optional provider override
     pub provider: Option<String>,
+    /// Optional model override
     pub model: Option<String>,
+    /// Optional system prompt override
     pub system_prompt: Option<String>,
+    /// Session ID for conversation continuity
     pub session_id: Option<String>,
 }
 
+/// Result from a chat interaction.
+///
+/// Contains the model's response along with metadata about
+/// the interaction.
 #[derive(Debug, Clone)]
 pub struct ChatResult {
+    /// The model's response content
     pub content: String,
+    /// Session ID for this conversation
     pub session_id: String,
+    /// Provider used for this request
     pub provider: String,
+    /// Model used for this request
     pub model: String,
+    /// Debug/execution logs
     pub logs: Vec<String>,
 }
 
