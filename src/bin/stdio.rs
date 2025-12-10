@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )
     .with_tools(file_config.tools.clone())
     .with_servers(file_config.servers.clone())
-    .with_prompt_template(Some(file_config.prompt_template.clone()))
+    .with_prompts(file_config.prompts.clone())
     .with_providers(file_config.providers.clone());
 
     let client = Arc::new(McpClient::new(provider, client_config));

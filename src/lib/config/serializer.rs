@@ -8,7 +8,7 @@ pub fn to_raw_toml_string(config: &AppConfig) -> String {
         &config.default_provider,
         &config.model,
         config.system_prompt.as_deref(),
-        &config.prompt_template,
+        &config.prompt_template(),
         &config.tools,
         &config.providers,
     )

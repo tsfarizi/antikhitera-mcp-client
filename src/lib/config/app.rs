@@ -43,6 +43,8 @@ pub struct DocServerConfig {
 /// Configurable prompts for agent behavior
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PromptsConfig {
+    /// System prompt template with placeholders
+    pub template: Option<String>,
     /// Guidance when tools are available
     pub tool_guidance: Option<String>,
     /// Guidance when no tools match the request
@@ -54,6 +56,11 @@ pub struct PromptsConfig {
 }
 
 impl PromptsConfig {
+    /// Default prompt template
+    pub fn default_template() -> &'static str {
+        "You are a helpful AI assistant.\n\n{{custom_instruction}}\n\n{{language_guidance}}\n\n{{tool_guidance}}"
+    }
+
     /// Default tool guidance (English)
     pub fn default_tool_guidance() -> &'static str {
         "You have access to the following tools. Use them only when necessary to fulfill the user request:"
@@ -72,6 +79,11 @@ impl PromptsConfig {
     /// Default tool result instruction (English)
     pub fn default_tool_result_instruction() -> &'static str {
         "Provide a valid JSON response: use {\"action\":\"call_tool\",\"tool\":\"...\",\"input\":{...}} for tool calls or {\"action\":\"final\",\"response\":\"...\"} for final answers. Do not include any text outside the JSON structure."
+    }
+
+    /// Get template with fallback to default
+    pub fn template(&self) -> &str {
+        self.template.as_deref().unwrap_or(Self::default_template())
     }
 
     /// Get tool guidance with fallback to default
@@ -111,7 +123,6 @@ pub struct AppConfig {
     pub system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
-    pub prompt_template: String,
     pub providers: Vec<ModelProviderConfig>,
     /// REST server settings (CORS, docs)
     pub rest_server: RestServerConfig,
@@ -127,7 +138,7 @@ impl AppConfig {
 
     /// Get the prompt template
     pub fn prompt_template(&self) -> &str {
-        &self.prompt_template
+        self.prompts.template()
     }
 
     /// Convert configuration to TOML string

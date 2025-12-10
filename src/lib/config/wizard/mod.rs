@@ -490,14 +490,10 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
 
     ui::print_info("Current prompt template:");
     ui::print_divider();
-    let preview: String = config
-        .prompt_template
-        .lines()
-        .take(10)
-        .collect::<Vec<&str>>()
-        .join("\n");
+    let template = config.prompt_template();
+    let preview: String = template.lines().take(10).collect::<Vec<&str>>().join("\n");
     println!("{}", preview);
-    if config.prompt_template.lines().count() > 10 {
+    if template.lines().count() > 10 {
         println!("  ... (truncated)");
     }
 

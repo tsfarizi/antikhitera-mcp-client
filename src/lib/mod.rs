@@ -72,7 +72,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     )
     .with_tools(file_config.tools.clone())
     .with_servers(file_config.servers.clone())
-    .with_prompt_template(Some(file_config.prompt_template.clone()))
+    .with_prompts(file_config.prompts.clone())
     .with_providers(providers.clone());
     if let Some(system_prompt) = cli.system.clone().or(file_config.system_prompt.clone()) {
         client_config = client_config.with_system_prompt(system_prompt);

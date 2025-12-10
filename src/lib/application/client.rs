@@ -16,7 +16,6 @@ pub struct ClientConfig {
     pub default_system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
-    pub prompt_template: Option<String>,
     pub providers: Vec<ModelProviderConfig>,
     pub prompts: PromptsConfig,
 }
@@ -29,7 +28,6 @@ impl ClientConfig {
             default_system_prompt: None,
             tools: Vec::new(),
             servers: Vec::new(),
-            prompt_template: None,
             providers: Vec::new(),
             prompts: PromptsConfig::default(),
         }
@@ -50,13 +48,13 @@ impl ClientConfig {
         self
     }
 
-    pub fn with_prompt_template(mut self, template: Option<String>) -> Self {
-        self.prompt_template = template;
+    pub fn with_providers(mut self, providers: Vec<ModelProviderConfig>) -> Self {
+        self.providers = providers;
         self
     }
 
-    pub fn with_providers(mut self, providers: Vec<ModelProviderConfig>) -> Self {
-        self.providers = providers;
+    pub fn with_prompts(mut self, prompts: PromptsConfig) -> Self {
+        self.prompts = prompts;
         self
     }
 
@@ -64,8 +62,8 @@ impl ClientConfig {
         &self.providers
     }
 
-    pub fn prompt_template(&self) -> Option<&str> {
-        self.prompt_template.as_deref()
+    pub fn prompt_template(&self) -> &str {
+        self.prompts.template()
     }
 
     pub fn to_app_config(&self) -> AppConfig {
@@ -75,7 +73,6 @@ impl ClientConfig {
             system_prompt: self.default_system_prompt.clone(),
             tools: self.tools.clone(),
             servers: self.servers.clone(),
-            prompt_template: self.prompt_template.clone().unwrap_or_default(),
             providers: self.providers.clone(),
             rest_server: Default::default(),
             prompts: self.prompts.clone(),
@@ -160,7 +157,7 @@ impl<P: ModelProvider> McpClient<P> {
 
     pub fn config_snapshot(&self) -> ClientConfigSnapshot {
         let app_config = self.config.to_app_config();
-        let prompt_template = app_config.prompt_template.clone();
+        let prompt_template = app_config.prompt_template().to_string();
         let raw = app_config.to_raw_toml();
         ClientConfigSnapshot {
             model: app_config.model.clone(),
@@ -279,7 +276,7 @@ impl<P: ModelProvider> McpClient<P> {
     }
 
     fn compose_system_prompt(&self, override_prompt: Option<String>) -> String {
-        let template = self.config.prompt_template.clone().unwrap_or_default();
+        let template = self.config.prompt_template().to_string();
         let custom_instruction = override_prompt.unwrap_or_default();
         if template.is_empty() {
             return custom_instruction.trim().to_string();

@@ -35,7 +35,7 @@ pub async fn config_get_handler<P: ModelProvider>(
         }
     };
 
-    let prompt_template = config.prompt_template.clone();
+    let prompt_template = config.prompt_template().to_string();
     let raw = std::fs::read_to_string(path).unwrap_or_else(|_| config.to_raw_toml());
 
     Ok(Json(ConfigResponse {
@@ -78,7 +78,7 @@ pub async fn config_put_handler<P: ModelProvider>(
     config.model = payload.model;
     config.default_provider = payload.default_provider;
     config.system_prompt = payload.system_prompt;
-    config.prompt_template = payload.prompt_template.clone();
+    config.prompts.template = Some(payload.prompt_template.clone());
 
     if let Some(parent) = path.parent() {
         if let Err(error) = std::fs::create_dir_all(parent) {
@@ -92,7 +92,7 @@ pub async fn config_put_handler<P: ModelProvider>(
     }
 
     let raw = config.to_raw_toml();
-    let prompt_template = config.prompt_template.clone();
+    let prompt_template = config.prompt_template().to_string();
 
     if let Err(error) = std::fs::write(path, &raw) {
         return Err((
@@ -135,7 +135,7 @@ pub async fn config_reload_handler<P: ModelProvider>(
     match AppConfig::load(Some(path)) {
         Ok(config) => {
             let raw = std::fs::read_to_string(path).unwrap_or_else(|_| config.to_raw_toml());
-            let prompt_template = config.prompt_template.clone();
+            let prompt_template = config.prompt_template().to_string();
 
             info!("Configuration reloaded successfully");
 
