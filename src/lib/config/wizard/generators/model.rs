@@ -1,10 +1,10 @@
 //! Model configuration generator
 //!
 //! Generates and modifies config/model.toml containing:
-//! - default_provider
-//! - model
-//! - prompt_template
-//! - [[tools]]
+//! - `default_provider` - Default API provider ID
+//! - `model` - Default model name
+//! - `[prompts]` - System prompt template and configurable prompts
+//! - `[[tools]]` - Tool definitions synced from MCP servers
 
 use crate::constants::MODEL_CONFIG_PATH;
 use std::collections::HashSet;

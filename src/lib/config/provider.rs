@@ -1,7 +1,21 @@
+//! # Provider Configuration
+//!
+//! This module defines the configuration types for AI model providers.
+//! Supported provider types include Gemini, OpenAI, and Ollama.
+//!
+//! ## Provider Types
+//!
+//! | Type | Description | API Key Required |
+//! |------|-------------|-----------------|
+//! | `gemini` | Google Gemini API | Yes |
+//! | `openai` | OpenAI-compatible APIs | Yes |
+//! | `ollama` | Local Ollama server | No |
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// Trait for configuration types that can be parsed from TOML.
+///
 /// This provides a consistent interface for converting raw deserialized
 /// data into the final configuration types.
 pub trait ParseableConfig<R>: Sized
@@ -12,25 +26,53 @@ where
     fn from_raw(raw: R) -> Self;
 }
 
+/// Information about an available model from a provider.
+///
+/// Models can be specified with just a name, or with an optional display name
+/// for better UI presentation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ModelInfo {
+    /// Model identifier used in API calls (e.g., "gemini-2.0-flash")
     pub name: String,
+    /// Human-readable display name for UI (e.g., "Gemini 2.0 Flash")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
 }
 
+/// Configuration for an AI model provider.
+///
+/// Each provider represents a connection to an AI service endpoint.
+/// Multiple providers can be configured to allow switching between
+/// different models or services.
+///
+/// # Example
+///
+/// ```toml
+/// [[providers]]
+/// id = "gemini"
+/// type = "gemini"
+/// endpoint = "https://generativelanguage.googleapis.com"
+/// api_key = "${GEMINI_API_KEY}"
+/// models = [
+///     { name = "gemini-2.0-flash", display_name = "Gemini 2.0 Flash" }
+/// ]
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ModelProviderConfig {
+    /// Unique identifier for this provider (e.g., "gemini", "ollama-local")
     pub id: String,
-    /// The provider type determines API format: "ollama", "gemini", "openai", etc.
+    /// The provider type determines API format: "ollama", "gemini", "openai"
     #[serde(rename = "type")]
     pub provider_type: String,
+    /// API endpoint URL
     pub endpoint: String,
+    /// API key (can use environment variable syntax like "${VAR_NAME}")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
-    /// Custom API path (e.g., "v1beta/models" for Gemini)
+    /// Custom API path override (e.g., "v1beta/models" for Gemini)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_path: Option<String>,
+    /// List of available models from this provider
     pub models: Vec<ModelInfo>,
 }
 

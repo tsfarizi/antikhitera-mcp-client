@@ -1,9 +1,9 @@
 //! Client configuration generator
 //!
 //! Generates and modifies config/client.toml containing:
-//! - [[providers]]
-//! - [[servers]]
-//! - [server] (REST settings: CORS, docs)
+//! - `[[providers]]` - API provider configurations
+//! - `[[servers]]` - MCP server definitions
+//! - `[server]` - REST settings (CORS, docs)
 
 use crate::constants::CONFIG_PATH;
 use std::error::Error;

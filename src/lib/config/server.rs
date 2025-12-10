@@ -1,16 +1,41 @@
+//! # MCP Server Configuration
+//!
+//! This module defines configuration for connecting to MCP (Model Context Protocol) servers.
+//! MCP servers provide tools that the AI agent can use to perform actions.
+//!
+//! ## Example
+//!
+//! ```toml
+//! [[servers]]
+//! name = "time"
+//! command = "python"
+//! args = ["-m", "mcp_server_time"]
+//! ```
+
 use serde::Deserialize;
 use shellexpand;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Configuration for an MCP server connection.
+///
+/// MCP servers are external processes that provide tools for the AI agent.
+/// Each server is started as a subprocess with the specified command and arguments.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct ServerConfig {
+    /// Unique name for this server
     pub name: String,
+    /// Path to the executable
     pub command: PathBuf,
+    /// Command line arguments
     pub args: Vec<String>,
+    /// Environment variables for the process
     pub env: HashMap<String, String>,
+    /// Working directory (optional)
     pub workdir: Option<PathBuf>,
+    /// Default timezone for time-related operations
     pub default_timezone: Option<String>,
+    /// Default city for location-based operations
     pub default_city: Option<String>,
 }
 
