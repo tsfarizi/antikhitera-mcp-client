@@ -121,7 +121,6 @@ fn update_prompts_field(
     let mut result = String::new();
     let mut in_prompts_section = false;
     let mut field_written = false;
-    let mut in_multiline = false;
     let mut skip_until_end_quote = false;
 
     let field_prefix = format!("{} = ", field_name);

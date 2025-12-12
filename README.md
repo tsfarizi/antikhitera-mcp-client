@@ -565,6 +565,129 @@ command = "/path/to/server-binary"
 
 ---
 
+## 🔍 Server Auto-Discovery
+
+The discovery module provides automatic loading of MCP servers from a designated folder.
+
+### Architecture
+
+```mermaid
+flowchart TB
+    subgraph Discovery["🔍 Discovery Module"]
+        direction TB
+        SCAN["📂 Scanner<br/>scan_folder()"]
+        LOAD["⚡ Loader<br/>load_all()"]
+        TYPES["📦 Types<br/>DiscoveredServer"]
+    end
+    
+    subgraph Folder["📁 servers/"]
+        S1["mcp-time.exe"]
+        S2["mcp-filesystem.exe"]
+        S3["mcp-weather.exe"]
+    end
+    
+    subgraph Process["🔄 Processing"]
+        P1["1️⃣ Detect executable"]
+        P2["2️⃣ Spawn process"]
+        P3["3️⃣ MCP initialize"]
+        P4["4️⃣ tools/list"]
+    end
+    
+    subgraph Result["✅ Result"]
+        R1["Server name"]
+        R2["Tool list"]
+        R3["Load status"]
+    end
+    
+    Folder --> SCAN
+    SCAN --> |"Find binaries"| LOAD
+    LOAD --> Process
+    Process --> TYPES
+    TYPES --> Result
+    
+    style Discovery fill:#6c5ce7,stroke:#a29bfe,color:#fff
+    style Folder fill:#0984e3,stroke:#74b9ff,color:#fff
+    style Process fill:#00b894,stroke:#00cec9,color:#fff
+    style Result fill:#fd79a8,stroke:#e84393,color:#fff
+```
+
+### Discovery Flow
+
+```mermaid
+sequenceDiagram
+    participant App as 🚀 Application
+    participant Scanner as 📂 Scanner
+    participant Loader as ⚡ Loader
+    participant Server as 🔧 MCP Server
+    
+    App->>Scanner: scan_folder("servers")
+    Scanner->>Scanner: Find executable files
+    Scanner-->>App: Vec<DiscoveredServer>
+    
+    loop For each server
+        App->>Loader: load_server(&mut server)
+        Loader->>Server: Spawn process
+        Loader->>Server: initialize
+        Server-->>Loader: capabilities
+        Loader->>Server: tools/list
+        Server-->>Loader: available tools
+        Loader-->>App: Update server.tools
+    end
+    
+    App->>App: DiscoverySummary
+```
+
+### Usage
+
+```rust
+use antikhitera_mcp_client::application::discovery;
+
+// Option 1: Scan and load in one step
+let (servers, summary) = discovery::scan_and_load("servers").await?;
+
+println!("✓ Loaded {} servers with {} total tools", 
+    summary.loaded, 
+    summary.total_tools
+);
+
+// Option 2: Manual two-step process
+let mut servers = discovery::scan_folder("servers")?;
+let summary = discovery::load_all(&mut servers).await;
+
+// Iterate through results
+for server in &servers {
+    match &server.load_status {
+        LoadStatus::Success => {
+            println!("✓ {} - {} tools", server.name, server.tool_count());
+            for (tool_name, desc) in &server.tools {
+                println!("  • {}: {}", tool_name, desc);
+            }
+        }
+        LoadStatus::Failed(e) => println!("✗ {} - {}", server.name, e),
+        LoadStatus::NoTools => println!("⚠ {} - no tools", server.name),
+        _ => {}
+    }
+}
+```
+
+### Module Structure
+
+| File | Description |
+|:-----|:------------|
+| `discovery/mod.rs` | Module exports + documentation |
+| `discovery/types.rs` | `DiscoveredServer`, `LoadStatus`, `DiscoverySummary` |
+| `discovery/scanner.rs` | `scan_folder()` - Platform-specific executable detection |
+| `discovery/loader.rs` | `load_all()`, `scan_and_load()` - MCP initialization |
+
+### Platform-Specific Detection
+
+| Platform | Detected Extensions |
+|:---------|:-------------------|
+| **Windows** | `.exe`, `.cmd`, `.bat` |
+| **Unix/Linux** | Files with execute permission bit |
+
+---
+
 ## 🧪 Development
 
 ### Project Structure
