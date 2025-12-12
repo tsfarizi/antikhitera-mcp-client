@@ -8,6 +8,7 @@
 //! - runner.rs: Coordinates the components
 
 mod input;
+mod messaging;
 mod runner;
 mod state;
 mod ui;
