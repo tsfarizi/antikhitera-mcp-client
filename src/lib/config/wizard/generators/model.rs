@@ -12,7 +12,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-/// Generate the model configuration file
+/// Generate the model configuration file with new [prompts] section format
 pub fn generate(provider_id: &str, default_model: &str) -> Result<(), Box<dyn Error>> {
     let config_content = format!(
         r#"# Model Configuration
@@ -22,8 +22,9 @@ pub fn generate(provider_id: &str, default_model: &str) -> Result<(), Box<dyn Er
 default_provider = "{provider_id}"
 model = "{default_model}"
 
-# System prompt template
-prompt_template = """
+# Prompts configuration
+[prompts]
+template = """
 You are a helpful AI assistant.
 
 {{{{custom_instruction}}}}
@@ -83,36 +84,122 @@ pub fn update_default_model(model_name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Update the prompt template
+/// Update the prompt template (legacy compatibility - updates [prompts].template)
 pub fn update_prompt_template(template: &str) -> Result<(), Box<dyn Error>> {
+    update_prompts_field("template", template, true)
+}
+
+/// Update tool_guidance in [prompts] section
+pub fn update_tool_guidance(value: &str) -> Result<(), Box<dyn Error>> {
+    update_prompts_field("tool_guidance", value, false)
+}
+
+/// Update fallback_guidance in [prompts] section
+pub fn update_fallback_guidance(value: &str) -> Result<(), Box<dyn Error>> {
+    update_prompts_field("fallback_guidance", value, false)
+}
+
+/// Update json_retry_message in [prompts] section
+pub fn update_json_retry_message(value: &str) -> Result<(), Box<dyn Error>> {
+    update_prompts_field("json_retry_message", value, false)
+}
+
+/// Update tool_result_instruction in [prompts] section
+pub fn update_tool_result_instruction(value: &str) -> Result<(), Box<dyn Error>> {
+    update_prompts_field("tool_result_instruction", value, false)
+}
+
+/// Generic function to update a field in [prompts] section
+fn update_prompts_field(
+    field_name: &str,
+    value: &str,
+    multiline: bool,
+) -> Result<(), Box<dyn Error>> {
     let config_path = Path::new(MODEL_CONFIG_PATH);
     let content = fs::read_to_string(config_path)?;
+
     let mut result = String::new();
-    let mut in_template = false;
-    let mut template_written = false;
+    let mut in_prompts_section = false;
+    let mut field_written = false;
+    let mut in_multiline = false;
+    let mut skip_until_end_quote = false;
+
+    let field_prefix = format!("{} = ", field_name);
 
     for line in content.lines() {
-        if line.starts_with("prompt_template = ") {
-            in_template = true;
-            if !template_written {
-                result.push_str(&format!("prompt_template = \"\"\"\n{}\n\"\"\"\n", template));
-                template_written = true;
+        // Track if we're in [prompts] section
+        if line.trim() == "[prompts]" {
+            in_prompts_section = true;
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+
+        // Detect new section (not [prompts])
+        if line.trim().starts_with('[') && line.trim() != "[prompts]" {
+            // If we haven't written the field yet, write it before leaving prompts section
+            if in_prompts_section && !field_written {
+                if multiline {
+                    result.push_str(&format!("{} = \"\"\"\n{}\n\"\"\"\n", field_name, value));
+                } else {
+                    result.push_str(&format!(
+                        "{} = \"{}\"\n",
+                        field_name,
+                        value.replace('"', "\\\"")
+                    ));
+                }
+                field_written = true;
             }
-            if !line.contains("\"\"\"") {
-                in_template = false;
+            in_prompts_section = false;
+        }
+
+        // Handle skipping multiline content
+        if skip_until_end_quote {
+            if line.contains("\"\"\"") {
+                skip_until_end_quote = false;
             }
             continue;
         }
 
-        if in_template {
-            if line.contains("\"\"\"") {
-                in_template = false;
+        // Check if this line starts the field we want to update
+        if in_prompts_section && line.trim().starts_with(&field_prefix) {
+            // Write the new value
+            if multiline {
+                result.push_str(&format!("{} = \"\"\"\n{}\n\"\"\"\n", field_name, value));
+            } else {
+                result.push_str(&format!(
+                    "{} = \"{}\"\n",
+                    field_name,
+                    value.replace('"', "\\\"")
+                ));
+            }
+            field_written = true;
+
+            // Check if it's a multiline string that we need to skip
+            if line.contains("\"\"\"") && line.matches("\"\"\"").count() == 1 {
+                skip_until_end_quote = true;
             }
             continue;
         }
 
         result.push_str(line);
         result.push('\n');
+    }
+
+    // If we never found the [prompts] section, add it
+    if !field_written {
+        if !content.contains("[prompts]") {
+            result.push_str("\n[prompts]\n");
+        }
+        if multiline {
+            result.push_str(&format!("{} = \"\"\"\n{}\n\"\"\"\n", field_name, value));
+        } else {
+            result.push_str(&format!(
+                "{} = \"{}\"\n",
+                field_name,
+                value.replace('"', "\\\"")
+            ));
+        }
     }
 
     fs::write(config_path, result.trim_end())?;
