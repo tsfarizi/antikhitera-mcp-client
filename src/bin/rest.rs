@@ -49,6 +49,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let provider = DynamicModelProvider::from_configs(&file_config.providers)?;
+
+    // Run server discovery from servers folder
+    let _discovery_result =
+        antikhitera_mcp_client::application::discovery::run_startup_discovery(None).await;
+
     let client_config = ClientConfig::new(
         file_config.default_provider.clone(),
         file_config.model.clone(),
