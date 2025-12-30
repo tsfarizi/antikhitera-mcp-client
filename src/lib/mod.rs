@@ -101,6 +101,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         provider_count = providers.len(),
         "Initializing dynamic model providers"
     );
+
+    // Run server discovery from servers folder
+    let _discovery_result = application::discovery::run_startup_discovery(None).await;
+
     let provider = DynamicModelProvider::from_configs(&providers)?;
     let mut client_config = ClientConfig::new(
         file_config.default_provider.clone(),
