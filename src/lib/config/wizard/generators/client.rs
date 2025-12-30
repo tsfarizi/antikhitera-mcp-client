@@ -311,3 +311,170 @@ pub fn remove_server(server_name: &str) -> Result<(), Box<dyn Error>> {
     fs::write(config_path, result.trim_end())?;
     Ok(())
 }
+
+/// Get current CORS origins from config
+pub fn get_cors_origins() -> Result<Vec<String>, Box<dyn Error>> {
+    let config_path = Path::new(CONFIG_PATH);
+    let content = fs::read_to_string(config_path)?;
+
+    let mut origins = Vec::new();
+    let mut in_cors_array = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("cors_origins") && trimmed.contains('[') {
+            in_cors_array = true;
+            // Handle inline array like: cors_origins = ["origin1", "origin2"]
+            if let Some(start) = trimmed.find('[') {
+                if let Some(end) = trimmed.find(']') {
+                    let array_content = &trimmed[start + 1..end];
+                    for item in array_content.split(',') {
+                        let cleaned = item.trim().trim_matches('"').trim_matches('\'');
+                        if !cleaned.is_empty() {
+                            origins.push(cleaned.to_string());
+                        }
+                    }
+                    in_cors_array = false;
+                }
+            }
+            continue;
+        }
+
+        if in_cors_array {
+            if trimmed == "]" {
+                in_cors_array = false;
+                continue;
+            }
+            // Extract origin from line like: "http://localhost:8080",
+            let cleaned = trimmed
+                .trim_end_matches(',')
+                .trim_matches('"')
+                .trim_matches('\'');
+            if !cleaned.is_empty() {
+                origins.push(cleaned.to_string());
+            }
+        }
+    }
+
+    Ok(origins)
+}
+
+/// Add a CORS origin to the config
+pub fn add_cors_origin(origin: &str) -> Result<(), Box<dyn Error>> {
+    let config_path = Path::new(CONFIG_PATH);
+    let content = fs::read_to_string(config_path)?;
+
+    // Check if origin already exists
+    let existing = get_cors_origins()?;
+    if existing.iter().any(|o| o == origin) {
+        return Err(format!("Origin '{}' already exists", origin).into());
+    }
+
+    let mut result = String::new();
+    let mut in_cors_array = false;
+    let mut found_cors = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("cors_origins") && trimmed.contains('[') {
+            found_cors = true;
+            in_cors_array = true;
+
+            // Handle empty array: cors_origins = []
+            if trimmed.ends_with("[]") {
+                result.push_str("cors_origins = [\n");
+                result.push_str(&format!("    \"{}\",\n", origin));
+                result.push_str("]\n");
+                in_cors_array = false;
+                continue;
+            }
+        }
+
+        if in_cors_array && trimmed == "]" {
+            // Add new origin before closing bracket
+            result.push_str(&format!("    \"{}\",\n", origin));
+            result.push_str(line);
+            result.push('\n');
+            in_cors_array = false;
+            continue;
+        }
+
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    // If no cors_origins found, add it after [server] section
+    if !found_cors {
+        let mut final_result = String::new();
+        let mut in_server_section = false;
+
+        for line in result.lines() {
+            final_result.push_str(line);
+            final_result.push('\n');
+
+            if line.trim() == "[server]" {
+                in_server_section = true;
+            }
+
+            if in_server_section && line.trim().starts_with("bind") {
+                final_result.push_str(&format!("cors_origins = [\n    \"{}\",\n]\n", origin));
+                in_server_section = false;
+            }
+        }
+
+        fs::write(config_path, final_result.trim_end())?;
+    } else {
+        fs::write(config_path, result.trim_end())?;
+    }
+
+    Ok(())
+}
+
+/// Remove a CORS origin from the config
+pub fn remove_cors_origin(origin: &str) -> Result<(), Box<dyn Error>> {
+    let config_path = Path::new(CONFIG_PATH);
+    let content = fs::read_to_string(config_path)?;
+
+    let mut result = String::new();
+    let mut in_cors_array = false;
+    let mut removed = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("cors_origins") && trimmed.contains('[') {
+            in_cors_array = true;
+        }
+
+        if in_cors_array {
+            if trimmed == "]" {
+                in_cors_array = false;
+                result.push_str(line);
+                result.push('\n');
+                continue;
+            }
+
+            // Check if this line contains the origin to remove
+            let cleaned = trimmed
+                .trim_end_matches(',')
+                .trim_matches('"')
+                .trim_matches('\'');
+            if cleaned == origin {
+                removed = true;
+                continue; // Skip this line
+            }
+        }
+
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    if !removed {
+        return Err(format!("Origin '{}' not found", origin).into());
+    }
+
+    fs::write(config_path, result.trim_end())?;
+    Ok(())
+}
