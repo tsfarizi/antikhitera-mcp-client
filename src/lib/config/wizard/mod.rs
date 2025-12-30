@@ -78,6 +78,7 @@ pub async fn run_setup_menu() -> Result<bool, Box<dyn Error>> {
         println!("  [3] Manage MCP Servers");
         println!("  [4] Sync Tools from Servers");
         println!("  [5] Manage Prompt Template");
+        println!("  [6] Manage CORS Origins");
         println!("  [0] Back\n");
 
         let choice = prompts::prompt_text("Select option", None)?;
@@ -89,6 +90,7 @@ pub async fn run_setup_menu() -> Result<bool, Box<dyn Error>> {
             "3" => manage_servers().await?,
             "4" => sync_tools().await?,
             "5" => edit_prompt_template().await?,
+            "6" => manage_cors_origins().await?,
             _ => ui::print_error("Invalid option"),
         }
     }
@@ -535,6 +537,95 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
             }
         }
         _ => {}
+    }
+
+    Ok(())
+}
+
+async fn manage_cors_origins() -> Result<(), Box<dyn Error>> {
+    ui::print_header("CORS Origins");
+
+    let origins = client::get_cors_origins()?;
+
+    if origins.is_empty() {
+        ui::print_info("No CORS origins configured (permissive mode).");
+    } else {
+        ui::print_info("Current CORS origins:");
+        for (i, origin) in origins.iter().enumerate() {
+            println!("  [{}] {}", i + 1, origin);
+        }
+    }
+
+    println!();
+    println!("  [1] Add CORS Origin");
+    println!("  [2] Remove CORS Origin");
+    println!("  [0] Back\n");
+
+    let choice = prompts::prompt_text("Select option", None)?;
+
+    match choice.as_str() {
+        "1" => add_cors_origin().await?,
+        "2" => remove_cors_origin(&origins).await?,
+        _ => {}
+    }
+
+    Ok(())
+}
+
+async fn add_cors_origin() -> Result<(), Box<dyn Error>> {
+    ui::print_section("Add CORS Origin");
+
+    ui::print_hint("Examples: http://localhost:3000, https://example.com");
+    let origin = prompts::prompt_text("Origin URL", None)?;
+
+    if origin.is_empty() {
+        return Ok(());
+    }
+
+    // Basic validation
+    if !origin.starts_with("http://") && !origin.starts_with("https://") {
+        ui::print_error("Origin must start with http:// or https://");
+        return Ok(());
+    }
+
+    match client::add_cors_origin(&origin) {
+        Ok(()) => ui::print_success(&format!("Origin '{}' added!", origin)),
+        Err(e) => ui::print_error(&format!("Failed to add origin: {}", e)),
+    }
+
+    Ok(())
+}
+
+async fn remove_cors_origin(origins: &[String]) -> Result<(), Box<dyn Error>> {
+    if origins.is_empty() {
+        ui::print_warning("No CORS origins to remove.");
+        return Ok(());
+    }
+
+    ui::print_section("Remove CORS Origin");
+    ui::print_info("Select origin to remove:");
+    for (i, origin) in origins.iter().enumerate() {
+        println!("  [{}] {}", i + 1, origin);
+    }
+    println!();
+
+    let choice = prompts::prompt_text("Select origin (0 to cancel)", None)?;
+    let index: usize = match choice.parse::<usize>() {
+        Ok(0) => return Ok(()),
+        Ok(n) if n <= origins.len() => n - 1,
+        _ => {
+            ui::print_error("Invalid selection");
+            return Ok(());
+        }
+    };
+
+    let origin = &origins[index];
+
+    if prompts::prompt_confirm(&format!("Remove origin '{}'?", origin), false)? {
+        match client::remove_cors_origin(origin) {
+            Ok(()) => ui::print_success(&format!("Origin '{}' removed!", origin)),
+            Err(e) => ui::print_error(&format!("Failed to remove origin: {}", e)),
+        }
     }
 
     Ok(())
