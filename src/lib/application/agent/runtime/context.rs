@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use super::{ServerGuidance, ToolContext, ToolDescriptor, ToolRuntime};
+use crate::domain::sanitize::sanitize_for_toml;
 
 impl ToolRuntime {
     pub async fn build_context(&self) -> ToolContext {
@@ -36,17 +37,21 @@ impl ToolRuntime {
                         descriptor.name = metadata.name;
                     }
                     if let Some(remote_desc) = metadata.description {
+                        // Sanitize remote description to ensure TOML compatibility
+                        let sanitized_desc = sanitize_for_toml(&remote_desc);
+
                         descriptor.description = match descriptor.description {
                             Some(existing)
                                 if existing.trim().is_empty()
-                                    || existing.trim() == remote_desc.trim() =>
+                                    || existing.trim() == sanitized_desc.trim() =>
                             {
-                                Some(remote_desc)
+                                Some(sanitized_desc)
                             }
                             Some(existing) => {
-                                Some(format!("{} {}", remote_desc.trim(), existing.trim()))
+                                // Merge remote and local descriptions
+                                Some(format!("{} {}", sanitized_desc.trim(), existing.trim()))
                             }
-                            None => Some(remote_desc),
+                            None => Some(sanitized_desc),
                         };
                     }
                     descriptor.input_schema = metadata.input_schema;
