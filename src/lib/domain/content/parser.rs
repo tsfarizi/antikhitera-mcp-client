@@ -68,16 +68,6 @@ pub fn parse_step_output(output: &Value) -> ParsedOutput {
     parsed
 }
 
-/// Parse multiple tool outputs from an array.
-pub fn parse_tool_outputs(outputs: &[Value]) -> Vec<ParsedOutput> {
-    outputs.iter().map(parse_step_output).collect()
-}
-
-/// Extract all files from multiple outputs.
-pub fn extract_all_files(outputs: &[ParsedOutput]) -> Vec<&FileContent> {
-    outputs.iter().flat_map(|o| o.files.iter()).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
