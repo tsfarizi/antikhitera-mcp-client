@@ -446,7 +446,13 @@ async fn show_config<P: ModelProvider>(
     } else {
         write_line(stdout, "- MCP servers:").await?;
         for server in &snapshot.servers {
-            let mut line = format!("  - {} -> {}", server.name, server.command.display());
+            let cmd_display = server
+                .command
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .or_else(|| server.url.clone())
+                .unwrap_or_else(|| "(no command/url)".to_string());
+            let mut line = format!("  - {} -> {}", server.name, cmd_display);
             if !server.args.is_empty() {
                 line.push_str(&format!(" {}", server.args.join(" ")));
             }

@@ -300,12 +300,13 @@ async fn manage_servers() -> Result<(), Box<dyn Error>> {
     } else {
         ui::print_info("Current servers:");
         for (i, server) in config.servers.iter().enumerate() {
-            println!(
-                "  [{}] {} ({})",
-                i + 1,
-                server.name,
-                server.command.display()
-            );
+            let cmd_display = server
+                .command
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .or_else(|| server.url.clone())
+                .unwrap_or_else(|| "(no path)".to_string());
+            println!("  [{}] {} ({})", i + 1, server.name, cmd_display);
         }
     }
 
@@ -412,12 +413,12 @@ async fn sync_tools() -> Result<(), Box<dyn Error>> {
         ui::print_info("\nSyncing tools from all servers...");
         for server in &config.servers {
             let args: Vec<String> = server.args.clone();
-            sync_tools_from_single_server(
-                &server.name,
-                server.command.to_str().unwrap_or(""),
-                &args,
-            )
-            .await?;
+            let cmd = server
+                .command
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .unwrap_or("");
+            sync_tools_from_single_server(&server.name, cmd, &args).await?;
         }
     } else {
         match choice.parse::<usize>() {
@@ -425,12 +426,12 @@ async fn sync_tools() -> Result<(), Box<dyn Error>> {
             Ok(n) if n <= config.servers.len() => {
                 let server = &config.servers[n - 1];
                 let args: Vec<String> = server.args.clone();
-                sync_tools_from_single_server(
-                    &server.name,
-                    server.command.to_str().unwrap_or(""),
-                    &args,
-                )
-                .await?;
+                let cmd = server
+                    .command
+                    .as_ref()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or("");
+                sync_tools_from_single_server(&server.name, cmd, &args).await?;
             }
             _ => {
                 ui::print_error("Invalid selection");
@@ -447,17 +448,20 @@ async fn sync_tools_from_single_server(
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
     ui::print_info(&format!("\nConnecting to server '{}'...", name));
-    use crate::config::ServerConfig;
+    use crate::config::{ServerConfig, TransportType};
     use crate::tooling::spawn_and_list_tools;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
     let server_config = ServerConfig {
         name: name.to_string(),
-        command: PathBuf::from(command),
+        transport: TransportType::Stdio,
+        command: Some(PathBuf::from(command)),
         args: args.to_vec(),
         env: HashMap::new(),
         workdir: None,
+        url: None,
+        headers: HashMap::new(),
         default_timezone: None,
         default_city: None,
     };

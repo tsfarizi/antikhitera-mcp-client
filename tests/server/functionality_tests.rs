@@ -24,7 +24,14 @@ struct McpTestClient {
 
 impl McpTestClient {
     fn spawn(server: &ServerConfig) -> Result<Self, String> {
-        let command_path = &server.command;
+        // Get command path - only works for STDIO servers
+        let command_path = server.command.as_ref().ok_or_else(|| {
+            format!(
+                "Server '{}' has no command (might be HTTP server)",
+                server.name
+            )
+        })?;
+
         if !command_path.exists() {
             return Err(format!(
                 "Server executable not found: {}",
@@ -163,8 +170,17 @@ macro_rules! server_test {
                 }
             };
 
-            if !server.command.exists() {
-                eprintln!("SKIPPED: {} not found", server.command.display());
+            // Check if this is a STDIO server with command path
+            let cmd_path = match &server.command {
+                Some(path) => path,
+                None => {
+                    eprintln!("SKIPPED: Server '{}' is not a STDIO server", $server_name);
+                    return;
+                }
+            };
+
+            if !cmd_path.exists() {
+                eprintln!("SKIPPED: {} not found", cmd_path.display());
                 return;
             }
 

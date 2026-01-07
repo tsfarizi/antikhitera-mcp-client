@@ -21,8 +21,13 @@ pub fn run_manage_servers_with_terminal(terminal: &mut Tui) -> Result<(), Box<dy
             .servers
             .iter()
             .map(|s| {
-                let cmd_display = truncate_path(s.command.to_str().unwrap_or(""), 30);
-                TableRow::new(vec![s.name.clone(), cmd_display])
+                let cmd_display = s
+                    .command
+                    .as_ref()
+                    .and_then(|p| p.to_str())
+                    .or_else(|| s.url.as_deref())
+                    .unwrap_or("");
+                TableRow::new(vec![s.name.clone(), truncate_path(cmd_display, 30)])
             })
             .collect();
 
@@ -100,7 +105,14 @@ fn run_server_details_tui(
         ]),
         Line::from(vec![
             Span::styled("📂 Command: ", Style::default().fg(Color::Yellow)),
-            Span::raw(server.command.to_string_lossy().to_string()),
+            Span::raw(
+                server
+                    .command
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .or_else(|| server.url.clone())
+                    .unwrap_or_else(|| "(none)".to_string()),
+            ),
         ]),
         Line::from(vec![
             Span::styled("📋 Args:    ", Style::default().fg(Color::Yellow)),
@@ -175,12 +187,12 @@ fn run_server_details_tui(
             NavAction::Select => {
                 match action_menu.selected_index() {
                     Some(0) => {
-                        run_sync_single_server_tui(
-                            terminal,
-                            &server.name,
-                            server.command.to_str().unwrap_or(""),
-                            &server.args,
-                        )?;
+                        let cmd = server
+                            .command
+                            .as_ref()
+                            .and_then(|p| p.to_str())
+                            .unwrap_or("");
+                        run_sync_single_server_tui(terminal, &server.name, cmd, &server.args)?;
                         break; // Return to refresh
                     }
                     Some(1) => break, // Back

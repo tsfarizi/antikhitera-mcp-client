@@ -154,6 +154,8 @@ pub async fn load_server(server: &mut DiscoveredServer) {
     }
 }
 
+use crate::config::TransportType;
+
 /// Create a `ServerConfig` from a binary path.
 ///
 /// This function creates the configuration needed to spawn an MCP server
@@ -170,10 +172,13 @@ pub async fn load_server(server: &mut DiscoveredServer) {
 fn create_server_config(name: &str, binary_path: &PathBuf) -> ServerConfig {
     ServerConfig {
         name: name.to_string(),
-        command: binary_path.clone(),
+        transport: TransportType::Stdio,
+        command: Some(binary_path.clone()),
         args: Vec::new(),
         env: HashMap::new(),
         workdir: None,
+        url: None,
+        headers: HashMap::new(),
         default_timezone: None,
         default_city: None,
     }
@@ -226,7 +231,7 @@ mod tests {
         let config = create_server_config("test-server", &PathBuf::from("/path/to/server"));
 
         assert_eq!(config.name, "test-server");
-        assert_eq!(config.command, PathBuf::from("/path/to/server"));
+        assert_eq!(config.command, Some(PathBuf::from("/path/to/server")));
         assert!(config.args.is_empty());
         assert!(config.env.is_empty());
         assert!(config.workdir.is_none());
