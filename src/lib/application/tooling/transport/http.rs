@@ -151,6 +151,13 @@ impl McpTransport for HttpTransport {
 
         // Add custom headers
         for (key, value) in &self.inner.config.headers {
+            // Skip Authorization header if value is empty or just "Bearer "
+            if key.eq_ignore_ascii_case("Authorization") {
+                if value.trim().is_empty() || value.trim().eq_ignore_ascii_case("Bearer") {
+                    debug!(server = %self.inner.config.name, "Skipping empty Authorization header");
+                    continue;
+                }
+            }
             request = request.header(key, value);
         }
 
@@ -214,6 +221,12 @@ impl McpTransport for HttpTransport {
             .json(&payload);
 
         for (key, value) in &self.inner.config.headers {
+            // Skip Authorization header if value is empty or just "Bearer "
+            if key.eq_ignore_ascii_case("Authorization") {
+                if value.trim().is_empty() || value.trim().eq_ignore_ascii_case("Bearer") {
+                    continue;
+                }
+            }
             request = request.header(key, value);
         }
 
