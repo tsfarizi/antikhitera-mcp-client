@@ -273,6 +273,45 @@ command = "{}"{}"#,
     Ok(())
 }
 
+/// Add an HTTP server to the config
+pub fn add_http_server(
+    name: &str,
+    url: &str,
+    headers: &std::collections::HashMap<String, String>,
+) -> Result<(), Box<dyn Error>> {
+    let config_path = Path::new(CONFIG_PATH);
+
+    if !config_path.exists() {
+        return Err("Config file not found. Run setup wizard first.".into());
+    }
+
+    let mut content = fs::read_to_string(config_path)?;
+
+    let headers_toml = if headers.is_empty() {
+        String::new()
+    } else {
+        let pairs: Vec<String> = headers
+            .iter()
+            .map(|(k, v)| format!("{} = \"{}\"", k, v))
+            .collect();
+        format!("\nheaders = {{ {} }}", pairs.join(", "))
+    };
+
+    let server_block = format!(
+        r#"
+
+[[servers]]
+name = "{}"
+url = "{}"{}"#,
+        name, url, headers_toml
+    );
+
+    content.push_str(&server_block);
+    fs::write(config_path, content)?;
+
+    Ok(())
+}
+
 /// Remove a server from the config
 pub fn remove_server(server_name: &str) -> Result<(), Box<dyn Error>> {
     let config_path = Path::new(CONFIG_PATH);
