@@ -5,8 +5,8 @@
 mod display;
 
 use super::load_config;
-use crate::config::ServerConfig;
 use crate::config::wizard::generators::model;
+use crate::config::{ServerConfig, TransportType};
 use crate::tooling::spawn_and_list_tools;
 use crate::tui::terminal::Tui;
 use ratatui::style::Color;
@@ -39,10 +39,13 @@ pub fn run_sync_single_server_tui(
 
     let server_config = ServerConfig {
         name: name.to_string(),
-        command: PathBuf::from(command),
+        transport: TransportType::Stdio,
+        command: Some(PathBuf::from(command)),
         args: args.to_vec(),
         env: HashMap::new(),
         workdir: None,
+        url: None,
+        headers: HashMap::new(),
         default_timezone: None,
         default_city: None,
     };
@@ -114,10 +117,13 @@ pub fn run_sync_all_servers_tui(
 
         let server_config = ServerConfig {
             name: server.name.clone(),
+            transport: server.transport.clone(),
             command: server.command.clone(),
             args: server.args.clone(),
             env: HashMap::new(),
             workdir: None,
+            url: server.url.clone(),
+            headers: server.headers.clone(),
             default_timezone: None,
             default_city: None,
         };

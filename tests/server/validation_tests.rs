@@ -18,13 +18,32 @@ fn all_servers_have_valid_commands() {
     };
 
     for server in &config.servers {
-        println!("Checking '{}': {}", server.name, server.command.display());
+        // Handle Option<PathBuf> for command
+        let cmd_display = server
+            .command
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .or_else(|| server.url.clone())
+            .unwrap_or_else(|| "(none)".to_string());
 
-        if !server.command.exists() {
+        println!("Checking '{}': {}", server.name, cmd_display);
+
+        // Check if command exists (only for STDIO servers)
+        if let Some(cmd_path) = &server.command {
+            if !cmd_path.exists() {
+                eprintln!(
+                    "WARNING: '{}' command not found: {}",
+                    server.name,
+                    cmd_path.display()
+                );
+            }
+        } else if server.url.is_some() {
+            // HTTP server - no local file to check
+            println!("  (HTTP server - URL: {})", server.url.as_ref().unwrap());
+        } else {
             eprintln!(
-                "WARNING: '{}' command not found: {}",
-                server.name,
-                server.command.display()
+                "WARNING: '{}' has neither command nor URL configured",
+                server.name
             );
         }
     }

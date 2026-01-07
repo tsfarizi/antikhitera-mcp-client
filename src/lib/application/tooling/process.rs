@@ -79,7 +79,15 @@ impl McpProcessInner {
             }
         }
 
-        let mut command = Command::new(&self.server.command);
+        let command_path =
+            self.server
+                .command
+                .as_ref()
+                .ok_or_else(|| ToolInvokeError::NotConfigured {
+                    server: format!("{}: no command path configured", self.server.name),
+                })?;
+
+        let mut command = Command::new(command_path);
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
