@@ -54,6 +54,38 @@ impl HttpClientBase {
             .map_err(|e| ModelError::network(&self.id, e))
     }
 
+    /// Post JSON with optional bearer auth - only sends Authorization header if api_key is configured
+    pub async fn post_with_optional_bearer<Req, Res>(
+        &self,
+        url: &str,
+        body: &Req,
+    ) -> Result<Res, ModelError>
+    where
+        Req: Serialize,
+        Res: DeserializeOwned,
+    {
+        let mut request = self
+            .http
+            .post(url)
+            .header("Content-Type", "application/json")
+            .json(body);
+
+        // Only add Authorization header if api_key is present and non-empty
+        if let Some(api_key) = self.api_key.as_deref().filter(|k| !k.trim().is_empty()) {
+            request = request.header("Authorization", format!("Bearer {}", api_key));
+        }
+
+        request
+            .send()
+            .await
+            .map_err(|e| ModelError::network(&self.id, e))?
+            .error_for_status()
+            .map_err(|e| ModelError::network(&self.id, e))?
+            .json()
+            .await
+            .map_err(|e| ModelError::network(&self.id, e))
+    }
+
     /// Post JSON with query param auth (for Gemini)
     pub async fn post_with_query_key<Req, Res>(
         &self,
