@@ -795,6 +795,78 @@ classDiagram
 
 ---
 
+## 🔐 HTTP Client Authentication
+
+The `HttpClientBase` provides multiple authentication methods for different use cases:
+
+### Available Methods
+
+| Method | API Key Required | Use Case |
+|:-------|:----------------:|:---------|
+| `post_with_bearer` | ✅ Yes | Cloud providers requiring API key (OpenAI, Anthropic) |
+| `post_with_optional_bearer` | ❌ Optional | Flexible endpoints - sends header only if configured |
+| `post_with_query_key` | ✅ Yes | Google/Gemini API (key in query param) |
+| `post_no_auth` | ❌ No | Local services (Ollama, LM Studio) |
+
+### Usage Examples
+
+```rust
+use crate::infrastructure::model::clients::HttpClientBase;
+
+// Initialize client
+let client = HttpClientBase::new(
+    "my-client".to_string(),
+    "https://api.example.com".to_string(),
+    Some("your-api-key".to_string()), // or None for no auth
+);
+
+// Option 1: Required bearer token (fails if no API key)
+let response: MyResponse = client
+    .post_with_bearer(&url, &payload)
+    .await?;
+
+// Option 2: Optional bearer token (works with or without API key)
+let response: MyResponse = client
+    .post_with_optional_bearer(&url, &payload)
+    .await?;
+
+// Option 3: API key in query param (for Gemini)
+let response: MyResponse = client
+    .post_with_query_key(&url, &payload)
+    .await?;
+
+// Option 4: No authentication (for local services)
+let response: MyResponse = client
+    .post_no_auth(&url, &payload)
+    .await?;
+```
+
+### When to Use Each Method
+
+```mermaid
+flowchart TD
+    START[Need to make HTTP request] --> Q1{API Key configured?}
+    
+    Q1 -->|Yes| Q2{Is it required?}
+    Q1 -->|No| Q3{Local service?}
+    
+    Q2 -->|Yes| Q4{Header or Query?}
+    Q2 -->|No| OPT[post_with_optional_bearer]
+    
+    Q3 -->|Yes| NOAUTH[post_no_auth]
+    Q3 -->|No| OPT
+    
+    Q4 -->|Header| BEARER[post_with_bearer]
+    Q4 -->|Query| QUERY[post_with_query_key]
+    
+    style START fill:#6c5ce7,stroke:#a29bfe,color:#fff
+    style BEARER fill:#00b894,stroke:#00cec9,color:#fff
+    style OPT fill:#0984e3,stroke:#74b9ff,color:#fff
+    style QUERY fill:#fd79a8,stroke:#e84393,color:#fff
+    style NOAUTH fill:#fdcb6e,stroke:#f39c12,color:#000
+```
+
+
 ## 📄 License
 
 MIT License - See [LICENSE](LICENSE) for details.
