@@ -68,6 +68,11 @@ impl HttpTransport {
         let base = self.inner.config.url.trim_end_matches('/');
         format!("{}/rpc", base)
     }
+
+    /// Get the server name.
+    pub fn get_name(&self) -> &str {
+        &self.inner.config.name
+    }
 }
 
 #[async_trait]

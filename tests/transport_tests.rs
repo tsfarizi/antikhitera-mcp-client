@@ -16,7 +16,7 @@ mod http_transport_tests {
         };
 
         let transport = HttpTransport::new(config);
-        assert_eq!(transport.server_name(), "test-server");
+        assert_eq!(transport.get_name(), "test-server");
     }
 
     #[test]
@@ -32,7 +32,7 @@ mod http_transport_tests {
         };
 
         let transport = HttpTransport::new(config);
-        assert_eq!(transport.server_name(), "auth-server");
+        assert_eq!(transport.get_name(), "auth-server");
     }
 
     #[test]
