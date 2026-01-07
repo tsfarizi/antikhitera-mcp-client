@@ -334,6 +334,21 @@ async fn add_server() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
+    // Transport type selection
+    ui::print_info("Select transport type:");
+    println!("  [1] STDIO (local executable)");
+    println!("  [2] HTTP/SSE (remote URL)");
+    println!();
+
+    let transport_choice = prompts::prompt_text("Transport type [1]", Some("1"))?;
+
+    match transport_choice.as_str() {
+        "2" => add_http_server(&name).await,
+        _ => add_stdio_server(&name).await,
+    }
+}
+
+async fn add_stdio_server(name: &str) -> Result<(), Box<dyn Error>> {
     let command = prompts::prompt_text("Command (path to executable)", None)?;
     if command.is_empty() {
         ui::print_error("Command is required");
@@ -348,13 +363,65 @@ async fn add_server() -> Result<(), Box<dyn Error>> {
         args.split(',').map(|s| s.trim().to_string()).collect()
     };
 
-    client::add_server(&name, &command, &args_vec)?;
+    client::add_server(name, &command, &args_vec)?;
     ui::print_success(&format!("Server '{}' added!", name));
     if prompts::prompt_confirm("Sync tools from this server now?", true)? {
-        sync_tools_from_single_server(&name, &command, &args_vec).await?;
+        sync_tools_from_single_server(name, &command, &args_vec).await?;
     }
 
     Ok(())
+}
+
+async fn add_http_server(name: &str) -> Result<(), Box<dyn Error>> {
+    let url = prompts::prompt_text("Server URL (e.g. https://api.example.com/mcp)", None)?;
+    if url.is_empty() {
+        ui::print_error("URL is required");
+        return Ok(());
+    }
+
+    // Collect headers
+    let mut headers: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
+    ui::print_info("Add authorization headers (optional):");
+    ui::print_hint("Enter headers as 'key=value'. Empty line to finish.");
+
+    loop {
+        let header_input = prompts::prompt_text("Header (key=value)", Some(""))?;
+        if header_input.is_empty() {
+            break;
+        }
+
+        if let Some((key, value)) = header_input.split_once('=') {
+            let key = key.trim().to_string();
+            let value = value.trim().to_string();
+            if !key.is_empty() && !value.is_empty() {
+                ui::print_hint(&format!("  Added: {} = {}", key, mask_sensitive(&value)));
+                headers.insert(key, value);
+            } else {
+                ui::print_warning("Invalid format. Use 'key=value'");
+            }
+        } else {
+            ui::print_warning("Invalid format. Use 'key=value'");
+        }
+    }
+
+    client::add_http_server(name, &url, &headers)?;
+    ui::print_success(&format!("HTTP server '{}' added!", name));
+    ui::print_info(&format!("  URL: {}", url));
+    if !headers.is_empty() {
+        ui::print_info(&format!("  Headers: {} configured", headers.len()));
+    }
+
+    Ok(())
+}
+
+/// Mask sensitive values for display
+fn mask_sensitive(value: &str) -> String {
+    if value.len() <= 8 {
+        "*".repeat(value.len())
+    } else {
+        format!("{}...{}", &value[..4], &value[value.len() - 4..])
+    }
 }
 
 async fn remove_server(config: &AppConfig) -> Result<(), Box<dyn Error>> {
