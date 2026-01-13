@@ -167,10 +167,10 @@ impl McpTransport for HttpTransport {
             return Ok(());
         }
 
-        debug!(
+        info!(
             server = %self.inner.config.name,
             url = %self.inner.config.url,
-            "Connecting to HTTP MCP server"
+            "Connecting to HTTP/SSE MCP server"
         );
 
         // Start SSE listener
@@ -207,9 +207,11 @@ impl McpTransport for HttpTransport {
 
         self.inner.connected.store(true, Ordering::SeqCst);
 
-        debug!(
+        let tool_count = self.inner.tool_cache.lock().await.len();
+        info!(
             server = %self.inner.config.name,
-            "Successfully connected to HTTP MCP server"
+            tool_count = tool_count,
+            "Successfully connected to HTTP/SSE MCP server"
         );
 
         Ok(())
@@ -228,10 +230,11 @@ impl McpTransport for HttpTransport {
 
         let url = self.resolve_endpoint().await?;
 
-        debug!(
+        info!(
             server = %self.inner.config.name,
             method = method,
             url = %url,
+            request_id = %request_id,
             "Sending HTTP JSON-RPC request"
         );
 
@@ -252,18 +255,28 @@ impl McpTransport for HttpTransport {
             request = request.header(key, value);
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| ToolInvokeError::Transport {
+        let response = request.send().await.map_err(|e| {
+            warn!(
+                server = %self.inner.config.name,
+                error = %e,
+                "HTTP request failed"
+            );
+            ToolInvokeError::Transport {
                 server: self.inner.config.name.clone(),
                 message: format!("HTTP request failed: {}", e),
-            })?;
+            }
+        })?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        if !status.is_success() {
+            warn!(
+                server = %self.inner.config.name,
+                status = %status,
+                "HTTP request returned error status"
+            );
             return Err(ToolInvokeError::Transport {
                 server: self.inner.config.name.clone(),
-                message: format!("HTTP error: {}", response.status()),
+                message: format!("HTTP error: {}", status),
             });
         }
 
@@ -283,6 +296,12 @@ impl McpTransport for HttpTransport {
                 .and_then(Value::as_str)
                 .unwrap_or("Unknown error")
                 .to_string();
+            warn!(
+                server = %self.inner.config.name,
+                code = code,
+                error_message = %message,
+                "JSON-RPC error received"
+            );
             return Err(ToolInvokeError::Rpc {
                 server: self.inner.config.name.clone(),
                 code,
@@ -292,6 +311,10 @@ impl McpTransport for HttpTransport {
 
         // Extract result
         let result = body.get("result").cloned().unwrap_or(Value::Null);
+        debug!(
+            server = %self.inner.config.name,
+            "HTTP JSON-RPC request completed successfully"
+        );
         Ok(result)
     }
 

@@ -4,7 +4,10 @@
 //! Optimized for production deployment.
 
 use antikhitera_mcp_client::application::client::{ClientConfig, McpClient};
-use antikhitera_mcp_client::config::AppConfig;
+use antikhitera_mcp_client::application::tooling::{
+    HttpTransport, HttpTransportConfig, McpTransport,
+};
+use antikhitera_mcp_client::config::{AppConfig, TransportType};
 use antikhitera_mcp_client::infrastructure::model::DynamicModelProvider;
 use antikhitera_mcp_client::infrastructure::server;
 use clap::Parser;
@@ -12,7 +15,7 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::{EnvFilter, fmt};
 
 #[derive(Parser)]
@@ -49,6 +52,81 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let provider = DynamicModelProvider::from_configs(&file_config.providers)?;
+
+    // Validate all HTTP/SSE servers at startup
+    info!("Validating MCP HTTP/SSE servers...");
+    let http_servers: Vec<_> = file_config
+        .servers
+        .iter()
+        .filter(|s| s.transport == TransportType::Http)
+        .collect();
+
+    if http_servers.is_empty() {
+        info!("No HTTP/SSE servers configured");
+    } else {
+        info!(
+            count = http_servers.len(),
+            "Found HTTP/SSE servers to validate"
+        );
+
+        let mut failed_servers = Vec::new();
+
+        for server_config in &http_servers {
+            let url = match &server_config.url {
+                Some(url) => url.clone(),
+                None => {
+                    error!(server = %server_config.name, "HTTP server missing URL");
+                    failed_servers.push((server_config.name.clone(), "Missing URL".to_string()));
+                    continue;
+                }
+            };
+
+            info!(server = %server_config.name, url = %url, "Connecting to HTTP/SSE server...");
+
+            let transport_config = HttpTransportConfig {
+                name: server_config.name.clone(),
+                url,
+                headers: server_config.headers.clone(),
+            };
+
+            let transport = HttpTransport::new(transport_config);
+
+            match transport.connect().await {
+                Ok(()) => {
+                    info!(
+                        server = %server_config.name,
+                        "✓ HTTP/SSE server connected successfully"
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        server = %server_config.name,
+                        error = %e,
+                        "✗ Failed to connect to HTTP/SSE server"
+                    );
+                    failed_servers.push((server_config.name.clone(), e.to_string()));
+                }
+            }
+        }
+
+        if !failed_servers.is_empty() {
+            error!("=== SERVER VALIDATION FAILED ===");
+            for (name, err) in &failed_servers {
+                error!(server = %name, error = %err, "Failed server");
+            }
+            panic!(
+                "Cannot start REST API: {} of {} HTTP/SSE server(s) failed to respond. \
+                All servers must be operational before the client can start.",
+                failed_servers.len(),
+                http_servers.len()
+            );
+        }
+
+        info!(
+            count = http_servers.len(),
+            "All HTTP/SSE servers validated successfully"
+        );
+    }
 
     // Run server discovery from servers folder
     let _discovery_result =
