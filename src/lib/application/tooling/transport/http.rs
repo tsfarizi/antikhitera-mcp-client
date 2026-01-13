@@ -1,28 +1,30 @@
 //! HTTP Transport for MCP servers.
 //!
-//! Implements JSON-RPC 2.0 over HTTP POST for MCP communication.
+//! Implements JSON-RPC 2.0 over HTTP/SSE for MCP communication.
 
 use async_trait::async_trait;
 use reqwest::Client;
+use reqwest_eventsource::{Event, RequestBuilderExt};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::Mutex as AsyncMutex;
-use tracing::debug;
+use tokio_stream::StreamExt;
+use tracing::{debug, info, warn};
 
 use super::McpTransport;
 use crate::application::tooling::error::ToolInvokeError;
 use crate::application::tooling::interface::ServerToolInfo;
 
-const PROTOCOL_VERSION: &str = "2025-06-18";
+const PROTOCOL_VERSION: &str = "2024-11-05";
 
 /// HTTP Transport configuration.
 #[derive(Debug, Clone)]
 pub struct HttpTransportConfig {
     /// Server name identifier
     pub name: String,
-    /// Base URL for the MCP server
+    /// Base URL for the MCP server (SSE endpoint)
     pub url: String,
     /// Optional authorization headers
     pub headers: HashMap<String, String>,
@@ -41,6 +43,7 @@ struct HttpTransportInner {
     connected: AtomicBool,
     instructions: AsyncMutex<Option<String>>,
     tool_cache: AsyncMutex<HashMap<String, ServerToolInfo>>,
+    session_endpoint: AsyncMutex<Option<String>>,
 }
 
 impl HttpTransport {
@@ -59,19 +62,101 @@ impl HttpTransport {
                 connected: AtomicBool::new(false),
                 instructions: AsyncMutex::new(None),
                 tool_cache: AsyncMutex::new(HashMap::new()),
+                session_endpoint: AsyncMutex::new(None),
             }),
         }
-    }
-
-    /// Get the RPC endpoint URL.
-    fn rpc_url(&self) -> String {
-        let base = self.inner.config.url.trim_end_matches('/');
-        format!("{}/rpc", base)
     }
 
     /// Get the server name.
     pub fn get_name(&self) -> &str {
         &self.inner.config.name
+    }
+
+    /// Start listening to SSE events in bg
+    fn start_sse_listener(&self) {
+        let client = self.inner.client.clone();
+        let name = self.inner.config.name.clone();
+        let url = self.inner.config.url.clone();
+        let inner = self.inner.clone();
+
+        tokio::spawn(async move {
+            debug!(server = %name, %url, "Starting SSE listener");
+
+            let mut request = client.get(&url);
+
+            // Add custom headers
+            for (key, value) in &inner.config.headers {
+                if key.eq_ignore_ascii_case("Authorization") {
+                    if value.trim().is_empty() || value.trim().eq_ignore_ascii_case("Bearer") {
+                        continue;
+                    }
+                }
+                request = request.header(key, value);
+            }
+
+            let mut es = request.eventsource().unwrap();
+
+            while let Some(event) = es.next().await {
+                match event {
+                    Ok(Event::Open) => {
+                        info!(server = %name, "SSE connection opened");
+                    }
+                    Ok(Event::Message(message)) => {
+                        debug!(server = %name, event = %message.event, "Received SSE event");
+                        if message.event == "endpoint" {
+                            let endpoint = message.data.trim().to_string();
+                            info!(server = %name, %endpoint, "Received session endpoint");
+                            *inner.session_endpoint.lock().await = Some(endpoint);
+                        }
+                    }
+                    Err(err) => {
+                        warn!(server = %name, %err, "Error in SSE stream");
+                        // Decide if we should exit or retry. EventSource handles reconnects implicitly usually.
+                    }
+                }
+            }
+            warn!(server = %name, "SSE stream ended");
+        });
+    }
+
+    async fn resolve_endpoint(&self) -> Result<String, ToolInvokeError> {
+        // Wait for session endpoint to be available (with timeout)
+        let start = tokio::time::Instant::now();
+        loop {
+            if let Some(endpoint) = self.inner.session_endpoint.lock().await.as_ref() {
+                // Handle relative URLs
+                if endpoint.starts_with("http") {
+                    return Ok(endpoint.clone());
+                } else {
+                    // If endpoint starts with /, join carefully
+                    // NOTE: This assumes the config URL is the base for the relative endpoint.
+                    // If config URL is /sse, and endpoint is /sse, we might just want to use config URL base?
+                    // Standard practice: config URL is connection URL.
+                    // If endpoint is relative, it's relative to connection URL? Or host?
+                    // Let's assume relative to host of the connection URL.
+                    let url = reqwest::Url::parse(&self.inner.config.url).map_err(|e| {
+                        ToolInvokeError::Transport {
+                            server: self.inner.config.name.clone(),
+                            message: format!("Invalid base URL: {}", e),
+                        }
+                    })?;
+
+                    let joined = url.join(endpoint).map_err(|e| ToolInvokeError::Transport {
+                        server: self.inner.config.name.clone(),
+                        message: format!("Failed to join endpoint: {}", e),
+                    })?;
+                    return Ok(joined.to_string());
+                }
+            }
+
+            if start.elapsed() > std::time::Duration::from_secs(5) {
+                return Err(ToolInvokeError::Transport {
+                    server: self.inner.config.name.clone(),
+                    message: "Timed out waiting for session endpoint".to_string(),
+                });
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
     }
 }
 
@@ -87,6 +172,12 @@ impl McpTransport for HttpTransport {
             url = %self.inner.config.url,
             "Connecting to HTTP MCP server"
         );
+
+        // Start SSE listener
+        self.start_sse_listener();
+
+        // Wait for endpoint resolution
+        let _endpoint = self.resolve_endpoint().await?;
 
         // Send initialize request
         let params = json!({
@@ -135,10 +226,12 @@ impl McpTransport for HttpTransport {
             "params": params
         });
 
-        let url = self.rpc_url();
+        let url = self.resolve_endpoint().await?;
+
         debug!(
             server = %self.inner.config.name,
             method = method,
+            url = %url,
             "Sending HTTP JSON-RPC request"
         );
 
@@ -151,10 +244,8 @@ impl McpTransport for HttpTransport {
 
         // Add custom headers
         for (key, value) in &self.inner.config.headers {
-            // Skip Authorization header if value is empty or just "Bearer "
             if key.eq_ignore_ascii_case("Authorization") {
                 if value.trim().is_empty() || value.trim().eq_ignore_ascii_case("Bearer") {
-                    debug!(server = %self.inner.config.name, "Skipping empty Authorization header");
                     continue;
                 }
             }
@@ -211,7 +302,7 @@ impl McpTransport for HttpTransport {
             "params": params
         });
 
-        let url = self.rpc_url();
+        let url = self.resolve_endpoint().await?;
 
         let mut request = self
             .inner
@@ -221,7 +312,6 @@ impl McpTransport for HttpTransport {
             .json(&payload);
 
         for (key, value) in &self.inner.config.headers {
-            // Skip Authorization header if value is empty or just "Bearer "
             if key.eq_ignore_ascii_case("Authorization") {
                 if value.trim().is_empty() || value.trim().eq_ignore_ascii_case("Bearer") {
                     continue;
@@ -230,7 +320,6 @@ impl McpTransport for HttpTransport {
             request = request.header(key, value);
         }
 
-        // For notifications, we don't wait for response body
         let _ = request
             .send()
             .await
@@ -243,7 +332,6 @@ impl McpTransport for HttpTransport {
     }
 
     async fn call_tool(&self, tool: &str, arguments: Value) -> Result<Value, ToolInvokeError> {
-        // Ensure connected
         self.connect().await?;
 
         let params = json!({
@@ -277,6 +365,7 @@ impl McpTransport for HttpTransport {
         self.inner.connected.store(false, Ordering::SeqCst);
         self.inner.tool_cache.lock().await.clear();
         *self.inner.instructions.lock().await = None;
+        *self.inner.session_endpoint.lock().await = None;
     }
 }
 
@@ -329,18 +418,6 @@ mod tests {
             headers: HashMap::new(),
         };
         let transport = HttpTransport::new(config);
-        assert_eq!(transport.server_name(), "test");
-        assert_eq!(transport.rpc_url(), "https://example.com/mcp/rpc");
-    }
-
-    #[test]
-    fn test_rpc_url_trailing_slash() {
-        let config = HttpTransportConfig {
-            name: "test".to_string(),
-            url: "https://example.com/mcp/".to_string(),
-            headers: HashMap::new(),
-        };
-        let transport = HttpTransport::new(config);
-        assert_eq!(transport.rpc_url(), "https://example.com/mcp/rpc");
+        assert_eq!(transport.get_name(), "test");
     }
 }
