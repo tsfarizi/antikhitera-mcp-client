@@ -105,6 +105,28 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     // Run server discovery from servers folder
     let _discovery_result = application::discovery::run_startup_discovery(None).await;
 
+    // Log configured HTTP/SSE servers
+    let http_servers: Vec<_> = file_config
+        .servers
+        .iter()
+        .filter(|s| s.transport == config::TransportType::Http)
+        .collect();
+
+    if !http_servers.is_empty() {
+        info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        info!("🌐 Configured HTTP/SSE Servers");
+        info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        for server in &http_servers {
+            let url = server.url.as_deref().unwrap_or("(no URL)");
+            info!(
+                server = %server.name,
+                url = %url,
+                "HTTP/SSE server configured (will connect on first use)"
+            );
+        }
+        info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    }
+
     let provider = DynamicModelProvider::from_configs(&providers)?;
     let mut client_config = ClientConfig::new(
         file_config.default_provider.clone(),
