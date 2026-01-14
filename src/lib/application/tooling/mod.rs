@@ -9,4 +9,4 @@ pub use error::ToolInvokeError;
 pub use interface::{ServerToolInfo, ToolServerInterface};
 pub use manager::ServerManager;
 pub use process::spawn_and_list_tools;
-pub use transport::{HttpTransport, HttpTransportConfig, McpTransport};
+pub use transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};

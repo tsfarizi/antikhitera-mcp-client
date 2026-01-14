@@ -5,7 +5,7 @@
 
 use antikhitera_mcp_client::application::client::{ClientConfig, McpClient};
 use antikhitera_mcp_client::application::tooling::{
-    HttpTransport, HttpTransportConfig, McpTransport,
+    HttpTransport, HttpTransportConfig, McpTransport, TransportMode,
 };
 use antikhitera_mcp_client::config::{AppConfig, TransportType};
 use antikhitera_mcp_client::infrastructure::model::DynamicModelProvider;
@@ -87,6 +87,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 name: server_config.name.clone(),
                 url,
                 headers: server_config.headers.clone(),
+                mode: TransportMode::Auto,
             };
 
             let transport = HttpTransport::new(transport_config);
