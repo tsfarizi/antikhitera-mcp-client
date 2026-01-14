@@ -5,7 +5,7 @@
 use super::error::ToolInvokeError;
 use super::interface::{ServerToolInfo, ToolServerInterface};
 use super::process::McpProcess;
-use super::transport::{HttpTransport, HttpTransportConfig, McpTransport};
+use super::transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};
 use crate::config::{ServerConfig, TransportType};
 use async_trait::async_trait;
 use serde_json::Value;
@@ -100,6 +100,7 @@ impl ServerManager {
                     name: config.name.clone(),
                     url,
                     headers: config.headers.clone(),
+                    mode: TransportMode::Auto,
                 };
                 let transport = Arc::new(HttpTransport::new(transport_config));
                 transport.connect().await?;

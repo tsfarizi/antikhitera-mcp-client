@@ -4,7 +4,9 @@
 
 mod http_transport_tests {
     use antikhitera_mcp_client::config::{ServerConfig, TransportType};
-    use antikhitera_mcp_client::tooling::transport::{HttpTransport, HttpTransportConfig};
+    use antikhitera_mcp_client::tooling::transport::{
+        HttpTransport, HttpTransportConfig, TransportMode,
+    };
     use std::collections::HashMap;
 
     #[test]
@@ -13,6 +15,7 @@ mod http_transport_tests {
             name: "test-server".to_string(),
             url: "https://mcp.example.com".to_string(),
             headers: HashMap::new(),
+            mode: TransportMode::Auto,
         };
 
         let transport = HttpTransport::new(config);
@@ -29,6 +32,7 @@ mod http_transport_tests {
             name: "auth-server".to_string(),
             url: "https://secure.mcp.example.com/api".to_string(),
             headers,
+            mode: TransportMode::Auto,
         };
 
         let transport = HttpTransport::new(config);
@@ -142,7 +146,7 @@ mod http_transport_tests {
 
 mod http_transport_async_tests {
     use antikhitera_mcp_client::tooling::transport::{
-        HttpTransport, HttpTransportConfig, McpTransport,
+        HttpTransport, HttpTransportConfig, McpTransport, TransportMode,
     };
     use std::collections::HashMap;
 
@@ -152,6 +156,7 @@ mod http_transport_async_tests {
             name: "test".to_string(),
             url: "https://nonexistent.example.com".to_string(),
             headers: HashMap::new(),
+            mode: TransportMode::Auto,
         };
 
         let transport = HttpTransport::new(config);
@@ -164,6 +169,7 @@ mod http_transport_async_tests {
             name: "test".to_string(),
             url: "https://test.example.com".to_string(),
             headers: HashMap::new(),
+            mode: TransportMode::Auto,
         };
 
         let transport = HttpTransport::new(config);
@@ -177,6 +183,7 @@ mod http_transport_async_tests {
             name: "test".to_string(),
             url: "https://test.example.com".to_string(),
             headers: HashMap::new(),
+            mode: TransportMode::Auto,
         };
 
         let transport = HttpTransport::new(config);
@@ -189,6 +196,7 @@ mod http_transport_async_tests {
             name: "test".to_string(),
             url: "https://test.example.com".to_string(),
             headers: HashMap::new(),
+            mode: TransportMode::Auto,
         };
 
         let transport = HttpTransport::new(config);

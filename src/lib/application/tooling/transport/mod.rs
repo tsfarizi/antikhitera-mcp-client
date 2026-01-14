@@ -11,7 +11,7 @@ use serde_json::Value;
 use super::error::ToolInvokeError;
 use super::interface::ServerToolInfo;
 
-pub use http::{HttpTransport, HttpTransportConfig};
+pub use http::{HttpTransport, HttpTransportConfig, TransportMode};
 
 /// Transport trait for MCP communication.
 ///

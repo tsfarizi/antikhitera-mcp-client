@@ -1,6 +1,7 @@
 //! HTTP Transport for MCP servers.
 //!
 //! Implements JSON-RPC 2.0 over HTTP/SSE for MCP communication.
+//! Supports auto-detection of stateful (SSE) vs stateless (direct POST) servers.
 
 use async_trait::async_trait;
 use reqwest::Client;
@@ -18,6 +19,24 @@ use crate::application::tooling::error::ToolInvokeError;
 use crate::application::tooling::interface::ServerToolInfo;
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
+const SSE_TIMEOUT_SECS: u64 = 5;
+
+/// Transport mode for HTTP MCP servers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransportMode {
+    /// Stateful mode using SSE for session management
+    Stateful,
+    /// Stateless mode using direct HTTP POST (no SSE)
+    Stateless,
+    /// Auto-detect mode - tries SSE first, falls back to stateless
+    Auto,
+}
+
+impl Default for TransportMode {
+    fn default() -> Self {
+        TransportMode::Auto
+    }
+}
 
 /// HTTP Transport configuration.
 #[derive(Debug, Clone)]
@@ -28,6 +47,8 @@ pub struct HttpTransportConfig {
     pub url: String,
     /// Optional authorization headers
     pub headers: HashMap<String, String>,
+    /// Transport mode (default: Auto)
+    pub mode: TransportMode,
 }
 
 /// HTTP Transport for MCP communication.
@@ -44,6 +65,8 @@ struct HttpTransportInner {
     instructions: AsyncMutex<Option<String>>,
     tool_cache: AsyncMutex<HashMap<String, ServerToolInfo>>,
     session_endpoint: AsyncMutex<Option<String>>,
+    /// Detected or configured transport mode (after connect)
+    active_mode: AsyncMutex<Option<TransportMode>>,
 }
 
 impl HttpTransport {
@@ -63,6 +86,7 @@ impl HttpTransport {
                 instructions: AsyncMutex::new(None),
                 tool_cache: AsyncMutex::new(HashMap::new()),
                 session_endpoint: AsyncMutex::new(None),
+                active_mode: AsyncMutex::new(None),
             }),
         }
     }
@@ -149,13 +173,35 @@ impl HttpTransport {
                 }
             }
 
-            if start.elapsed() > std::time::Duration::from_secs(5) {
+            if start.elapsed() > std::time::Duration::from_secs(SSE_TIMEOUT_SECS) {
                 return Err(ToolInvokeError::Transport {
                     server: self.inner.config.name.clone(),
                     message: "Timed out waiting for session endpoint".to_string(),
                 });
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+
+    /// Get the endpoint URL based on active transport mode
+    #[allow(dead_code)]
+    async fn get_endpoint_url(&self) -> Result<String, ToolInvokeError> {
+        let active_mode = self.inner.active_mode.lock().await;
+        match *active_mode {
+            Some(TransportMode::Stateless) => {
+                // Stateless: use config URL directly
+                Ok(self.inner.config.url.clone())
+            }
+            Some(TransportMode::Stateful) | None => {
+                // Stateful or not set: use session endpoint
+                drop(active_mode); // Release lock before async call
+                self.resolve_endpoint().await
+            }
+            Some(TransportMode::Auto) => {
+                // Should not happen after connect, but fallback to resolve
+                drop(active_mode);
+                self.resolve_endpoint().await
+            }
         }
     }
 }
@@ -167,17 +213,56 @@ impl McpTransport for HttpTransport {
             return Ok(());
         }
 
+        let configured_mode = self.inner.config.mode;
+
         info!(
             server = %self.inner.config.name,
             url = %self.inner.config.url,
-            "Connecting to HTTP/SSE MCP server"
+            mode = ?configured_mode,
+            "Connecting to HTTP MCP server"
         );
 
-        // Start SSE listener
-        self.start_sse_listener();
+        // Determine transport mode
+        let detected_mode = match configured_mode {
+            TransportMode::Stateful => {
+                // Force stateful mode with SSE
+                self.start_sse_listener();
+                match self.resolve_endpoint().await {
+                    Ok(_) => TransportMode::Stateful,
+                    Err(e) => {
+                        warn!(server = %self.inner.config.name, %e, "SSE connection failed in forced stateful mode");
+                        return Err(e);
+                    }
+                }
+            }
+            TransportMode::Stateless => {
+                // Force stateless mode - no SSE needed
+                info!(server = %self.inner.config.name, "Using stateless mode (direct HTTP POST)");
+                TransportMode::Stateless
+            }
+            TransportMode::Auto => {
+                // Auto-detect: try SSE first, fallback to stateless
+                info!(server = %self.inner.config.name, "Auto-detecting transport mode...");
+                self.start_sse_listener();
 
-        // Wait for endpoint resolution
-        let _endpoint = self.resolve_endpoint().await?;
+                match self.resolve_endpoint().await {
+                    Ok(_) => {
+                        info!(server = %self.inner.config.name, "Detected stateful mode (SSE endpoint received)");
+                        TransportMode::Stateful
+                    }
+                    Err(_) => {
+                        info!(server = %self.inner.config.name, "SSE timeout - falling back to stateless mode");
+                        // Set endpoint to config URL for stateless mode
+                        *self.inner.session_endpoint.lock().await =
+                            Some(self.inner.config.url.clone());
+                        TransportMode::Stateless
+                    }
+                }
+            }
+        };
+
+        // Store detected mode
+        *self.inner.active_mode.lock().await = Some(detected_mode);
 
         // Send initialize request
         let params = json!({
@@ -211,7 +296,8 @@ impl McpTransport for HttpTransport {
         info!(
             server = %self.inner.config.name,
             tool_count = tool_count,
-            "Successfully connected to HTTP/SSE MCP server"
+            mode = ?detected_mode,
+            "Successfully connected to HTTP MCP server"
         );
 
         Ok(())
@@ -439,6 +525,7 @@ mod tests {
             name: "test".to_string(),
             url: "https://example.com/mcp".to_string(),
             headers: HashMap::new(),
+            mode: TransportMode::Auto,
         };
         let transport = HttpTransport::new(config);
         assert_eq!(transport.get_name(), "test");
