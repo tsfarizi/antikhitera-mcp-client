@@ -1,0 +1,123 @@
+version: '3'
+
+vars:
+  IMAGE_NAME: farizi/cbt-mcp-client
+  TAG: latest
+  CONTAINER_NAME: cbt-mcp-client
+
+tasks:
+  build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t {{.IMAGE_NAME}}:{{.TAG}} .
+  
+  build-version:
+    desc: Build with specific version (task build-version VERSION=1.0.0)
+    cmds:
+      - docker build -t {{.IMAGE_NAME}}:{{.VERSION}} -t {{.IMAGE_NAME}}:latest .
+    requires:
+      vars: [VERSION]
+  
+  build-clean:
+    desc: Build without cache
+    cmds:
+      - docker build --no-cache -t {{.IMAGE_NAME}}:{{.TAG}} .
+
+  run:
+    desc: Run container locally
+    cmds:
+      - docker run -p 8080:8080 --name {{.CONTAINER_NAME}} {{.IMAGE_NAME}}:{{.TAG}}
+  
+  run-detached:
+    desc: Run in detached mode
+    aliases: [run-d]
+    cmds:
+      - docker run -d -p 8080:8080 --name {{.CONTAINER_NAME}} {{.IMAGE_NAME}}:{{.TAG}}
+  
+  run-debug:
+    desc: Run with debug logging
+    cmds:
+      - docker run -p 8080:8080 -e RUST_LOG=debug --name {{.CONTAINER_NAME}} {{.IMAGE_NAME}}:{{.TAG}}
+
+  login:
+    desc: Login to Docker Hub
+    cmds:
+      - docker login
+  
+  push:
+    desc: Push to Docker Hub
+    cmds:
+      - docker push {{.IMAGE_NAME}}:{{.TAG}}
+  
+  push-all:
+    desc: Push all tags
+    cmds:
+      - docker push {{.IMAGE_NAME}} --all-tags
+
+  tag-version:
+    desc: Tag with version (task tag-version VERSION=1.0.0)
+    cmds:
+      - docker tag {{.IMAGE_NAME}}:latest {{.IMAGE_NAME}}:{{.VERSION}}
+    requires:
+      vars: [VERSION]
+
+  stop:
+    desc: Stop and remove container
+    cmds:
+      - docker stop {{.CONTAINER_NAME}} || true
+      - docker rm {{.CONTAINER_NAME}} || true
+  
+  clean:
+    desc: Remove image
+    cmds:
+      - docker rmi {{.IMAGE_NAME}}:{{.TAG}} || true
+  
+  clean-all:
+    desc: Remove all project images
+    cmds:
+      - docker images {{.IMAGE_NAME}} -q | xargs -r docker rmi -f
+
+  logs:
+    desc: Show container logs
+    cmds:
+      - docker logs -f {{.CONTAINER_NAME}}
+  
+  shell:
+    desc: Shell into running container
+    cmds:
+      - docker exec -it {{.CONTAINER_NAME}} /bin/bash
+  
+  info:
+    desc: Show image info
+    cmds:
+      - docker images {{.IMAGE_NAME}}
+  
+  health:
+    desc: Check health endpoint
+    cmds:
+      - curl -f http://localhost:8080/health
+
+  dev:
+    desc: Build and run locally
+    cmds:
+      - task: build
+      - task: run
+  
+  release:
+    desc: Build and push to Docker Hub
+    cmds:
+      - task: build-clean
+      - task: push
+      - echo "Released {{.IMAGE_NAME}}:{{.TAG}}"
+  
+  release-version:
+    desc: Build and push with version (task release-version VERSION=1.0.0)
+    cmds:
+      - task: build-version
+        vars:
+          VERSION: "{{.VERSION}}"
+      - docker push {{.IMAGE_NAME}}:{{.VERSION}}
+      - docker push {{.IMAGE_NAME}}:latest
+      - echo "Released {{.IMAGE_NAME}}:{{.VERSION}}"
+    requires:
+      vars: [VERSION]
