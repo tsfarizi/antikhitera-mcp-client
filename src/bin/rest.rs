@@ -11,7 +11,6 @@ use antikhitera_mcp_client::config::{AppConfig, TransportType};
 use antikhitera_mcp_client::infrastructure::model::DynamicModelProvider;
 use antikhitera_mcp_client::infrastructure::server;
 use clap::Parser;
-use std::error::Error;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -30,15 +29,39 @@ struct Args {
     addr: Option<SocketAddr>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
+    // Debug output at absolute earliest point (before tokio runtime)
+    println!("[rest] PRE-TOKIO: Starting...");
+    std::io::Write::flush(&mut std::io::stdout()).ok();
+
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+    if let Err(e) = rt.block_on(async_main()) {
+        eprintln!("[rest] Fatal error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+
+    eprintln!("[rest] Starting MCP REST API Server...");
 
     init_tracing();
     info!("Starting MCP REST API Server");
 
     let config_path = args.config.as_deref().map(Path::new);
-    let file_config = AppConfig::load(config_path)?;
+    eprintln!(
+        "[rest] Loading config from: {:?}",
+        config_path.unwrap_or(Path::new("config/client.toml"))
+    );
+
+    let file_config = match AppConfig::load(config_path) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("[rest] ERROR loading config: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     debug!(provider = %file_config.default_provider, model = %file_config.model, "Configuration loaded");
 
