@@ -2,7 +2,16 @@
 //!
 //! This module provides transport abstraction for MCP communication,
 //! supporting both STDIO (subprocess) and HTTP transports.
+//!
+//! ## Module Structure
+//!
+//! - `config` - Transport configuration types (TransportMode, HttpTransportConfig)
+//! - `http` - HTTP transport implementation
+//!   - `sse` - SSE listener and endpoint resolution
+//!   - `rpc` - JSON-RPC request/notification handling
+//!   - `tools` - Tool cache management
 
+mod config;
 mod http;
 
 use async_trait::async_trait;
@@ -11,7 +20,9 @@ use serde_json::Value;
 use super::error::ToolInvokeError;
 use super::interface::ServerToolInfo;
 
-pub use http::{HttpTransport, HttpTransportConfig, TransportMode};
+// Re-export public types
+pub use config::{HttpTransportConfig, TransportMode};
+pub use http::HttpTransport;
 
 /// Transport trait for MCP communication.
 ///
