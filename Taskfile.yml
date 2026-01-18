@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  IMAGE_NAME: farizi/cbt-mcp-client
+  IMAGE_NAME: YOUR-DOCKER-HUB-USERNAME/antikhitera-mcp-client
   TAG: latest
   CONTAINER_NAME: antikhitera-mcp-client
 
