@@ -3,7 +3,7 @@ version: '3'
 vars:
   IMAGE_NAME: farizi/cbt-mcp-client
   TAG: latest
-  CONTAINER_NAME: cbt-mcp-client
+  CONTAINER_NAME: antikhitera-mcp-client
 
 tasks:
   build:
