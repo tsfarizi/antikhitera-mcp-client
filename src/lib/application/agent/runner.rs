@@ -35,8 +35,6 @@ impl<P: ModelProvider> Agent<P> {
         let mut session_id = options.session_id.clone();
         let mut steps = Vec::new();
         let mut logs = Vec::new();
-        let model_override = options.model.clone();
-        let provider_override = options.provider.clone();
 
         let context = self.runtime.build_context().await;
         let instructions = self.runtime.compose_system_instructions(&context);
@@ -50,18 +48,17 @@ impl<P: ModelProvider> Agent<P> {
         let prompt_preview = McpClient::<P>::summarise(&prompt);
         let mut next_prompt = self.runtime.initial_user_prompt(prompt, &context);
         logs.push(format!("Initial agent request: {prompt_preview}"));
-        let effective_provider = provider_override
-            .clone()
-            .unwrap_or_else(|| self.client.default_provider().to_string());
-        let effective_model = model_override
-            .clone()
-            .unwrap_or_else(|| self.client.default_model().to_string());
+
+        let effective_provider = self.client.default_provider().to_string();
+        let effective_model = self.client.default_model().to_string();
         logs.push(format!(
             "Active provider: '{effective_provider}' | Model: '{effective_model}'"
         ));
+
         let mut remaining_steps = options.max_steps;
         let mut system_prompt_to_send = Some(system_prompt);
         let mut first_call = true;
+        let initial_attachments = std::mem::take(&mut options.attachments);
 
         loop {
             debug!(
@@ -70,14 +67,18 @@ impl<P: ModelProvider> Agent<P> {
             );
             let request = ChatRequest {
                 prompt: next_prompt.clone(),
-                provider: provider_override.clone(),
-                model: model_override.clone(),
+                attachments: if first_call {
+                    initial_attachments.clone()
+                } else {
+                    Vec::new()
+                },
                 system_prompt: if first_call {
                     system_prompt_to_send.take()
                 } else {
                     None
                 },
                 session_id: session_id.clone(),
+                raw_mode: false,
             };
 
             let result = self.client.chat(request).await?;
@@ -188,10 +189,10 @@ impl<P: ModelProvider> Agent<P> {
                     // Send correction request to model
                     let retry_request = ChatRequest {
                         prompt: retry_message,
-                        provider: None,
-                        model: None,
+                        attachments: Vec::new(),
                         system_prompt: None,
                         session_id: session_id.clone(),
+                        raw_mode: false,
                     };
 
                     match self.client.chat(retry_request).await {

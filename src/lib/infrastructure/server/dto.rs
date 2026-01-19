@@ -3,15 +3,32 @@ use crate::config::{ModelProviderConfig, ToolConfig};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// Attachment for multimodal input (image or file)
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct Attachment {
+    /// File name
+    pub name: String,
+    /// MIME type (e.g., "image/png", "application/pdf")
+    pub mime_type: String,
+    /// Base64 encoded file data
+    pub data: String,
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RestChatRequest {
+    /// The user's message/prompt
     pub prompt: String,
-    pub provider: Option<String>,
-    pub model: Option<String>,
+    /// Optional file/image attachments (base64 encoded)
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
+    /// Optional system prompt override
     pub system_prompt: Option<String>,
+    /// Session ID for conversation continuity
     pub session_id: Option<String>,
+    /// Enable agent mode with tool execution
     #[serde(default)]
     pub agent: bool,
+    /// Maximum tool execution steps in agent mode
     #[serde(default)]
     pub max_tool_steps: Option<usize>,
 }

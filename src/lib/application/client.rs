@@ -24,6 +24,7 @@
 use super::tooling::{ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::model::{ModelError, ModelProvider, ModelRequest};
+use crate::types::MessagePart;
 use crate::types::{ChatMessage, MessageRole};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -133,21 +134,19 @@ impl ClientConfig {
 }
 
 /// Request parameters for a chat interaction.
-///
-/// All fields except `prompt` are optional and will use defaults from
-/// the client configuration if not specified.
 #[derive(Debug, Default)]
 pub struct ChatRequest {
     /// The user's message/prompt
     pub prompt: String,
-    /// Optional provider override
-    pub provider: Option<String>,
-    /// Optional model override
-    pub model: Option<String>,
+    /// Optional file/image attachments
+    pub attachments: Vec<MessagePart>,
     /// Optional system prompt override
     pub system_prompt: Option<String>,
     /// Session ID for conversation continuity
     pub session_id: Option<String>,
+    /// Raw mode - bypass all config system prompts and templates
+    /// Used for direct model queries without context injection
+    pub raw_mode: bool,
 }
 
 /// Result from a chat interaction.
@@ -254,49 +253,70 @@ impl<P: ModelProvider> McpClient<P> {
     }
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
-        let provider = request
-            .provider
-            .unwrap_or_else(|| self.config.default_provider.clone());
-        let model = request
-            .model
-            .unwrap_or_else(|| self.config.default_model.clone());
-        let session_id = request.session_id.unwrap_or_else(new_session_id);
-        let system = request
-            .system_prompt
-            .or_else(|| self.config.default_system_prompt.clone());
-
-        let history = {
-            let mut sessions = self.sessions.lock().await;
-            sessions.entry(session_id.clone()).or_default().clone()
-        };
-        debug!(
-            session_id = session_id.as_str(),
-            history_count = history.len(),
-            "Preparing chat request with prior history"
-        );
+        let provider = self.config.default_provider.clone();
+        let model = self.config.default_model.clone();
+        let session_id = request.session_id.clone().unwrap_or_else(new_session_id);
+        let raw_mode = request.raw_mode;
 
         let mut logs = Vec::new();
         logs.push(format!("Provider '{provider}' with model '{model}'"));
-        if !history.is_empty() {
-            logs.push(format!(
-                "Previous conversation history: {} messages",
-                history.len()
-            ));
+
+        let mut messages = Vec::new();
+
+        if raw_mode {
+            // Raw mode: skip all system prompts and history, just send user message directly
+            logs.push("Raw mode: sending request directly to model".to_string());
+        } else {
+            // Normal mode: include system prompt and history
+            let system = request
+                .system_prompt
+                .or_else(|| self.config.default_system_prompt.clone());
+
+            let history = {
+                let mut sessions = self.sessions.lock().await;
+                sessions.entry(session_id.clone()).or_default().clone()
+            };
+            debug!(
+                session_id = session_id.as_str(),
+                history_count = history.len(),
+                "Preparing chat request with prior history"
+            );
+
+            if !history.is_empty() {
+                logs.push(format!(
+                    "Previous conversation history: {} messages",
+                    history.len()
+                ));
+            }
+
+            let system_prompt = self.compose_system_prompt(system);
+            if !system_prompt.is_empty() {
+                logs.push(format!(
+                    "System prompt active: {}",
+                    Self::summarise(&system_prompt)
+                ));
+                messages.push(ChatMessage::new(MessageRole::System, system_prompt));
+            }
+            messages.extend(history.iter().cloned());
         }
 
-        let mut messages = Vec::with_capacity(history.len() + 2);
-        let system_prompt = self.compose_system_prompt(system);
-        if !system_prompt.is_empty() {
-            logs.push(format!(
-                "System prompt active: {}",
-                Self::summarise(&system_prompt)
-            ));
-            messages.push(ChatMessage::new(MessageRole::System, system_prompt));
-        }
         let prompt_preview = Self::summarise(&request.prompt);
-        messages.extend(history.iter().cloned());
-        messages.push(ChatMessage::new(MessageRole::User, request.prompt.clone()));
-        logs.push(format!("User: {prompt_preview}"));
+
+        // Build user message with text and attachments
+        let mut user_parts = vec![MessagePart::text(request.prompt.clone())];
+        user_parts.extend(request.attachments.clone());
+        let user_message = ChatMessage::with_parts(MessageRole::User, user_parts);
+        messages.push(user_message);
+
+        if !request.attachments.is_empty() {
+            logs.push(format!(
+                "User: {} (with {} attachment(s))",
+                prompt_preview,
+                request.attachments.len()
+            ));
+        } else {
+            logs.push(format!("User: {prompt_preview}"));
+        }
 
         info!(
             session_id = session_id.as_str(),
@@ -320,7 +340,7 @@ impl<P: ModelProvider> McpClient<P> {
             .clone()
             .unwrap_or_else(|| session_id.clone());
         let assistant_message = response.message.clone();
-        let response_preview = Self::summarise(&assistant_message.content);
+        let response_preview = Self::summarise(&assistant_message.content());
         logs.push(format!("Model: {response_preview}"));
 
         info!(
@@ -337,7 +357,7 @@ impl<P: ModelProvider> McpClient<P> {
             .await;
 
         Ok(ChatResult {
-            content: response.message.content,
+            content: response.message.content(),
             session_id: final_session,
             provider,
             model,

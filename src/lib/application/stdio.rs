@@ -285,10 +285,10 @@ async fn handle_prompt<P: ModelProvider + 'static>(
         match client
             .chat(ChatRequest {
                 prompt: message,
-                provider: None,
-                model: None,
+                attachments: Vec::new(),
                 system_prompt: None,
                 session_id: state.session_id.clone(),
+                raw_mode: false,
             })
             .await
         {
