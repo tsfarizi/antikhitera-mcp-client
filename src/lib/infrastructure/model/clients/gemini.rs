@@ -49,10 +49,7 @@ impl ModelClient for GeminiClient {
         let (system_text, contents) = MessageAdapter::to_gemini_format(&request.messages);
 
         let mut payload = json!({
-            "contents": contents,
-            "generationConfig": {
-                "responseMimeType": "application/json"
-            }
+            "contents": contents
         });
 
         if let Some(system) = system_text {

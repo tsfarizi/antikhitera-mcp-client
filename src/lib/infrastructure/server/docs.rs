@@ -1,6 +1,6 @@
 use super::dto::{
-    ConfigResponse, ConfigUpdateRequest, ErrorResponse, ReloadResponse, RestChatRequest,
-    RestChatResponse, ToolInventoryResponse,
+    Attachment, ConfigResponse, ConfigUpdateRequest, ErrorResponse, ReloadResponse,
+    RestChatRequest, RestChatResponse, ToolInventoryResponse,
 };
 use super::routes;
 use crate::agent::AgentStep;
@@ -18,6 +18,7 @@ use utoipa::OpenApi;
     ),
     components(
         schemas(
+            Attachment,
             RestChatRequest,
             RestChatResponse,
             ErrorResponse,

@@ -1,3 +1,4 @@
+use crate::types::MessagePart;
 use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -25,21 +26,19 @@ pub struct AgentOutcome {
 
 #[derive(Debug, Clone)]
 pub struct AgentOptions {
-    pub provider: Option<String>,
-    pub model: Option<String>,
     pub system_prompt: Option<String>,
     pub session_id: Option<String>,
     pub max_steps: usize,
+    pub attachments: Vec<MessagePart>,
 }
 
 impl Default for AgentOptions {
     fn default() -> Self {
         Self {
-            provider: None,
-            model: None,
             system_prompt: None,
             session_id: None,
             max_steps: DEFAULT_MAX_STEPS,
+            attachments: Vec::new(),
         }
     }
 }
