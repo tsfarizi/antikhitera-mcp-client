@@ -147,6 +147,9 @@ pub struct ChatRequest {
     /// Raw mode - bypass all config system prompts and templates
     /// Used for direct model queries without context injection
     pub raw_mode: bool,
+    /// Skip template composition - use system_prompt as-is
+    /// Used by Agent runner which composes its own complete system prompt
+    pub bypass_template: bool,
 }
 
 /// Result from a chat interaction.
@@ -268,10 +271,6 @@ impl<P: ModelProvider> McpClient<P> {
             logs.push("Raw mode: sending request directly to model".to_string());
         } else {
             // Normal mode: include system prompt and history
-            let system = request
-                .system_prompt
-                .or_else(|| self.config.default_system_prompt.clone());
-
             let history = {
                 let mut sessions = self.sessions.lock().await;
                 sessions.entry(session_id.clone()).or_default().clone()
@@ -289,7 +288,18 @@ impl<P: ModelProvider> McpClient<P> {
                 ));
             }
 
-            let system_prompt = self.compose_system_prompt(system);
+            // Determine system prompt based on bypass_template flag
+            let system_prompt = if request.bypass_template {
+                // Agent provides complete system prompt - use as-is
+                request.system_prompt.unwrap_or_default()
+            } else {
+                // Normal mode: compose with template
+                let system = request
+                    .system_prompt
+                    .or_else(|| self.config.default_system_prompt.clone());
+                self.compose_system_prompt(system)
+            };
+
             if !system_prompt.is_empty() {
                 logs.push(format!(
                     "System prompt active: {}",

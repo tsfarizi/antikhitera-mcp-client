@@ -113,7 +113,8 @@ pub async fn chat_handler<P: ModelProvider>(
                 attachments: attachment_parts,
                 system_prompt,
                 session_id,
-                raw_mode: true, // Non-agent mode bypasses system prompts
+                raw_mode: true,         // Non-agent mode bypasses system prompts
+                bypass_template: false, // Not relevant when raw_mode is true
             })
             .await;
 
