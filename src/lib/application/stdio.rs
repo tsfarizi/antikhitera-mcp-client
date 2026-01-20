@@ -289,6 +289,7 @@ async fn handle_prompt<P: ModelProvider + 'static>(
                 system_prompt: None,
                 session_id: state.session_id.clone(),
                 raw_mode: false,
+                bypass_template: false, // Use normal template composition
             })
             .await
         {
