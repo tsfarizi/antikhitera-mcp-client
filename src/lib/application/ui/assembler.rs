@@ -115,29 +115,30 @@ impl UiAssembler {
 }
 
 /// Find data object in various tool output structures.
+/// Priority: nested "data" > nested "product" > content array > direct object
 fn find_data_object(output: &Value) -> Result<&Value, AssemblerError> {
-    // Direct object
-    if output.is_object() {
-        return Ok(output);
-    }
-
-    // Nested in "data" field
+    // Check nested "data" field first (highest priority)
     if let Some(data) = output.get("data").filter(|v| v.is_object()) {
         return Ok(data);
     }
 
-    // Nested in "product" field
+    // Check nested "product" field
     if let Some(product) = output.get("product").filter(|v| v.is_object()) {
         return Ok(product);
     }
 
-    // First object in content array
+    // Check content array
     if let Some(content) = output.get("content").and_then(Value::as_array) {
         for item in content {
             if item.is_object() {
                 return Ok(item);
             }
         }
+    }
+
+    // Fall back to direct object (lowest priority)
+    if output.is_object() {
+        return Ok(output);
     }
 
     Err(AssemblerError::InvalidStructure(
