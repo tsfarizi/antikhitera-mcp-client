@@ -9,9 +9,11 @@
 //! - [`discovery`] - Auto-discovery and loading of MCP servers from a folder
 //! - [`stdio`] - Standard input/output interface for command-line interaction
 //! - [`tooling`] - Tool server management and MCP server integration
+//! - [`ui`] - Schema-driven UI assembler for dynamic component layout
 
 pub mod agent;
 pub mod client;
 pub mod discovery;
 pub mod stdio;
 pub mod tooling;
+pub mod ui;
