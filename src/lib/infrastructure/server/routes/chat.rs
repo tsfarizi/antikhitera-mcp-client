@@ -2,7 +2,6 @@ use super::super::dto::{Attachment, ErrorResponse, RestChatRequest, RestChatResp
 use super::super::state::ServerState;
 use crate::agent::{Agent, AgentOptions};
 use crate::client::{ChatRequest, McpError};
-use crate::domain::ui::AgentLayoutIntent;
 use crate::model::ModelProvider;
 use crate::types::MessagePart;
 use axum::Json;
@@ -83,39 +82,15 @@ pub async fn chat_handler<P: ModelProvider>(
             options.max_steps = max_steps;
         }
         let agent = Agent::new(client.clone());
-        match agent.run(prompt, options).await {
-            Ok(outcome) => {
+        match agent
+            .run_ui_layout(prompt, options, &state.ui_assembler)
+            .await
+        {
+            Ok((outcome, content_json)) => {
                 info!(
                     session_id = outcome.session_id.as_str(),
                     "Agent run completed successfully"
                 );
-
-                // Try to parse response as intent and assemble UI
-                let content_json = if let Ok(intent) =
-                    serde_json::from_str::<AgentLayoutIntent>(&outcome.response)
-                {
-                    match state.ui_assembler.assemble(&intent, &outcome.steps) {
-                        Ok(component) => json!(component),
-                        Err(e) => {
-                            error!(%e, "Failed to assemble UI component");
-                            // Fallback to text component
-                            json!({
-                                "type": "text",
-                                "props": {
-                                    "content": outcome.response
-                                }
-                            })
-                        }
-                    }
-                } else {
-                    // Not an intent, wrap raw text
-                    json!({
-                        "type": "text",
-                        "props": {
-                            "content": outcome.response
-                        }
-                    })
-                };
 
                 Ok(Json(RestChatResponse {
                     logs: outcome.logs,

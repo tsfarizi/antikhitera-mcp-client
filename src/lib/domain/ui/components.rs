@@ -15,11 +15,12 @@ use utoipa::ToSchema;
 pub struct DynamicComponent {
     /// Component name from ui.toml (e.g. "product_card", "text", "container")
     #[serde(rename = "type")]
-    pub component_name: String,
+    pub component_type: String,
 
     /// Dynamic properties hydrated from MCP data per TOML schema.
     /// Keys must match `required_fields` + `optional_fields` from schema.
     #[schema(value_type = Object)]
+    #[serde(flatten)]
     pub props: HashMap<String, Value>,
 
     /// Optional children for container components.
@@ -32,7 +33,7 @@ impl DynamicComponent {
     /// Create a new component with the given name.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
-            component_name: name.into(),
+            component_type: name.into(),
             props: HashMap::new(),
             children: None,
         }
@@ -83,7 +84,7 @@ mod tests {
             .with_prop("price", json!(99.99))
             .with_prop("image", json!("base64data..."));
 
-        assert_eq!(component.component_name, "product_card");
+        assert_eq!(component.component_type, "product_card");
         assert_eq!(component.get_string_prop("title"), Some("Test Product"));
         assert_eq!(component.get_f64_prop("price"), Some(99.99));
         assert!(!component.has_children());

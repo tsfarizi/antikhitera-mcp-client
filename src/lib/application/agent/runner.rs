@@ -3,6 +3,8 @@ use super::errors::AgentError;
 use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use crate::application::client::{ChatRequest, McpClient};
+use crate::application::ui::UiAssembler;
+use crate::domain::ui::AgentLayoutIntent;
 use crate::model::ModelProvider;
 use serde_json::json;
 use std::sync::Arc;
@@ -20,9 +22,10 @@ impl<P: ModelProvider> Agent<P> {
     pub fn new(client: Arc<McpClient<P>>) -> Self {
         let tools = client.tools().to_vec();
         let bridge = client.server_bridge();
+        let ui_schema = client.config().ui.clone();
         Self {
             client,
-            runtime: ToolRuntime::new(tools, bridge),
+            runtime: ToolRuntime::new(tools, bridge, ui_schema),
         }
     }
 
@@ -153,6 +156,41 @@ impl<P: ModelProvider> Agent<P> {
                 }
             }
         }
+    }
+
+    /// Run agent and attempt to assemble UI layout from response.
+    pub async fn run_ui_layout(
+        &self,
+        prompt: String,
+        options: AgentOptions,
+        assembler: &UiAssembler,
+    ) -> Result<(AgentOutcome, serde_json::Value), AgentError> {
+        // 1. Run the agent loop
+        let outcome = self.run(prompt, options).await?;
+
+        // 2. Try to parse response as AgentLayoutIntent
+        if let Ok(intent) = serde_json::from_str::<AgentLayoutIntent>(&outcome.response) {
+            match assembler.assemble(&intent, &outcome.steps) {
+                Ok(component) => {
+                    info!("Successfully assembled UI component from agent intent");
+                    let value = serde_json::to_value(component).map_err(|e| {
+                        AgentError::InvalidResponse(format!("Failed to serialize component: {}", e))
+                    })?;
+                    return Ok((outcome, value));
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to assemble UI component, falling back to text");
+                }
+            }
+        }
+
+        // 3. Fallback to simple text component
+        let fallback = json!({
+            "type": "text",
+            "content": outcome.response
+        });
+
+        Ok((outcome, fallback))
     }
 
     /// Parse agent action with retry logic for malformed JSON

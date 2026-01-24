@@ -228,6 +228,10 @@ impl<P: ModelProvider> McpClient<P> {
         }
     }
 
+    pub fn config(&self) -> &ClientConfig {
+        &self.config
+    }
+
     pub fn tools(&self) -> &[ToolConfig] {
         &self.config.tools
     }

@@ -14,7 +14,7 @@ impl ToolRuntime {
             "If you have finding data that suitable for UI representation, you MUST use the following JSON structure for the 'response' field:".to_string(),
             "{ \"analysisText\": \"Explaining what is shown\", \"selectedDataIndex\": <index_of_tool_step_containing_data>, \"componentType\": \"<component_name_from_ui_contract>\", \"layoutDirection\": \"vertical|horizontal\", \"cardPosition\": \"top|bottom|left|right\" }".to_string(),
             "Example final response with UI intent: { \"action\": \"final\", \"response\": { \"analysisText\": \"Here are the latest posts\", \"selectedDataIndex\": 0, \"componentType\": \"post_card\", \"layoutDirection\": \"vertical\", \"cardPosition\": \"top\" } }".to_string(),
-            "Supported component types: 'text', 'post_card', 'container'. Use 'post_card' for news/announcements.".to_string(),
+            format!("Supported component types: {}.", self.build_dynamic_component_catalog()),
             "Detect the user's language automatically and answer using that same language unless they explicitly request another language."
                 .to_string(),
             "Do not call any translation-related tools; handle language understanding internally."
@@ -69,5 +69,21 @@ impl ToolRuntime {
         }
 
         payload.to_string()
+    }
+
+    /// Build dynamic component catalog string for system prompt.
+    fn build_dynamic_component_catalog(&self) -> String {
+        let mut components: Vec<_> = self.ui_schema.components.keys().cloned().collect();
+        components.sort(); // Deterministic order
+
+        // Add descriptions if available (optional enhancement)
+        // For now, just listing types as requested: 'text', 'post_card', etc.
+        let list = components
+            .iter()
+            .map(|c| format!("'{}'", c))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        list
     }
 }
