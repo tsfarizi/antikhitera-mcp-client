@@ -202,4 +202,17 @@ mod http_transport_async_tests {
         let transport = HttpTransport::new(config);
         assert!(transport.tool_metadata("nonexistent").await.is_none());
     }
+
+    #[tokio::test]
+    async fn test_http_transport_list_tools_initially_empty() {
+        let config = HttpTransportConfig {
+            name: "test".to_string(),
+            url: "https://test.example.com".to_string(),
+            headers: HashMap::new(),
+            mode: TransportMode::Auto,
+        };
+
+        let transport = HttpTransport::new(config);
+        assert!(transport.list_tools().await.is_empty());
+    }
 }
