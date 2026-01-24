@@ -59,7 +59,7 @@ impl UiAssembler {
 
         // 4. Build the data component
         let data_component = DynamicComponent {
-            component_name: intent.component_type.clone(),
+            component_type: intent.component_type.clone(),
             props,
             children: None,
         };
@@ -237,14 +237,14 @@ mod tests {
 
         let result = assembler.assemble(&intent, &steps).unwrap();
 
-        assert_eq!(result.component_name, "container");
+        assert_eq!(result.component_type, "container");
         assert_eq!(result.get_string_prop("direction"), Some("horizontal"));
         assert!(result.has_children());
 
         let children = result.children.as_ref().unwrap();
         assert_eq!(children.len(), 2);
-        assert_eq!(children[0].component_name, "product_card"); // left = first
-        assert_eq!(children[1].component_name, "text");
+        assert_eq!(children[0].component_type, "product_card"); // left = first
+        assert_eq!(children[1].component_type, "text");
     }
 
     #[test]

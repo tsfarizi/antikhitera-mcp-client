@@ -14,14 +14,21 @@ pub(super) use super::errors::{AgentError, ToolError};
 pub(super) use crate::application::tooling::{ToolInvokeError, ToolServerInterface};
 pub(super) use serde_json::{Value, json};
 
+use crate::domain::ui::UiSchemaConfig;
+
 pub struct ToolRuntime {
     configs: Vec<ToolConfig>,
     index: HashMap<String, ToolConfig>,
     bridge: Arc<dyn ToolServerInterface>,
+    ui_schema: UiSchemaConfig,
 }
 
 impl ToolRuntime {
-    pub fn new(configs: Vec<ToolConfig>, bridge: Arc<dyn ToolServerInterface>) -> Self {
+    pub fn new(
+        configs: Vec<ToolConfig>,
+        bridge: Arc<dyn ToolServerInterface>,
+        ui_schema: UiSchemaConfig,
+    ) -> Self {
         let index = configs
             .iter()
             .cloned()
@@ -32,6 +39,7 @@ impl ToolRuntime {
             configs,
             index,
             bridge,
+            ui_schema,
         }
     }
 }
