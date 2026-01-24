@@ -187,12 +187,7 @@ fn run_server_details_tui(
             NavAction::Select => {
                 match action_menu.selected_index() {
                     Some(0) => {
-                        let cmd = server
-                            .command
-                            .as_ref()
-                            .and_then(|p| p.to_str())
-                            .unwrap_or("");
-                        run_sync_single_server_tui(terminal, &server.name, cmd, &server.args)?;
+                        run_sync_single_server_tui(terminal, server)?;
                         break; // Return to refresh
                     }
                     Some(1) => break, // Back
