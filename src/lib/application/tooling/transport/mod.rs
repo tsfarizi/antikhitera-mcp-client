@@ -48,6 +48,9 @@ pub trait McpTransport: Send + Sync {
     /// Get tool metadata from cache.
     async fn tool_metadata(&self, tool: &str) -> Option<ServerToolInfo>;
 
+    /// List all tools from cache.
+    async fn list_tools(&self) -> Vec<ServerToolInfo>;
+
     /// Get server name.
     fn server_name(&self) -> &str;
 

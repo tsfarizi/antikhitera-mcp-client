@@ -248,6 +248,16 @@ impl McpTransport for HttpTransport {
         self.inner.tool_cache.lock().await.get(tool).cloned()
     }
 
+    async fn list_tools(&self) -> Vec<ServerToolInfo> {
+        self.inner
+            .tool_cache
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect()
+    }
+
     fn server_name(&self) -> &str {
         &self.inner.config.name
     }

@@ -5,58 +5,49 @@
 mod display;
 
 use super::load_config;
+use crate::config::ServerConfig;
 use crate::config::wizard::generators::model;
-use crate::config::{ServerConfig, TransportType};
 use crate::tooling::spawn_and_list_tools;
 use crate::tui::terminal::Tui;
 use ratatui::style::Color;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
-use std::path::PathBuf;
 
 use display::{show_all_results_tui, show_result_tui, show_status_tui};
 
 /// Sync tools from a single server (TUI version)
 pub fn run_sync_single_server_tui(
     terminal: &mut Tui,
-    name: &str,
-    command: &str,
-    args: &[String],
+    server: &ServerConfig,
 ) -> Result<(), Box<dyn Error>> {
     show_status_tui(
         terminal,
-        &format!("🔄 Syncing: {}", name),
+        &format!("🔄 Syncing: {}", server.name),
         "⏳ Connecting to server...",
     )?;
     let config = load_config()?;
     let existing_tools: HashSet<String> = config
         .tools
         .iter()
-        .filter(|t| t.server.as_deref() == Some(name))
+        .filter(|t| t.server.as_deref() == Some(&server.name))
         .map(|t| t.name.clone())
         .collect();
 
-    let server_config = ServerConfig {
-        name: name.to_string(),
-        transport: TransportType::Stdio,
-        command: Some(PathBuf::from(command)),
-        args: args.to_vec(),
-        env: HashMap::new(),
-        workdir: None,
-        url: None,
-        headers: HashMap::new(),
-        default_timezone: None,
-        default_city: None,
-    };
     let handle = tokio::runtime::Handle::current();
-    let result =
-        tokio::task::block_in_place(|| handle.block_on(spawn_and_list_tools(&server_config)));
+    let result = tokio::task::block_in_place(|| handle.block_on(spawn_and_list_tools(server)));
 
     match result {
         Ok(tools) => {
             if tools.is_empty() {
-                show_result_tui(terminal, name, "⚠️ No tools found", 0, 0, Color::Yellow)?;
+                show_result_tui(
+                    terminal,
+                    &server.name,
+                    "⚠️ No tools found",
+                    0,
+                    0,
+                    Color::Yellow,
+                )?;
             } else {
                 let mut tool_data = Vec::new();
                 let mut new_count = 0;
@@ -67,11 +58,11 @@ pub fn run_sync_single_server_tui(
                     }
                     tool_data.push((tool_name.clone(), description.clone()));
                 }
-                model::sync_tools_from_server(name, tool_data)?;
+                model::sync_tools_from_server(&server.name, tool_data)?;
 
                 show_result_tui(
                     terminal,
-                    name,
+                    &server.name,
                     "✓ Sync complete!",
                     tools.len(),
                     new_count,
@@ -82,7 +73,7 @@ pub fn run_sync_single_server_tui(
         Err(e) => {
             show_result_tui(
                 terminal,
-                name,
+                &server.name,
                 &format!("❌ Failed: {}", e),
                 0,
                 0,

@@ -1,5 +1,6 @@
 use super::error::ToolInvokeError;
 use super::interface::ServerToolInfo;
+use super::transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};
 use crate::config::ServerConfig;
 use serde::Deserialize;
 use serde_json::{Map as JsonMap, Value, json};
@@ -541,18 +542,40 @@ struct ElicitationCreateParams {
 pub async fn spawn_and_list_tools(
     config: &crate::config::ServerConfig,
 ) -> Result<Vec<(String, String)>, ToolInvokeError> {
-    let process = McpProcess::new(config.clone());
-    process.ensure_running().await?;
-    let cache = process.inner.tool_cache.lock().await;
-    let tools: Vec<(String, String)> = cache
-        .values()
-        .map(|info| {
-            (
-                info.name.clone(),
-                info.description.clone().unwrap_or_default(),
-            )
-        })
-        .collect();
+    if config.is_http() {
+        let url = config
+            .url
+            .clone()
+            .ok_or_else(|| ToolInvokeError::NotConfigured {
+                server: format!("{}: missing URL for HTTP transport", config.name),
+            })?;
+        let transport_config = HttpTransportConfig {
+            name: config.name.clone(),
+            url,
+            headers: config.headers.clone(),
+            mode: TransportMode::Auto,
+        };
+        let transport = HttpTransport::new(transport_config);
+        transport.connect().await?;
+        let tools = transport.list_tools().await;
+        Ok(tools
+            .into_iter()
+            .map(|info| (info.name, info.description.unwrap_or_default()))
+            .collect())
+    } else {
+        let process = McpProcess::new(config.clone());
+        process.ensure_running().await?;
+        let cache = process.inner.tool_cache.lock().await;
+        let tools: Vec<(String, String)> = cache
+            .values()
+            .map(|info| {
+                (
+                    info.name.clone(),
+                    info.description.clone().unwrap_or_default(),
+                )
+            })
+            .collect();
 
-    Ok(tools)
+        Ok(tools)
+    }
 }
