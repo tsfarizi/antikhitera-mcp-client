@@ -2,6 +2,7 @@ use super::error::ConfigError;
 use super::provider::ModelProviderConfig;
 use super::server::ServerConfig;
 use super::tool::ToolConfig;
+use crate::domain::ui::UiSchemaConfig;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -128,6 +129,8 @@ pub struct AppConfig {
     pub rest_server: RestServerConfig,
     /// Configurable prompts for agent behavior
     pub prompts: PromptsConfig,
+    /// UI Schema configuration
+    pub ui: UiSchemaConfig,
 }
 
 impl AppConfig {

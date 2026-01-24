@@ -23,6 +23,7 @@
 
 use super::tooling::{ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
+use crate::domain::ui::UiSchemaConfig;
 use crate::model::{ModelError, ModelProvider, ModelRequest};
 use crate::types::MessagePart;
 use crate::types::{ChatMessage, MessageRole};
@@ -62,6 +63,8 @@ pub struct ClientConfig {
     pub providers: Vec<ModelProviderConfig>,
     /// Configurable prompts for agent behavior
     pub prompts: PromptsConfig,
+    /// UI configuration
+    pub ui: UiSchemaConfig,
 }
 
 impl ClientConfig {
@@ -75,6 +78,7 @@ impl ClientConfig {
             servers: Vec::new(),
             providers: Vec::new(),
             prompts: PromptsConfig::default(),
+            ui: UiSchemaConfig::default(),
         }
     }
 
@@ -108,6 +112,12 @@ impl ClientConfig {
         self
     }
 
+    /// Set the UI configuration.
+    pub fn with_ui(mut self, ui: UiSchemaConfig) -> Self {
+        self.ui = ui;
+        self
+    }
+
     /// Get the list of providers.
     pub fn providers(&self) -> &[ModelProviderConfig] {
         &self.providers
@@ -129,6 +139,7 @@ impl ClientConfig {
             providers: self.providers.clone(),
             rest_server: Default::default(),
             prompts: self.prompts.clone(),
+            ui: self.ui.clone(),
         }
     }
 }

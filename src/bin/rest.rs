@@ -163,14 +163,15 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     .with_tools(file_config.tools.clone())
     .with_servers(file_config.servers.clone())
     .with_prompts(file_config.prompts.clone())
-    .with_providers(file_config.providers.clone());
+    .with_providers(file_config.providers.clone())
+    .with_ui(file_config.ui.clone());
 
     let client = Arc::new(McpClient::new(provider, client_config));
 
     info!(addr = %addr, "REST server starting");
     let cors_origins = &file_config.rest_server.cors_origins;
     let doc_servers = &file_config.rest_server.docs;
-    server::serve(client, addr, cors_origins, doc_servers).await?;
+    server::serve(client, addr, cors_origins, doc_servers, &file_config).await?;
 
     Ok(())
 }

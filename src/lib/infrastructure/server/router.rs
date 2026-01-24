@@ -3,7 +3,7 @@ use super::error::ServerError;
 use super::routes;
 use super::state::ServerState;
 use crate::client::McpClient;
-use crate::config::DocServerConfig;
+use crate::config::{AppConfig, DocServerConfig};
 use crate::model::ModelProvider;
 use crate::rpc::server::handle_rpc;
 use axum::Router;
@@ -21,6 +21,7 @@ pub(super) async fn serve<P>(
     addr: SocketAddr,
     cors_origins: &[String],
     doc_servers: &[DocServerConfig],
+    config: &AppConfig,
 ) -> Result<(), ServerError>
 where
     P: ModelProvider + 'static,
@@ -49,7 +50,7 @@ where
             .allow_headers(Any)
     };
 
-    let state = Arc::new(ServerState::new(client));
+    let state = Arc::new(ServerState::new(client, config));
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", api))
         .route("/chat", post(routes::chat::chat_handler::<P>))

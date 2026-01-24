@@ -2,11 +2,13 @@ use super::super::dto::{Attachment, ErrorResponse, RestChatRequest, RestChatResp
 use super::super::state::ServerState;
 use crate::agent::{Agent, AgentOptions};
 use crate::client::{ChatRequest, McpError};
+use crate::domain::ui::AgentLayoutIntent;
 use crate::model::ModelProvider;
 use crate::types::MessagePart;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
+use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -87,10 +89,38 @@ pub async fn chat_handler<P: ModelProvider>(
                     session_id = outcome.session_id.as_str(),
                     "Agent run completed successfully"
                 );
+
+                // Try to parse response as intent and assemble UI
+                let content_json = if let Ok(intent) =
+                    serde_json::from_str::<AgentLayoutIntent>(&outcome.response)
+                {
+                    match state.ui_assembler.assemble(&intent, &outcome.steps) {
+                        Ok(component) => json!(component),
+                        Err(e) => {
+                            error!(%e, "Failed to assemble UI component");
+                            // Fallback to text component
+                            json!({
+                                "type": "text",
+                                "props": {
+                                    "content": outcome.response
+                                }
+                            })
+                        }
+                    }
+                } else {
+                    // Not an intent, wrap raw text
+                    json!({
+                        "type": "text",
+                        "props": {
+                            "content": outcome.response
+                        }
+                    })
+                };
+
                 Ok(Json(RestChatResponse {
                     logs: outcome.logs,
                     session_id: outcome.session_id,
-                    content: outcome.response,
+                    content: content_json,
                     provider,
                     model,
                     tool_steps: outcome.steps,
@@ -130,7 +160,12 @@ pub async fn chat_handler<P: ModelProvider>(
                 Ok(Json(RestChatResponse {
                     logs: result.logs,
                     session_id: result.session_id,
-                    content: result.content,
+                    content: json!({
+                        "type": "text",
+                        "props": {
+                            "content": result.content
+                        }
+                    }),
                     provider: result.provider,
                     model: result.model,
                     tool_steps: Vec::new(),
