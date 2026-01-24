@@ -10,8 +10,11 @@ impl ToolRuntime {
                 .to_string(),
             "To obtain the list of available tools, call the special tool: {\"action\":\"call_tool\",\"tool\":\"list_tools\"}."
                 .to_string(),
-            "When you are ready to give the final answer to the user, respond with: {\"action\":\"final\",\"response\":\"...\"}."
-                .to_string(),
+            "When you are ready to give the final answer to the user, respond with: {\"action\":\"final\",\"response\":\"...\"}.".to_string(),
+            "If you have finding data that suitable for UI representation, you MUST use the following JSON structure for the 'response' field:".to_string(),
+            "{ \"analysisText\": \"Explaining what is shown\", \"selectedDataIndex\": <index_of_tool_step_containing_data>, \"componentType\": \"<component_name_from_ui_contract>\", \"layoutDirection\": \"vertical|horizontal\", \"cardPosition\": \"top|bottom|left|right\" }".to_string(),
+            "Example final response with UI intent: { \"action\": \"final\", \"response\": { \"analysisText\": \"Here are the latest posts\", \"selectedDataIndex\": 0, \"componentType\": \"post_card\", \"layoutDirection\": \"vertical\", \"cardPosition\": \"top\" } }".to_string(),
+            "Supported component types: 'text', 'post_card', 'container'. Use 'post_card' for news/announcements.".to_string(),
             "Detect the user's language automatically and answer using that same language unless they explicitly request another language."
                 .to_string(),
             "Do not call any translation-related tools; handle language understanding internally."

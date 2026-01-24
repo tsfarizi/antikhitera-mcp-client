@@ -166,7 +166,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             info!(addr = %addr, "Starting REST server");
             let cors_origins = &file_config.rest_server.cors_origins;
             let doc_servers = &file_config.rest_server.docs;
-            server::serve(client.clone(), addr, cors_origins, doc_servers).await?;
+            server::serve(
+                client.clone(),
+                addr,
+                cors_origins,
+                doc_servers,
+                &file_config,
+            )
+            .await?;
         }
         RunMode::All => {
             // Use CLI addr if provided, otherwise use config bind address
@@ -181,9 +188,16 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let rest_client = client.clone();
             let cors_origins = file_config.rest_server.cors_origins.clone();
             let doc_servers = file_config.rest_server.docs.clone();
+            let file_config_clone = file_config.clone();
             let rest_handle = tokio::spawn(async move {
-                if let Err(e) =
-                    server::serve(rest_client, rest_addr, &cors_origins, &doc_servers).await
+                if let Err(e) = server::serve(
+                    rest_client,
+                    rest_addr,
+                    &cors_origins,
+                    &doc_servers,
+                    &file_config_clone,
+                )
+                .await
                 {
                     tracing::error!(error = %e, "REST server error");
                 }

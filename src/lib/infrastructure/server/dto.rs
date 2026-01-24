@@ -37,7 +37,8 @@ pub struct RestChatRequest {
 pub struct RestChatResponse {
     pub logs: Vec<String>,
     pub session_id: String,
-    pub content: String,
+    #[schema(value_type = Object)]
+    pub content: serde_json::Value,
     pub provider: String,
     pub model: String,
     pub tool_steps: Vec<AgentStep>,

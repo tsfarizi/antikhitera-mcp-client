@@ -9,7 +9,7 @@ pub use error::ServerError;
 pub(crate) use state::ServerState;
 
 use crate::client::McpClient;
-use crate::config::DocServerConfig;
+use crate::config::{AppConfig, DocServerConfig};
 use crate::model::ModelProvider;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -19,9 +19,10 @@ pub async fn serve<P>(
     addr: SocketAddr,
     cors_origins: &[String],
     doc_servers: &[DocServerConfig],
+    config: &AppConfig,
 ) -> Result<(), ServerError>
 where
     P: ModelProvider + 'static,
 {
-    router::serve(client, addr, cors_origins, doc_servers).await
+    router::serve(client, addr, cors_origins, doc_servers, config).await
 }

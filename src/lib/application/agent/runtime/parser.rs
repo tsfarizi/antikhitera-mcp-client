@@ -30,15 +30,19 @@ impl ToolRuntime {
                             })
                         }
                         "final" => {
-                            let response =
-                                map.get("response").and_then(Value::as_str).ok_or_else(|| {
-                                    AgentError::InvalidResponse(
-                                        "final action missing response field".into(),
-                                    )
-                                })?;
+                            let response = map.get("response").ok_or_else(|| {
+                                AgentError::InvalidResponse(
+                                    "final action missing response field".into(),
+                                )
+                            })?;
+
+                            let response_str = match response {
+                                Value::String(s) => s.to_string(),
+                                v => serde_json::to_string(v).unwrap_or_default(),
+                            };
 
                             Ok(AgentDirective::Final {
-                                response: response.to_string(),
+                                response: response_str,
                             })
                         }
                         other => Err(AgentError::InvalidResponse(format!(
