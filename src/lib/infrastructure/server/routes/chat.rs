@@ -115,6 +115,7 @@ pub async fn chat_handler<P: ModelProvider>(
                 session_id,
                 raw_mode: true,         // Non-agent mode bypasses system prompts
                 bypass_template: false, // Not relevant when raw_mode is true
+                force_json: false,
             })
             .await;
 

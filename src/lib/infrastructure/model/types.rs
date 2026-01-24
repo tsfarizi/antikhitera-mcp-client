@@ -11,6 +11,7 @@ pub struct ModelRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
     pub session_id: Option<String>,
+    pub force_json: bool,
 }
 
 /// Model response from LLM
