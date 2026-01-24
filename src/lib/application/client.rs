@@ -150,6 +150,8 @@ pub struct ChatRequest {
     /// Skip template composition - use system_prompt as-is
     /// Used by Agent runner which composes its own complete system prompt
     pub bypass_template: bool,
+    /// Force JSON mode - requests the LLM to output valid JSON
+    pub force_json: bool,
 }
 
 /// Result from a chat interaction.
@@ -342,6 +344,7 @@ impl<P: ModelProvider> McpClient<P> {
                 model: model.clone(),
                 messages,
                 session_id: Some(session_id.clone()),
+                force_json: request.force_json,
             })
             .await?;
 

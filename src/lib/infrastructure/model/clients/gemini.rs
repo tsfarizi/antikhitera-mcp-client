@@ -58,6 +58,12 @@ impl ModelClient for GeminiClient {
             });
         }
 
+        if request.force_json {
+            payload["generationConfig"] = json!({
+                "responseMimeType": "application/json"
+            });
+        }
+
         info!(
             provider = self.base.id.as_str(),
             model = request.model.as_str(),

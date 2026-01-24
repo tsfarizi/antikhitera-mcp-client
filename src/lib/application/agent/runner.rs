@@ -80,6 +80,7 @@ impl<P: ModelProvider> Agent<P> {
                 session_id: session_id.clone(),
                 raw_mode: false,
                 bypass_template: true, // Agent composes its own complete system prompt
+                force_json: true,
             };
 
             let result = self.client.chat(request).await?;
@@ -195,6 +196,7 @@ impl<P: ModelProvider> Agent<P> {
                         session_id: session_id.clone(),
                         raw_mode: false,
                         bypass_template: true, // Agent composes its own complete system prompt
+                        force_json: true,
                     };
 
                     match self.client.chat(retry_request).await {
