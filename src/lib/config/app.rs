@@ -2,7 +2,6 @@ use super::error::ConfigError;
 use super::provider::ModelProviderConfig;
 use super::server::ServerConfig;
 use super::tool::ToolConfig;
-use crate::domain::ui::UiSchemaConfig;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -94,12 +93,12 @@ impl PromptsConfig {
 
     /// Default agent instructions
     pub fn default_agent_instructions() -> &'static str {
-        "You are an autonomous assistant that can call tools to solve user requests.\nAll responses must be valid JSON without commentary or code fences.\nWhen you need to invoke a tool, respond with: {\"action\":\"call_tool\",\"tool\":\"tool_name\",\"input\":{...}}.\nTo obtain the list of available tools, call the special tool: {\"action\":\"call_tool\",\"tool\":\"list_tools\"}.\nWhen you are ready to give the final answer to the user, respond with: {\"action\":\"final\",\"response\":\"...\"}."
+        "You are an autonomous assistant that can call tools to solve user requests.\nAll responses must be valid JSON without commentary or code fences.\nWhen you need to invoke a tool, respond with: {\"action\":\"call_tool\",\"tool\":\"tool_name\",\"input\":{...}}.\nTo obtain the list of available tools, call the special tool: {\"action\":\"call_tool\",\"tool\":\"list_tools\"}.\nWhen you are ready to give the final answer to the user, respond with: {\"action\":\"final\",\"response\":{\"content\":\"...\", \"data\":\"step_N\"}} where 'step_N' refers to the index of a tool call result.\nIf your response includes data from tool calls, put the reference to the tool result in a 'data' field with the value 'step_N' where N is the step number.\nFor example: {\"action\":\"final\",\"response\":{\"content\":\"Here are the latest posts\",\"data\":\"step_0\"}}.\nIMPORTANT: Always return JSON for final responses, never plain text. If you want to include data from a tool call, reference it using the 'data' field with the appropriate step index.\nCRITICAL: Do not repeat or summarize the content of tool results in the 'content' field. Simply mention that the data exists and reference it using the 'data' field. The system will automatically embed the actual data from the tool result.\nABSOLUTELY CRITICAL: Your final response must be a JSON object with 'content' and 'data' fields. Do not return a string as the value of the 'response' field. The 'response' field must contain an object, not a string."
     }
 
     /// Default UI instructions
     pub fn default_ui_instructions() -> &'static str {
-        "LATE-BINDING UI HYDRATION:\nIf you find data suitable for UI representation, you MUST use the 'Late-Binding' JSON structure for the 'response' field.\nInstead of generating actual data, use 'data_source': 'step_N' to refer to a tool output index.\nRules:\n1. Start with a 'container' component.\n2. Use 'text' components for analysis and explanations.\n3. Use data-driven components (like 'post_card') with 'data_source': 'step_N'.\n4. NEVER hallucinate strings or base64 data if 'data_source' can be used.\nExample final response: {\"action\": \"final\", \"response\": {\"type\": \"container\", \"direction\": \"vertical\", \"children\": [{\"type\": \"text\", \"content\": \"Analysis...\"}, {\"type\": \"post_card\", \"data_source\": \"step_0\"}]}}"
+        "DATA FIELD REPLACEMENT:\nIf your response includes data from tool calls, put the reference to the tool result in a 'data' field with the value 'step_N' where N is the step number.\nThe system will automatically replace 'step_N' with the actual JSON data from the tool call result.\nFor example: {\"action\":\"final\",\"response\":{\"content\":\"Analysis complete\",\"data\":\"step_0\"}} where 'step_0' will be replaced with the actual data from the first tool call."
     }
 
     /// Default language instructions
@@ -199,8 +198,6 @@ pub struct AppConfig {
     pub rest_server: RestServerConfig,
     /// Configurable prompts for agent behavior
     pub prompts: PromptsConfig,
-    /// UI Schema configuration
-    pub ui: UiSchemaConfig,
 }
 
 impl AppConfig {

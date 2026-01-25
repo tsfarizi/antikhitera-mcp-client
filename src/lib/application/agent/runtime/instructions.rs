@@ -10,11 +10,6 @@ impl ToolRuntime {
         let mut lines = vec![
             prompts.template().to_string(),
             prompts.agent_instructions().to_string(),
-            prompts.ui_instructions().to_string(),
-            format!(
-                "Available UI Components (UI Catalog):\n{}",
-                self.build_dynamic_component_catalog()
-            ),
             prompts.language_instructions().to_string(),
         ];
 
@@ -66,46 +61,5 @@ impl ToolRuntime {
         }
 
         payload.to_string()
-    }
-
-    /// Build detailed dynamic component catalog for system prompt.
-    fn build_dynamic_component_catalog(&self) -> String {
-        let mut components: Vec<_> = self.ui_schema.components.keys().cloned().collect();
-        components.sort();
-
-        let mut entries = Vec::new();
-        for name in &components {
-            if let Some(schema) = self.ui_schema.components.get(name) {
-                let desc = schema.description.as_deref().unwrap_or("No description");
-                let mut info = format!("- '{}': {}", name, desc);
-
-                if !schema.required_fields.is_empty() {
-                    info.push_str(&format!(
-                        " (Required props: {})",
-                        schema.required_fields.join(", ")
-                    ));
-                }
-
-                if schema.is_container {
-                    info.push_str(" [Container - supports children]");
-                }
-
-                if let Some(mapping) = &schema.mapping {
-                    let mapped_fields: Vec<_> = mapping.keys().collect();
-                    info.push_str(&format!(
-                        " [Supports Late-Binding for: {}]",
-                        mapped_fields
-                            .iter()
-                            .map(|s| s.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
-                }
-
-                entries.push(info);
-            }
-        }
-
-        entries.join("\n")
     }
 }

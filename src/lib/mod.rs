@@ -171,7 +171,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 addr,
                 cors_origins,
                 doc_servers,
-                &file_config,
             )
             .await?;
         }
@@ -188,14 +187,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let rest_client = client.clone();
             let cors_origins = file_config.rest_server.cors_origins.clone();
             let doc_servers = file_config.rest_server.docs.clone();
-            let file_config_clone = file_config.clone();
             let rest_handle = tokio::spawn(async move {
                 if let Err(e) = server::serve(
                     rest_client,
                     rest_addr,
                     &cors_origins,
                     &doc_servers,
-                    &file_config_clone,
                 )
                 .await
                 {

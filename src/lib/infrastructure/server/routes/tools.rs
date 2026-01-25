@@ -22,7 +22,6 @@ pub async fn tools_handler<P: ModelProvider>(
     let runtime = ToolRuntime::new(
         client.tools().to_vec(),
         client.server_bridge(),
-        client.config().ui.clone(),
     );
     let context = runtime.build_context().await;
     debug!(
