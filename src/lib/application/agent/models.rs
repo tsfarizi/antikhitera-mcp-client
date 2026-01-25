@@ -20,7 +20,7 @@ pub struct AgentStep {
 pub struct AgentOutcome {
     pub logs: Vec<String>,
     pub session_id: String,
-    pub response: String,
+    pub response: Value,
     pub steps: Vec<AgentStep>,
 }
 

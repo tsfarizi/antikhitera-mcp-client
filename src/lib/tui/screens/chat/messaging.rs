@@ -39,7 +39,11 @@ pub(super) async fn send_message<P>(
                 let _ = tx
                     .send(ResponseEvent::SessionUpdate(outcome.session_id))
                     .await;
-                let _ = tx.send(ResponseEvent::Message(outcome.response)).await;
+                let response_str = match outcome.response {
+                    serde_json::Value::String(s) => s,
+                    v => serde_json::to_string(&v).unwrap_or_default(),
+                };
+                let _ = tx.send(ResponseEvent::Message(response_str)).await;
                 if !outcome.logs.is_empty() {
                     let _ = tx.send(ResponseEvent::Logs(outcome.logs)).await;
                 }
