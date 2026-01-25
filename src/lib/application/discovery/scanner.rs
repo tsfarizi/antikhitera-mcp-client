@@ -177,20 +177,6 @@ fn is_executable(path: &Path) -> bool {
     }
 }
 
-/// Check if a folder exists and is valid for scanning.
-///
-/// # Arguments
-///
-/// * `folder_path` - Path to check
-///
-/// # Returns
-///
-/// `true` if the folder exists and is a directory
-pub fn folder_exists(folder_path: impl AsRef<Path>) -> bool {
-    let path = folder_path.as_ref();
-    path.exists() && path.is_dir()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,13 +190,6 @@ mod tests {
 
         let path = Path::new("server-name");
         assert_eq!(extract_server_name(path), "server-name");
-    }
-
-    #[test]
-    fn test_folder_exists() {
-        let dir = tempdir().unwrap();
-        assert!(folder_exists(dir.path()));
-        assert!(!folder_exists("/nonexistent/path"));
     }
 
     #[test]
@@ -255,11 +234,11 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             let path = dir.path().join("server1");
             File::create(&path).unwrap();
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
             let path2 = dir.path().join("server2");
             File::create(&path2).unwrap();
-            fs::set_permissions(&path2, fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&path2, std::fs::Permissions::from_mode(0o755)).unwrap();
 
             File::create(dir.path().join("readme.txt")).unwrap();
         }
