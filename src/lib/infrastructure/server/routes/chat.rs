@@ -104,7 +104,7 @@ pub async fn chat_handler<P: ModelProvider>(
     // Use defaults from config
     let provider = client.default_provider().to_string();
     let model = client.default_model().to_string();
-    let debug_mode = debug.unwrap_or(true);
+    let debug_mode = debug.unwrap_or(false);
 
     if agent {
         let mut options = AgentOptions::default();

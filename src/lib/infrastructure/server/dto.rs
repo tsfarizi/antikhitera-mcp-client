@@ -31,7 +31,7 @@ pub struct RestChatRequest {
     /// Maximum tool execution steps in agent mode
     #[serde(default)]
     pub max_tool_steps: Option<usize>,
-    /// Debug mode: if false, returns minimized response. Defaults to true.
+    /// Debug mode: if true, returns verbose response (logs, steps). Defaults to false.
     #[serde(default)]
     pub debug: Option<bool>,
 }
