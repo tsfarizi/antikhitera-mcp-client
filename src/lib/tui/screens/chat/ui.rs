@@ -6,7 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Wrap};
 
 /// Main chat UI renderer
 pub struct ChatUI;
@@ -129,8 +129,10 @@ impl ChatUI {
         };
 
         let block = Block::default()
-            .borders(Borders::LEFT | Borders::RIGHT)
-            .border_style(theme::border());
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(theme::border())
+            .padding(Padding::new(1, 1, 0, 0));
 
         let para = Paragraph::new(lines)
             .block(block)
@@ -180,6 +182,8 @@ impl ChatUI {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .padding(Padding::new(1, 1, 0, 0))
             .border_style(if state.loading {
                 theme::border()
             } else {
