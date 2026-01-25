@@ -186,68 +186,7 @@ impl<P: ModelProvider> Agent<P> {
             Value::Object(obj) => {
                 let mut new_obj = serde_json::Map::new();
                 for (key, value) in obj {
-                    let processed_value = match (&key[..], &value) {
-                        // Special handling for "data" field that might contain step references
-                        ("data", Value::String(s)) => {
-                            if s.starts_with("step_") || s.starts_with("result_") {
-                                if let Some(step_idx) = s.strip_prefix("step_").or_else(|| s.strip_prefix("result_")) {
-                                    if let Ok(idx) = step_idx.parse::<usize>() {
-                                        if let Some(step) = steps.get(idx) {
-                                            // Extract just the result data, not the full JSON-RPC response
-                                            self.extract_result_data(&step.output)
-                                        } else {
-                                            // If step index not found, keep original value
-                                            value
-                                        }
-                                    } else {
-                                        // If parsing fails, keep original value
-                                        value
-                                    }
-                                } else {
-                                    // If prefix not found, keep original value
-                                    value
-                                }
-                            } else {
-                                // If not a step reference, keep original value
-                                value
-                            }
-                        }
-                        // For other fields, check if they're strings that look like step references
-                        (_, Value::String(s)) => {
-                            if s.starts_with("step_") || s.starts_with("result_") {
-                                if let Some(step_idx) = s.strip_prefix("step_").or_else(|| s.strip_prefix("result_")) {
-                                    if let Ok(idx) = step_idx.parse::<usize>() {
-                                        if let Some(step) = steps.get(idx) {
-                                            // Extract just the result data, not the full JSON-RPC response
-                                            self.extract_result_data(&step.output)
-                                        } else {
-                                            // If step index not found, keep original value
-                                            value
-                                        }
-                                    } else {
-                                        // If parsing fails, keep original value
-                                        value
-                                    }
-                                } else {
-                                    // If prefix not found, keep original value
-                                    value
-                                }
-                            } else {
-                                // If not a step reference, keep original value
-                                value
-                            }
-                        }
-                        // Recursively process nested objects
-                        (_, Value::Object(_)) => {
-                            self.embed_tool_results_sync(value, steps)
-                        }
-                        // Process arrays
-                        (_, Value::Array(_)) => {
-                            self.embed_tool_results_sync(value, steps)
-                        }
-                        // All other cases, keep original value
-                        _ => value,
-                    };
+                    let processed_value = self.embed_tool_results_sync(value, steps);
                     new_obj.insert(key, processed_value);
                 }
                 Value::Object(new_obj)
@@ -260,7 +199,50 @@ impl<P: ModelProvider> Agent<P> {
                     .collect();
                 Value::Array(new_arr)
             }
-            _ => response, // Non-object, non-array values remain unchanged
+            Value::String(s) => {
+                // 1. Check if the entire string is just a step reference (e.g., "step_0")
+                // In this case, we replace the whole string with the actual data object/array
+                if (s.starts_with("step_") || s.starts_with("result_")) && !s.contains(' ') {
+                    if let Some(step_idx) = s.strip_prefix("step_").or_else(|| s.strip_prefix("result_")) {
+                        if let Ok(idx) = step_idx.parse::<usize>() {
+                            if let Some(step) = steps.get(idx) {
+                                return self.extract_result_data(&step.output);
+                            }
+                        }
+                    }
+                }
+
+                // 2. Check for step references embedded within a larger string
+                // We'll use a simple approach here: look for "step_N" or "result_N" patterns
+                // and replace them with stringified JSON if they exist.
+                let mut result_str = s.clone();
+                let mut modified = false;
+
+                // Iterate in reverse to avoid partial matches (e.g., "step_1" matching "step_10")
+                for i in (0..steps.len()).rev() {
+                    let step_pattern = format!("step_{}", i);
+                    let result_pattern = format!("result_{}", i);
+                    
+                    if result_str.contains(&step_pattern) || result_str.contains(&result_pattern) {
+                        let data = self.extract_result_data(&steps[i].output);
+                        let replacement = match &data {
+                            Value::String(inner_s) => inner_s.clone(),
+                            _ => serde_json::to_string(&data).unwrap_or_else(|_| "null".to_string()),
+                        };
+                        
+                        result_str = result_str.replace(&step_pattern, &replacement);
+                        result_str = result_str.replace(&result_pattern, &replacement);
+                        modified = true;
+                    }
+                }
+
+                if modified {
+                    Value::String(result_str)
+                } else {
+                    Value::String(s)
+                }
+            }
+            _ => response, // Other values (numbers, booleans, null) remain unchanged
         }
     }
 

@@ -88,7 +88,7 @@ impl PromptsConfig {
 
     /// Default tool result instruction (English)
     pub fn default_tool_result_instruction() -> &'static str {
-        "Provide a valid JSON response: use {\"action\":\"call_tool\",\"tool\":\"...\",\"input\":{...}} for tool calls or {\"action\":\"final\",\"response\":\"...\"} for final answers. Do not include any text outside the JSON structure."
+        "Tool execution complete. Process this result and respond with a VALID JSON object.\n\nIF THE TOOL RETURNED DATA (like a list of posts):\nYou MUST use the 'post_card' component format:\n{\n  \"action\": \"final\",\n  \"response\": {\n    \"type\": \"post_card\",\n    \"data\": \"step_N\"\n  }\n}\n(Replace 'step_N' with the actual step ID, e.g., step_0)\n\nIF YOU NEED TO CALL ANOTHER TOOL:\n{\n  \"action\": \"call_tool\",\n  \"tool\": \"...\",\n  \"input\": {...}\n}\n\nCRITICAL:\n1. DO NOT return the raw data in a string.\n2. DO NOT summarize the data.\n3. ALWAYS use the {\"type\": \"post_card\", \"data\": \"step_N\"} structure for lists of posts."
     }
 
     /// Default agent instructions
