@@ -28,6 +28,10 @@ pub struct ComponentSchema {
     /// Whether this component can have children
     #[serde(default)]
     pub is_container: bool,
+
+    /// Mapping between UI slots and MCP output keys (e.g. title = "$.name")
+    #[serde(default)]
+    pub mapping: Option<HashMap<String, String>>,
 }
 
 impl ComponentSchema {

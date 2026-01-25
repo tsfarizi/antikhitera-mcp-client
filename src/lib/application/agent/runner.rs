@@ -4,7 +4,7 @@ use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use crate::application::client::{ChatRequest, McpClient};
 use crate::application::ui::UiAssembler;
-use crate::domain::ui::AgentLayoutIntent;
+use crate::domain::ui::{AgentLayoutIntent, DynamicComponent};
 use crate::model::ModelProvider;
 use serde_json::json;
 use std::sync::Arc;
@@ -40,7 +40,9 @@ impl<P: ModelProvider> Agent<P> {
         let mut logs = Vec::new();
 
         let context = self.runtime.build_context().await;
-        let instructions = self.runtime.compose_system_instructions(&context);
+        let instructions = self
+            .runtime
+            .compose_system_instructions(&context, self.client.prompts());
         let system_prompt = match options.system_prompt.take() {
             Some(existing) if !existing.trim().is_empty() => {
                 format!("{existing}\n\n{instructions}")
@@ -115,7 +117,7 @@ impl<P: ModelProvider> Agent<P> {
                     if remaining_steps == 0 {
                         warn!("Agent exceeded max tool interactions");
                         return Err(AgentError::InvalidResponse(
-                            "agent exceeded the maximum number of tool interactions".into(),
+                            self.client.prompts().agent_max_steps_error().into(),
                         ));
                     }
                     remaining_steps -= 1;
@@ -168,18 +170,57 @@ impl<P: ModelProvider> Agent<P> {
         // 1. Run the agent loop
         let outcome = self.run(prompt, options).await?;
 
-        // 2. Try to parse response as AgentLayoutIntent
-        if let Ok(intent) = serde_json::from_str::<AgentLayoutIntent>(&outcome.response) {
-            match assembler.assemble(&intent, &outcome.steps) {
-                Ok(component) => {
-                    info!("Successfully assembled UI component from agent intent");
-                    let value = serde_json::to_value(component).map_err(|e| {
-                        AgentError::InvalidResponse(format!("Failed to serialize component: {}", e))
+        // 2. Try to parse response as DynamicComponent template (Late-Binding format)
+        if let Ok(template) = serde_json::from_str::<DynamicComponent>(&outcome.response) {
+            match assembler.assemble(template, &outcome.steps) {
+                Ok(hydrated) => {
+                    info!("Successfully hydrated UI template from agent response");
+                    let value = serde_json::to_value(hydrated).map_err(|e| {
+                        AgentError::InvalidResponse(format!(
+                            "Failed to serialize hydrated component: {}",
+                            e
+                        ))
                     })?;
                     return Ok((outcome, value));
                 }
                 Err(e) => {
-                    warn!(error = %e, "Failed to assemble UI component, falling back to text");
+                    warn!(error = %e, "Failed to hydrate UI template, falling back to text");
+                }
+            }
+        }
+
+        // 3. Backward compatibility: Try to parse as AgentLayoutIntent and transform
+        if let Ok(intent) = serde_json::from_str::<AgentLayoutIntent>(&outcome.response) {
+            // Transform intent to a primitive template
+            let mut data_comp = DynamicComponent::new(intent.component_type.clone());
+            data_comp.data_source = Some(format!("step_{}", intent.selected_data_index));
+
+            let text_comp =
+                DynamicComponent::new("text").with_prop("content", json!(intent.analysis_text));
+
+            let children = if intent.card_first() {
+                vec![data_comp, text_comp]
+            } else {
+                vec![text_comp, data_comp]
+            };
+
+            let container = DynamicComponent::new("container")
+                .with_prop("direction", json!(intent.layout_direction))
+                .with_children(children);
+
+            match assembler.assemble(container, &outcome.steps) {
+                Ok(hydrated) => {
+                    info!("Successfully assembled UI from legacy intent");
+                    let value = serde_json::to_value(hydrated).map_err(|e| {
+                        AgentError::InvalidResponse(format!(
+                            "Failed to serialize hydrated component: {}",
+                            e
+                        ))
+                    })?;
+                    return Ok((outcome, value));
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to assemble legacy intent, falling back to text");
                 }
             }
         }

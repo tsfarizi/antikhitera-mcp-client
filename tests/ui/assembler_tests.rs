@@ -2,8 +2,9 @@
 
 use antikhitera_mcp_client::application::agent::AgentStep;
 use antikhitera_mcp_client::application::ui::{AssemblerError, UiAssembler};
-use antikhitera_mcp_client::domain::ui::{AgentLayoutIntent, UiSchemaConfig};
+use antikhitera_mcp_client::domain::ui::{AgentLayoutIntent, DynamicComponent, UiSchemaConfig};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 
 fn test_schema() -> UiSchemaConfig {
     toml::from_str(
@@ -50,104 +51,94 @@ fn basic_intent() -> AgentLayoutIntent {
     }
 }
 
+fn assemble_legacy(
+    assembler: &UiAssembler,
+    intent: AgentLayoutIntent,
+    steps: &[AgentStep],
+) -> Result<DynamicComponent, AssemblerError> {
+    let mut data_comp = DynamicComponent::new(intent.component_type.clone());
+    data_comp.data_source = Some(format!("step_{}", intent.selected_data_index));
+
+    let text_comp = DynamicComponent::new("text").with_prop("content", json!(intent.analysis_text));
+
+    let children = if intent.card_first() {
+        vec![data_comp, text_comp]
+    } else {
+        vec![text_comp, data_comp]
+    };
+
+    let container = DynamicComponent::new("container")
+        .with_prop("direction", json!(intent.layout_direction))
+        .with_children(children);
+
+    assembler.assemble(container, steps)
+}
+
 // =============================================================================
 // SUCCESS CASES
 // =============================================================================
 
 #[test]
-fn test_assemble_horizontal_left_layout() {
-    let assembler = UiAssembler::new(test_schema());
-    let intent = basic_intent();
+fn test_assemble_late_binding_hydration() {
+    let mut schema = test_schema();
+    schema.components.get_mut("product_card").unwrap().mapping = Some(HashMap::from([
+        ("title".to_string(), "$.name".to_string()),
+        ("price".to_string(), "$.amount".to_string()),
+        ("image".to_string(), "$.base64".to_string()),
+    ]));
+
+    let assembler = UiAssembler::new(schema);
+    let mut template = DynamicComponent::new("product_card");
+    template.data_source = Some("step_0".to_string());
+
     let steps = vec![mock_step(json!({
-        "title": "iPhone 15 Pro",
-        "price": 1199.99,
-        "image": "base64imagedata..."
+        "name": "Sony WH-1000XM5",
+        "amount": 349.99,
+        "base64": "audio_img_data..."
     }))];
 
-    let result = assembler.assemble(&intent, &steps).unwrap();
+    let hydrated = assembler
+        .assemble(template, &steps)
+        .expect("Hydration failed");
 
-    assert_eq!(result.component_type, "container");
-    assert_eq!(result.get_string_prop("direction"), Some("horizontal"));
-
-    let children = result.children.as_ref().unwrap();
-    assert_eq!(children.len(), 2);
-    assert_eq!(children[0].component_type, "product_card"); // left = first
-    assert_eq!(children[1].component_type, "text");
+    assert_eq!(hydrated.get_string_prop("title"), Some("Sony WH-1000XM5"));
+    assert_eq!(hydrated.get_f64_prop("price"), Some(349.99));
+    assert_eq!(hydrated.get_string_prop("image"), Some("audio_img_data..."));
 }
 
 #[test]
-fn test_assemble_vertical_bottom_layout() {
-    let assembler = UiAssembler::new(test_schema());
-    let intent = AgentLayoutIntent {
-        card_position: "bottom".into(),
-        layout_direction: "vertical".into(),
-        ..basic_intent()
-    };
+fn test_recursive_hydration() {
+    let mut schema = test_schema();
+    schema.components.get_mut("product_card").unwrap().mapping = Some(HashMap::from([
+        ("title".to_string(), "$.name".to_string()),
+        ("price".to_string(), "$.amount".to_string()),
+        ("image".to_string(), "$.base64".to_string()),
+    ]));
+
+    let assembler = UiAssembler::new(schema);
+
+    // Build a nested template
+    let mut card = DynamicComponent::new("product_card");
+    card.data_source = Some("step_0".to_string());
+
+    let text = DynamicComponent::new("text").with_prop("content", json!("Behold the product"));
+
+    let container = DynamicComponent::new("container")
+        .with_prop("direction", json!("vertical"))
+        .with_children(vec![text, card]);
+
     let steps = vec![mock_step(json!({
-        "title": "Test",
-        "price": 99.99,
-        "image": "base64..."
+        "name": "Recursive Item",
+        "amount": 10.0,
+        "base64": "img"
     }))];
 
-    let result = assembler.assemble(&intent, &steps).unwrap();
+    let result = assembler.assemble(container, &steps).unwrap();
 
-    assert_eq!(result.get_string_prop("direction"), Some("vertical"));
     let children = result.children.as_ref().unwrap();
-    assert_eq!(children[0].component_type, "text"); // bottom = text first
+    assert_eq!(children[0].component_type, "text");
     assert_eq!(children[1].component_type, "product_card");
-}
-
-#[test]
-fn test_assemble_with_optional_fields() {
-    let assembler = UiAssembler::new(test_schema());
-    let intent = basic_intent();
-    let steps = vec![mock_step(json!({
-        "title": "Sale Item",
-        "price": 49.99,
-        "image": "base64...",
-        "is_discounted": true
-    }))];
-
-    let result = assembler.assemble(&intent, &steps).unwrap();
-    let card = &result.children.as_ref().unwrap()[0];
-
-    assert_eq!(card.get_prop("is_discounted"), Some(&Value::Bool(true)));
-}
-
-#[test]
-fn test_assemble_with_nested_data() {
-    let assembler = UiAssembler::new(test_schema());
-    let intent = basic_intent();
-    // Data nested in "data" field
-    let steps = vec![mock_step(json!({
-        "data": {
-            "title": "Nested Product",
-            "price": 199.99,
-            "image": "base64..."
-        }
-    }))];
-
-    let result = assembler.assemble(&intent, &steps).unwrap();
-    let card = &result.children.as_ref().unwrap()[0];
-    assert_eq!(card.get_string_prop("title"), Some("Nested Product"));
-}
-
-#[test]
-fn test_assemble_with_product_nested_data() {
-    let assembler = UiAssembler::new(test_schema());
-    let intent = basic_intent();
-    // Data nested in "product" field
-    let steps = vec![mock_step(json!({
-        "product": {
-            "title": "Product Nested",
-            "price": 299.99,
-            "image": "base64..."
-        }
-    }))];
-
-    let result = assembler.assemble(&intent, &steps).unwrap();
-    let card = &result.children.as_ref().unwrap()[0];
-    assert_eq!(card.get_string_prop("title"), Some("Product Nested"));
+    assert_eq!(children[1].get_string_prop("title"), Some("Recursive Item"));
 }
 
 #[test]
@@ -161,7 +152,7 @@ fn test_integer_price_accepted() {
         "image": "base64..."
     }))];
 
-    let result = assembler.assemble(&intent, &steps);
+    let result = assemble_legacy(&assembler, intent, &steps);
     assert!(result.is_ok());
 }
 
@@ -177,7 +168,7 @@ fn test_error_index_out_of_bounds() {
         ..basic_intent()
     };
 
-    let result = assembler.assemble(&intent, &[]);
+    let result = assemble_legacy(&assembler, intent, &[]);
 
     match result {
         Err(AssemblerError::IndexOutOfBounds(idx, len)) => {
@@ -197,7 +188,7 @@ fn test_error_unknown_component() {
     };
     let steps = vec![mock_step(json!({"foo": "bar"}))];
 
-    let result = assembler.assemble(&intent, &steps);
+    let result = assemble_legacy(&assembler, intent, &steps);
 
     match result {
         Err(AssemblerError::UnknownComponent(name)) => {
@@ -216,7 +207,7 @@ fn test_error_missing_required_field() {
         // Missing price and image
     }))];
 
-    let result = assembler.assemble(&intent, &steps);
+    let result = assemble_legacy(&assembler, intent, &steps);
 
     match result {
         Err(AssemblerError::MissingField(field)) => {
@@ -237,7 +228,7 @@ fn test_error_string_price_rejected() {
         "image": "base64..."
     }))];
 
-    let result = assembler.assemble(&intent, &steps);
+    let result = assemble_legacy(&assembler, intent, &steps);
 
     match result {
         Err(AssemblerError::TypeError {
@@ -264,7 +255,7 @@ fn test_error_wrong_type_for_boolean() {
         "is_discounted": "yes"  // String instead of bool
     }))];
 
-    let result = assembler.assemble(&intent, &steps);
+    let result = assemble_legacy(&assembler, intent, &steps);
 
     match result {
         Err(AssemblerError::TypeError {
@@ -284,7 +275,7 @@ fn test_error_invalid_structure() {
     // Array instead of object
     let steps = vec![mock_step(json!(["not", "an", "object"]))];
 
-    let result = assembler.assemble(&intent, &steps);
+    let result = assemble_legacy(&assembler, intent, &steps);
     assert!(matches!(result, Err(AssemblerError::InvalidStructure(_))));
 }
 
@@ -306,7 +297,7 @@ fn test_base64_passthrough_integrity() {
         "image": original_base64
     }))];
 
-    let result = assembler.assemble(&intent, &steps).unwrap();
+    let result = assemble_legacy(&assembler, intent, &steps).unwrap();
     let card = &result.children.as_ref().unwrap()[0];
 
     // Verify base64 is EXACTLY preserved
@@ -327,7 +318,7 @@ fn test_large_base64_passthrough() {
         "image": large_base64
     }))];
 
-    let result = assembler.assemble(&intent, &steps).unwrap();
+    let result = assemble_legacy(&assembler, intent, &steps).unwrap();
     let card = &result.children.as_ref().unwrap()[0];
 
     assert_eq!(card.get_string_prop("image").unwrap().len(), 10000);
@@ -363,7 +354,7 @@ fn test_select_specific_step() {
         })),
     ];
 
-    let result = assembler.assemble(&intent, &steps).unwrap();
+    let result = assemble_legacy(&assembler, intent, &steps).unwrap();
     let card = &result.children.as_ref().unwrap()[0];
 
     // Should get data from step index 1
@@ -391,7 +382,7 @@ fn test_structured_content_discovery() {
         }
     }))];
 
-    let result = assembler.assemble(&intent, &steps).unwrap();
+    let result = assemble_legacy(&assembler, intent, &steps).unwrap();
     let children = result.children.as_ref().unwrap();
     let card = &children[0];
 
@@ -408,27 +399,22 @@ fn test_id_incrementing() {
         "image": "img"
     }))];
 
-    let result = assembler.assemble(&intent, &steps).unwrap();
+    let result = assemble_legacy(&assembler, intent.clone(), &steps).unwrap();
 
     // Result is a container with text and product_card children
-    // container id should be 3 (1: card, 2: text, 3: container)
-    // Wait, let's trace IDs:
-    // 1. data_component (id = 1)
-    // 2. text_component (id = 2)
-    // 3. container (id = 3)
-
-    assert_eq!(result.id, 3);
+    // container id should be 1 (Recursive hydration: container -> children)
+    assert_eq!(result.id, 1);
     assert_eq!(result.component_type, "container");
 
     let children = result.children.as_ref().unwrap();
     // card_first defaults to true for horizontal/left
-    assert_eq!(children[0].id, 1);
-    assert_eq!(children[1].id, 2);
+    assert_eq!(children[0].id, 2);
+    assert_eq!(children[1].id, 3);
 
     // Another assembly should continue the counter
-    let result2 = assembler.assemble(&intent, &steps).unwrap();
-    assert_eq!(result2.id, 6);
+    let result2 = assemble_legacy(&assembler, intent, &steps).unwrap();
+    assert_eq!(result2.id, 4);
     let children2 = result2.children.as_ref().unwrap();
-    assert_eq!(children2[0].id, 4);
-    assert_eq!(children2[1].id, 5);
+    assert_eq!(children2[0].id, 5);
+    assert_eq!(children2[1].id, 6);
 }

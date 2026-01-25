@@ -5,11 +5,10 @@
 
 use super::AssemblerError;
 use crate::application::agent::AgentStep;
-use crate::domain::ui::{AgentLayoutIntent, ComponentSchema, DynamicComponent, UiSchemaConfig};
+use crate::domain::ui::{ComponentSchema, DynamicComponent, UiSchemaConfig};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
-use tracing::debug;
 
 /// Schema-driven UI assembler.
 ///
@@ -33,98 +32,119 @@ impl UiAssembler {
         self.id_counter.fetch_add(1, Ordering::SeqCst)
     }
 
-    /// Assemble UI response from agent intent and tool steps.
+    /// Assemble UI response by hydrating a template with tool steps.
     ///
-    /// # Zero Hallucination Guarantee
-    /// - Agent only provides `selected_data_index`
-    /// - Actual data comes from tool_steps
-    ///
-    /// # Strict Type Check
-    /// - Fields validated against `field_types` in TOML
+    /// # Search & Inject Logic
+    /// - Recursively traverses the DynamicComponent tree.
+    /// - If `data_source` is "step_N", extracts data from tool_steps[N].
+    /// - Maps fields using `mapping` from ui.toml.
+    /// - Performs strict type validation.
     pub fn assemble(
         &self,
-        intent: &AgentLayoutIntent,
+        mut template: DynamicComponent,
         tool_steps: &[AgentStep],
     ) -> Result<DynamicComponent, AssemblerError> {
-        // 1. Validate index bounds
-        let step = tool_steps.get(intent.selected_data_index).ok_or_else(|| {
-            AssemblerError::IndexOutOfBounds(intent.selected_data_index, tool_steps.len())
-        })?;
-
-        debug!(
-            tool = %step.tool,
-            index = intent.selected_data_index,
-            component = %intent.component_type,
-            "Assembling UI component from tool output"
-        );
-
-        // 2. Lookup component schema
-        let component_schema = self
-            .schema
-            .get_component(&intent.component_type)
-            .ok_or_else(|| AssemblerError::UnknownComponent(intent.component_type.clone()))?;
-
-        // 3. Extract and validate props from tool output
-        let props = self.extract_props(&step.output, component_schema)?;
-
-        // 4. Build the data component
-        let data_component = DynamicComponent {
-            component_type: intent.component_type.clone(),
-            id: self.next_id(),
-            props,
-            children: None,
-        };
-
-        // 5. Build text component for analysis
-        let text_component = DynamicComponent::new("text")
-            .with_id(self.next_id())
-            .with_prop("content", Value::String(intent.analysis_text.clone()));
-
-        // 6. Arrange children based on position
-        let children = if intent.card_first() {
-            vec![data_component, text_component]
-        } else {
-            vec![text_component, data_component]
-        };
-
-        // 7. Build container
-        Ok(DynamicComponent::new("container")
-            .with_id(self.next_id())
-            .with_prop("direction", Value::String(intent.layout_direction.clone()))
-            .with_children(children))
+        self.hydrate_recursive(&mut template, tool_steps)?;
+        Ok(template)
     }
 
-    /// Extract props from tool output per schema.
+    /// Recursively hydrate a component and its children.
+    fn hydrate_recursive(
+        &self,
+        component: &mut DynamicComponent,
+        tool_steps: &[AgentStep],
+    ) -> Result<(), AssemblerError> {
+        // 1. Assign ID if not set
+        if component.id == 0 {
+            component.id = self.next_id();
+        }
+
+        // 2. Hydrate if data_source is present
+        if let Some(source) = &component.data_source {
+            let index = parse_step_index(source)?;
+            let step = tool_steps
+                .get(index)
+                .ok_or_else(|| AssemblerError::IndexOutOfBounds(index, tool_steps.len()))?;
+
+            let schema = self
+                .schema
+                .get_component(&component.component_type)
+                .ok_or_else(|| {
+                    AssemblerError::UnknownComponent(component.component_type.clone())
+                })?;
+
+            let hydrated_props = self.extract_props(&step.output, schema)?;
+            for (k, v) in hydrated_props {
+                component.props.insert(k, v);
+            }
+        }
+
+        // 3. Recurse into children
+        if let Some(children) = &mut component.children {
+            for child in children {
+                self.hydrate_recursive(child, tool_steps)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Extract props from tool output per schema's mapping roles.
     fn extract_props(
         &self,
         output: &Value,
         schema: &ComponentSchema,
     ) -> Result<HashMap<String, Value>, AssemblerError> {
-        let data = find_data_object(output)?;
         let mut props = HashMap::new();
 
-        // Extract and validate required fields
-        for field in &schema.required_fields {
-            let value = data
-                .get(field)
-                .ok_or_else(|| AssemblerError::MissingField(field.clone()))?;
-
-            let expected_type = schema.get_field_type(field).unwrap_or("any");
-            validate_type(field, value, expected_type)?;
-
-            props.insert(field.clone(), value.clone());
-        }
-
-        // Extract optional fields if present
-        for (field, expected_type) in &schema.optional_fields {
-            if let Some(value) = data.get(field) {
+        // Use mapping if available, otherwise fallback to old heuristic find_data_object
+        if let Some(mapping) = &schema.mapping {
+            let data = find_data_object(output)?;
+            for (ui_field, data_path) in mapping {
+                // Simplified JSONPath: $.field or field
+                let key = data_path.trim_start_matches("$.").trim_start_matches('.');
+                if let Some(value) = data.get(key) {
+                    let expected_type = schema.get_field_type(ui_field).unwrap_or("any");
+                    validate_type(ui_field, value, expected_type)?;
+                    props.insert(ui_field.clone(), value.clone());
+                } else if schema.is_required(ui_field) {
+                    return Err(AssemblerError::MissingField(ui_field.clone()));
+                }
+            }
+        } else {
+            // Fallback for components without mapping (old logic)
+            let data = find_data_object(output)?;
+            for field in &schema.required_fields {
+                let value = data
+                    .get(field)
+                    .ok_or_else(|| AssemblerError::MissingField(field.clone()))?;
+                let expected_type = schema.get_field_type(field).unwrap_or("any");
                 validate_type(field, value, expected_type)?;
                 props.insert(field.clone(), value.clone());
+            }
+            for (field, expected_type) in &schema.optional_fields {
+                if let Some(value) = data.get(field) {
+                    validate_type(field, value, expected_type)?;
+                    props.insert(field.clone(), value.clone());
+                }
             }
         }
 
         Ok(props)
     }
+}
+
+/// Parse "step_N" into N.
+fn parse_step_index(source: &str) -> Result<usize, AssemblerError> {
+    if !source.starts_with("step_") {
+        return Err(AssemblerError::InvalidStructure(format!(
+            "Invalid data_source format: {}. Expected 'step_N'",
+            source
+        )));
+    }
+    source[5..]
+        .parse::<usize>()
+        .map_err(|_| AssemblerError::InvalidStructure(format!("Invalid step index in {}", source)))
 }
 
 /// Find data object in various tool output structures.
