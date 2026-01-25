@@ -8,6 +8,7 @@ use crate::application::agent::AgentStep;
 use crate::domain::ui::{AgentLayoutIntent, ComponentSchema, DynamicComponent, UiSchemaConfig};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicI64, Ordering};
 use tracing::debug;
 
 /// Schema-driven UI assembler.
@@ -15,12 +16,21 @@ use tracing::debug;
 /// Uses TOML schema as source of truth for field extraction and validation.
 pub struct UiAssembler {
     schema: UiSchemaConfig,
+    id_counter: AtomicI64,
 }
 
 impl UiAssembler {
     /// Create a new assembler with the given schema.
     pub fn new(schema: UiSchemaConfig) -> Self {
-        Self { schema }
+        Self {
+            schema,
+            id_counter: AtomicI64::new(1),
+        }
+    }
+
+    /// Get the next unique ID for a component.
+    fn next_id(&self) -> i64 {
+        self.id_counter.fetch_add(1, Ordering::SeqCst)
     }
 
     /// Assemble UI response from agent intent and tool steps.
@@ -60,12 +70,14 @@ impl UiAssembler {
         // 4. Build the data component
         let data_component = DynamicComponent {
             component_type: intent.component_type.clone(),
+            id: self.next_id(),
             props,
             children: None,
         };
 
         // 5. Build text component for analysis
         let text_component = DynamicComponent::new("text")
+            .with_id(self.next_id())
             .with_prop("content", Value::String(intent.analysis_text.clone()));
 
         // 6. Arrange children based on position
@@ -77,6 +89,7 @@ impl UiAssembler {
 
         // 7. Build container
         Ok(DynamicComponent::new("container")
+            .with_id(self.next_id())
             .with_prop("direction", Value::String(intent.layout_direction.clone()))
             .with_children(children))
     }
