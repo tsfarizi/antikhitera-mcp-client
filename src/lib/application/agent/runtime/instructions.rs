@@ -10,6 +10,7 @@ impl ToolRuntime {
         let mut lines = vec![
             prompts.template().to_string(),
             prompts.agent_instructions().to_string(),
+            prompts.ui_instructions().to_string(),
             prompts.language_instructions().to_string(),
         ];
 
