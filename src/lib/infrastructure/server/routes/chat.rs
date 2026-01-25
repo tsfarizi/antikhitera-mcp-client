@@ -83,7 +83,7 @@ pub async fn chat_handler<P: ModelProvider>(
         }
         let agent = Agent::new(client.clone());
         match agent
-            .run_ui_layout(prompt, options, &state.ui_assembler)
+            .run_ui_layout(prompt, options)
             .await
         {
             Ok((outcome, content_json)) => {

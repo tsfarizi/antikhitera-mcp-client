@@ -5,7 +5,6 @@ use super::server::{RawServer, ServerConfig};
 use super::tool::{RawTool, ToolConfig};
 use super::{CONFIG_PATH, ENV_PATH};
 use crate::constants::MODEL_CONFIG_PATH;
-use crate::domain::ui::UiSchemaConfig;
 use dotenvy::from_filename;
 use serde::Deserialize;
 use std::fs;
@@ -61,20 +60,13 @@ pub fn load_config(path: Option<&Path>) -> Result<super::AppConfig, ConfigError>
         Path::new(MODEL_CONFIG_PATH).to_path_buf()
     };
 
-    // Derive ui.toml path from client.toml's parent directory
-    let ui_path = if let Some(parent) = client_path.parent() {
-        parent.join("ui.toml")
-    } else {
-        Path::new("config/ui.toml").to_path_buf()
-    };
 
-    read_configs(client_path, &model_path, &ui_path)
+    read_configs(client_path, &model_path)
 }
 
 fn read_configs(
     client_path: &Path,
     model_path: &Path,
-    ui_path: &Path,
 ) -> Result<super::AppConfig, ConfigError> {
     // Read client.toml
     debug!(path = %client_path.display(), "Reading client configuration file");
@@ -116,33 +108,12 @@ fn read_configs(
             source,
         })?;
 
-    // Read ui.toml
-    debug!(path = %ui_path.display(), "Reading UI configuration file");
-    let ui_content = fs::read_to_string(ui_path).map_err(|source| {
-        if source.kind() == io::ErrorKind::NotFound {
-            ConfigError::NotFound {
-                path: ui_path.to_path_buf(),
-            }
-        } else {
-            ConfigError::Io {
-                path: ui_path.to_path_buf(),
-                source,
-            }
-        }
-    })?;
-    let ui_parsed: UiSchemaConfig =
-        toml::from_str(&ui_content).map_err(|source| ConfigError::Parse {
-            path: ui_path.to_path_buf(),
-            source,
-        })?;
-
-    validate_and_build(client_parsed, model_parsed, ui_parsed)
+    validate_and_build(client_parsed, model_parsed)
 }
 
 fn validate_and_build(
     client: RawClientConfig,
     model: RawModelConfig,
-    ui: UiSchemaConfig,
 ) -> Result<super::AppConfig, ConfigError> {
     let model_name = model.model.ok_or(ConfigError::MissingModel)?;
     let default_provider = model
@@ -180,6 +151,5 @@ fn validate_and_build(
         providers,
         rest_server: client.server,
         prompts: model.prompts,
-        ui,
     })
 }

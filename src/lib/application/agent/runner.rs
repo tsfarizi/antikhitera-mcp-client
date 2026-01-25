@@ -3,10 +3,8 @@ use super::errors::AgentError;
 use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use crate::application::client::{ChatRequest, McpClient};
-use crate::application::ui::UiAssembler;
-use crate::domain::ui::{AgentLayoutIntent, DynamicComponent};
 use crate::model::ModelProvider;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
@@ -22,10 +20,9 @@ impl<P: ModelProvider> Agent<P> {
     pub fn new(client: Arc<McpClient<P>>) -> Self {
         let tools = client.tools().to_vec();
         let bridge = client.server_bridge();
-        let ui_schema = client.config().ui.clone();
         Self {
             client,
-            runtime: ToolRuntime::new(tools, bridge, ui_schema),
+            runtime: ToolRuntime::new(tools, bridge),
         }
     }
 
@@ -158,78 +155,148 @@ impl<P: ModelProvider> Agent<P> {
         }
     }
 
-    /// Run agent and attempt to assemble UI layout from response.
+    /// Run agent and return response with embedded tool results.
     pub async fn run_ui_layout(
         &self,
         prompt: String,
         options: AgentOptions,
-        assembler: &UiAssembler,
     ) -> Result<(AgentOutcome, serde_json::Value), AgentError> {
         // 1. Run the agent loop
         let outcome = self.run(prompt, options).await?;
 
-        // 2. Try to parse response as DynamicComponent template (Late-Binding format)
-        if let Ok(template) = serde_json::from_value::<DynamicComponent>(outcome.response.clone()) {
-            match assembler.assemble(template, &outcome.steps) {
-                Ok(hydrated) => {
-                    info!("Successfully hydrated UI template from agent response");
-                    let value = serde_json::to_value(hydrated).map_err(|e| {
-                        AgentError::InvalidResponse(format!(
-                            "Failed to serialize hydrated component: {}",
-                            e
-                        ))
-                    })?;
-                    return Ok((outcome, value));
+        // 2. Process the response to embed tool results by replacing IDs with actual data
+        let processed_response = self.embed_tool_results_sync(outcome.response.clone(), &outcome.steps);
+
+        // 3. If the processed response is a string (meaning the LLM didn't follow JSON format),
+        // wrap it in a proper structure with content field
+        let final_response = match processed_response {
+            Value::String(s) => {
+                // If the LLM returned a plain string, wrap it in a content field
+                json!({"content": s})
+            }
+            _ => processed_response,
+        };
+
+        Ok((outcome, final_response))
+    }
+
+    /// Embed tool results into the response by replacing IDs with actual data from tool steps.
+    fn embed_tool_results_sync(&self, response: Value, steps: &[AgentStep]) -> Value {
+        match response {
+            Value::Object(obj) => {
+                let mut new_obj = serde_json::Map::new();
+                for (key, value) in obj {
+                    let processed_value = match (&key[..], &value) {
+                        // Special handling for "data" field that might contain step references
+                        ("data", Value::String(s)) => {
+                            if s.starts_with("step_") || s.starts_with("result_") {
+                                if let Some(step_idx) = s.strip_prefix("step_").or_else(|| s.strip_prefix("result_")) {
+                                    if let Ok(idx) = step_idx.parse::<usize>() {
+                                        if let Some(step) = steps.get(idx) {
+                                            // Extract just the result data, not the full JSON-RPC response
+                                            self.extract_result_data(&step.output)
+                                        } else {
+                                            // If step index not found, keep original value
+                                            value
+                                        }
+                                    } else {
+                                        // If parsing fails, keep original value
+                                        value
+                                    }
+                                } else {
+                                    // If prefix not found, keep original value
+                                    value
+                                }
+                            } else {
+                                // If not a step reference, keep original value
+                                value
+                            }
+                        }
+                        // For other fields, check if they're strings that look like step references
+                        (_, Value::String(s)) => {
+                            if s.starts_with("step_") || s.starts_with("result_") {
+                                if let Some(step_idx) = s.strip_prefix("step_").or_else(|| s.strip_prefix("result_")) {
+                                    if let Ok(idx) = step_idx.parse::<usize>() {
+                                        if let Some(step) = steps.get(idx) {
+                                            // Extract just the result data, not the full JSON-RPC response
+                                            self.extract_result_data(&step.output)
+                                        } else {
+                                            // If step index not found, keep original value
+                                            value
+                                        }
+                                    } else {
+                                        // If parsing fails, keep original value
+                                        value
+                                    }
+                                } else {
+                                    // If prefix not found, keep original value
+                                    value
+                                }
+                            } else {
+                                // If not a step reference, keep original value
+                                value
+                            }
+                        }
+                        // Recursively process nested objects
+                        (_, Value::Object(_)) => {
+                            self.embed_tool_results_sync(value, steps)
+                        }
+                        // Process arrays
+                        (_, Value::Array(_)) => {
+                            self.embed_tool_results_sync(value, steps)
+                        }
+                        // All other cases, keep original value
+                        _ => value,
+                    };
+                    new_obj.insert(key, processed_value);
                 }
-                Err(e) => {
-                    warn!(error = %e, "Failed to hydrate UI template, falling back to text");
+                Value::Object(new_obj)
+            }
+            Value::Array(arr) => {
+                // Process top-level arrays
+                let new_arr: Vec<Value> = arr
+                    .into_iter()
+                    .map(|item| self.embed_tool_results_sync(item, steps))
+                    .collect();
+                Value::Array(new_arr)
+            }
+            _ => response, // Non-object, non-array values remain unchanged
+        }
+    }
+
+    /// Extract just the result data from a tool output, filtering out JSON-RPC wrapper if present.
+    fn extract_result_data(&self, output: &Value) -> Value {
+        // If the output looks like a JSON-RPC response with a "result" field, extract just that
+        if let Some(obj) = output.as_object() {
+            if let Some(result) = obj.get("result") {
+                return result.clone();
+            }
+            // If it has other JSON-RPC fields like "jsonrpc", "id", "error", extract just the meaningful data
+            if obj.contains_key("jsonrpc") || obj.contains_key("id") {
+                // Return the result field if present, otherwise return the whole object minus JSON-RPC fields
+                if let Some(result) = obj.get("result") {
+                    return result.clone();
+                } else {
+                    // If there's no result field but it's a JSON-RPC object, return null
+                    // Or return the original if it has other meaningful data
+                    let filtered_obj: serde_json::Map<String, Value> = obj
+                        .iter()
+                        .filter(|(k, _)| !["jsonrpc", "id", "error"].contains(&k.as_str()))
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+
+                    if filtered_obj.is_empty() {
+                        // If no non-RPC fields remain, return the original
+                        return output.clone();
+                    } else {
+                        return Value::Object(filtered_obj);
+                    }
                 }
             }
         }
 
-        // 3. Backward compatibility: Try to parse as AgentLayoutIntent and transform
-        if let Ok(intent) = serde_json::from_value::<AgentLayoutIntent>(outcome.response.clone()) {
-            // Transform intent to a primitive template
-            let mut data_comp = DynamicComponent::new(intent.component_type.clone());
-            data_comp.data_source = Some(format!("step_{}", intent.selected_data_index));
-
-            let text_comp =
-                DynamicComponent::new("text").with_prop("content", json!(intent.analysis_text));
-
-            let children = if intent.card_first() {
-                vec![data_comp, text_comp]
-            } else {
-                vec![text_comp, data_comp]
-            };
-
-            let container = DynamicComponent::new("container")
-                .with_prop("direction", json!(intent.layout_direction))
-                .with_children(children);
-
-            match assembler.assemble(container, &outcome.steps) {
-                Ok(hydrated) => {
-                    info!("Successfully assembled UI from legacy intent");
-                    let value = serde_json::to_value(hydrated).map_err(|e| {
-                        AgentError::InvalidResponse(format!(
-                            "Failed to serialize hydrated component: {}",
-                            e
-                        ))
-                    })?;
-                    return Ok((outcome, value));
-                }
-                Err(e) => {
-                    warn!(error = %e, "Failed to assemble legacy intent, falling back to text");
-                }
-            }
-        }
-
-        // 3. Fallback to simple text component
-        let fallback = json!({
-            "type": "text",
-            "content": outcome.response
-        });
-
-        Ok((outcome, fallback))
+        // Otherwise, return the output as-is
+        output.clone()
     }
 
     /// Parse agent action with retry logic for malformed JSON
