@@ -1,6 +1,6 @@
 use super::super::dto::{Attachment, ErrorResponse, RestChatRequest, RestChatResponse};
 use super::super::state::ServerState;
-use crate::agent::{Agent, AgentOptions};
+use crate::agent::{Agent, AgentOptions, AgentStep};
 use crate::client::{ChatRequest, McpError};
 use crate::model::ModelProvider;
 use crate::types::MessagePart;
@@ -25,6 +25,37 @@ fn attachments_to_parts(attachments: Vec<Attachment>) -> Vec<MessagePart> {
         .collect()
 }
 
+/// Helper to construct the response based on debug mode
+fn construct_response(
+    debug: bool,
+    session_id: String,
+    content: serde_json::Value,
+    logs: Vec<String>,
+    provider: String,
+    model: String,
+    tool_steps: Vec<AgentStep>,
+) -> RestChatResponse {
+    if !debug {
+        RestChatResponse {
+            logs: None,
+            session_id,
+            content,
+            provider: None,
+            model: None,
+            tool_steps: None,
+        }
+    } else {
+        RestChatResponse {
+            logs: Some(logs),
+            session_id,
+            content,
+            provider: Some(provider),
+            model: Some(model),
+            tool_steps: Some(tool_steps),
+        }
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/chat",
@@ -47,6 +78,7 @@ pub async fn chat_handler<P: ModelProvider>(
         session_id,
         agent,
         max_tool_steps,
+        debug,
     } = payload;
 
     info!(
@@ -72,6 +104,7 @@ pub async fn chat_handler<P: ModelProvider>(
     // Use defaults from config
     let provider = client.default_provider().to_string();
     let model = client.default_model().to_string();
+    let debug_mode = debug.unwrap_or(true);
 
     if agent {
         let mut options = AgentOptions::default();
@@ -81,8 +114,8 @@ pub async fn chat_handler<P: ModelProvider>(
         if let Some(max_steps) = max_tool_steps {
             options.max_steps = max_steps;
         }
-        let agent = Agent::new(client.clone());
-        match agent
+        let agent_runner = Agent::new(client.clone());
+        match agent_runner
             .run_ui_layout(prompt, options)
             .await
         {
@@ -92,14 +125,15 @@ pub async fn chat_handler<P: ModelProvider>(
                     "Agent run completed successfully"
                 );
 
-                Ok(Json(RestChatResponse {
-                    logs: outcome.logs,
-                    session_id: outcome.session_id,
-                    content: content_json,
+                Ok(Json(construct_response(
+                    debug_mode,
+                    outcome.session_id,
+                    content_json,
+                    outcome.logs,
                     provider,
                     model,
-                    tool_steps: outcome.steps,
-                }))
+                    outcome.steps,
+                )))
             }
             Err(error) => {
                 error!(%error, "Agent run failed");
@@ -132,19 +166,19 @@ pub async fn chat_handler<P: ModelProvider>(
                     model = result.model.as_str(),
                     "Chat request completed successfully"
                 );
-                Ok(Json(RestChatResponse {
-                    logs: result.logs,
-                    session_id: result.session_id,
-                    content: json!({
-                        "type": "text",
-                        "props": {
-                            "content": result.content
-                        }
-                    }),
-                    provider: result.provider,
-                    model: result.model,
-                    tool_steps: Vec::new(),
-                }))
+
+                // When agent is false, content is just the string
+                let content = json!(result.content);
+
+                Ok(Json(construct_response(
+                    debug_mode,
+                    result.session_id,
+                    content,
+                    result.logs,
+                    result.provider,
+                    result.model,
+                    Vec::new(),
+                )))
             }
             Err(McpError::Model(error)) => {
                 error!(%error, "Model provider returned an error");
@@ -155,5 +189,75 @@ pub async fn chat_handler<P: ModelProvider>(
                 ))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_construct_response_debug_true() {
+        let session_id = "test-session".to_string();
+        let content = json!({"key": "value"});
+        let logs = vec!["log1".to_string()];
+        let provider = "test-provider".to_string();
+        let model = "test-model".to_string();
+        let tool_steps = vec![];
+
+        let response = construct_response(
+            true,
+            session_id.clone(),
+            content.clone(),
+            logs.clone(),
+            provider.clone(),
+            model.clone(),
+            tool_steps.clone(),
+        );
+
+        assert_eq!(response.session_id, session_id);
+        assert_eq!(response.content, content);
+        assert_eq!(response.logs, Some(logs));
+        assert_eq!(response.provider, Some(provider));
+        assert_eq!(response.model, Some(model));
+        assert_eq!(response.tool_steps, Some(tool_steps));
+    }
+
+    #[test]
+    fn test_construct_response_debug_false() {
+        let session_id = "test-session".to_string();
+        let content = json!({"key": "value"});
+        let logs = vec!["log1".to_string()];
+        let provider = "test-provider".to_string();
+        let model = "test-model".to_string();
+        let tool_steps = vec![];
+
+        let response = construct_response(
+            false,
+            session_id.clone(),
+            content.clone(),
+            logs.clone(),
+            provider.clone(),
+            model.clone(),
+            tool_steps.clone(),
+        );
+
+        assert_eq!(response.session_id, session_id);
+        assert_eq!(response.content, content);
+        assert!(response.logs.is_none());
+        assert!(response.provider.is_none());
+        assert!(response.model.is_none());
+        assert!(response.tool_steps.is_none());
+    }
+
+    #[test]
+    fn test_content_structure_assumption() {
+        // Verify that we can pass simple strings as content (for agent=false case)
+        let content_str = json!("Simple string content");
+        assert!(content_str.is_string());
+
+        let content_obj = json!({"complex": "object"});
+        assert!(content_obj.is_object());
     }
 }

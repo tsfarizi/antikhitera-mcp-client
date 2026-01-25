@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 const DEFAULT_MAX_STEPS: usize = 8;
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema, PartialEq)]
 pub struct AgentStep {
     pub tool: String,
     #[schema(value_type = Object)]
