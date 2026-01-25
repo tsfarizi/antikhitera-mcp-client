@@ -90,7 +90,7 @@ pub mod types;
 
 // Re-export commonly used items
 pub use loader::{load_all, load_server, scan_and_load};
-pub use scanner::{folder_exists, scan_folder};
+pub use scanner::scan_folder;
 pub use startup::{StartupDiscoveryResult, print_discovery_summary, run_startup_discovery};
 pub use types::{DiscoveredServer, DiscoveryError, DiscoverySummary, LoadStatus};
 
