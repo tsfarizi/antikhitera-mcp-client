@@ -31,17 +31,24 @@ pub struct RestChatRequest {
     /// Maximum tool execution steps in agent mode
     #[serde(default)]
     pub max_tool_steps: Option<usize>,
+    /// Debug mode: if false, returns minimized response. Defaults to true.
+    #[serde(default)]
+    pub debug: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RestChatResponse {
-    pub logs: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logs: Option<Vec<String>>,
     pub session_id: String,
     #[schema(value_type = Object)]
     pub content: serde_json::Value,
-    pub provider: String,
-    pub model: String,
-    pub tool_steps: Vec<AgentStep>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_steps: Option<Vec<AgentStep>>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
