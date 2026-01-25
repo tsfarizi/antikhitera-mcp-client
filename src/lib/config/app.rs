@@ -88,7 +88,7 @@ impl PromptsConfig {
 
     /// Default tool result instruction (English)
     pub fn default_tool_result_instruction() -> &'static str {
-        "Tool execution complete. Process this result and respond with a VALID JSON object.\n\nIF THE TOOL RETURNED DATA (like a list of posts):\nYou MUST use the 'post_card' component format:\n{\n  \"action\": \"final\",\n  \"response\": {\n    \"type\": \"post_card\",\n    \"data\": \"step_N\"\n  }\n}\n(Replace 'step_N' with the actual step ID, e.g., step_0)\n\nIF YOU NEED TO CALL ANOTHER TOOL:\n{\n  \"action\": \"call_tool\",\n  \"tool\": \"...\",\n  \"input\": {...}\n}\n\nCRITICAL:\n1. DO NOT return the raw data in a string.\n2. DO NOT summarize the data.\n3. ALWAYS use the {\"type\": \"post_card\", \"data\": \"step_N\"} structure for lists of posts."
+        "Tool execution complete. Process this result and respond with a VALID JSON object.\n\nIF THE TOOL RETURNED DATA (like a list of posts):\nYou MUST return a JSON object containing:\n1. \"message\": Your friendly text explanation.\n2. \"data\": The step ID reference.\n\nFormat for FINAL ANSWER:\n{\n  \"action\": \"final\",\n  \"response\": {\n    \"message\": \"Here is the information you requested...\",\n    \"data\": \"step_N\"\n  }\n}\n(Replace 'step_N' with the actual step ID, e.g., step_0)\n\nIF YOU NEED TO CALL ANOTHER TOOL:\n{\n  \"action\": \"call_tool\",\n  \"tool\": \"...\",\n  \"input\": {...}\n}\n\nCRITICAL:\n1. DO NOT return the raw data in the 'message' string.\n2. DO NOT summarize the data content in the 'message'.\n3. ALWAYS provide a 'message' so the user feels attended to."
     }
 
     /// Default agent instructions
