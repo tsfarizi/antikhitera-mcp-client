@@ -36,13 +36,8 @@ impl ToolRuntime {
                                 )
                             })?;
 
-                            let response_str = match response {
-                                Value::String(s) => s.to_string(),
-                                v => serde_json::to_string(v).unwrap_or_default(),
-                            };
-
                             Ok(AgentDirective::Final {
-                                response: response_str,
+                                response: response.clone(),
                             })
                         }
                         other => Err(AgentError::InvalidResponse(format!(

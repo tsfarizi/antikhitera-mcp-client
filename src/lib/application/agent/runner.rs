@@ -104,8 +104,6 @@ impl<P: ModelProvider> Agent<P> {
                         session_id = result.session_id.as_str(),
                         "Agent returned final response"
                     );
-                    let final_preview = McpClient::<P>::summarise(&response);
-                    logs.push(format!("Agent final answer: {final_preview}"));
                     return Ok(AgentOutcome {
                         logs,
                         session_id: result.session_id,
@@ -171,7 +169,7 @@ impl<P: ModelProvider> Agent<P> {
         let outcome = self.run(prompt, options).await?;
 
         // 2. Try to parse response as DynamicComponent template (Late-Binding format)
-        if let Ok(template) = serde_json::from_str::<DynamicComponent>(&outcome.response) {
+        if let Ok(template) = serde_json::from_value::<DynamicComponent>(outcome.response.clone()) {
             match assembler.assemble(template, &outcome.steps) {
                 Ok(hydrated) => {
                     info!("Successfully hydrated UI template from agent response");
@@ -190,7 +188,7 @@ impl<P: ModelProvider> Agent<P> {
         }
 
         // 3. Backward compatibility: Try to parse as AgentLayoutIntent and transform
-        if let Ok(intent) = serde_json::from_str::<AgentLayoutIntent>(&outcome.response) {
+        if let Ok(intent) = serde_json::from_value::<AgentLayoutIntent>(outcome.response.clone()) {
             // Transform intent to a primitive template
             let mut data_comp = DynamicComponent::new(intent.component_type.clone());
             data_comp.data_source = Some(format!("step_{}", intent.selected_data_index));

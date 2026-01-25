@@ -375,7 +375,11 @@ where
                 write_line(stdout, "").await?;
             }
             write_line(stdout, "Agent:").await?;
-            write_line(stdout, &response).await?;
+            let response_str = match response {
+                Value::String(s) => s,
+                v => serde_json::to_string(&v).unwrap_or_default(),
+            };
+            write_line(stdout, &response_str).await?;
             if steps.is_empty() {
                 state.clear_steps();
             } else {
