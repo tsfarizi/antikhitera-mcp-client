@@ -107,9 +107,17 @@ fn test_all_fields_iterator() {
 fn test_rating_display_integer_field() {
     let schema = load_test_schema();
     let rating = schema.get_component("rating_display").unwrap();
-
     assert_eq!(rating.get_field_type("rating"), Some("f64"));
     assert_eq!(rating.get_field_type("review_count"), Some("i64"));
+}
+
+#[test]
+fn test_get_component_schema_alias() {
+    let schema = load_test_schema();
+    let product_alias = schema.get_component_schema("product_card").unwrap();
+    let product_orig = schema.get_component("product_card").unwrap();
+
+    assert_eq!(product_alias.description, product_orig.description);
 }
 
 #[test]
@@ -118,7 +126,7 @@ fn test_load_actual_config() {
     let toml_content = include_str!("../../config/ui.toml");
     let config: UiSchemaConfig = toml::from_str(toml_content).expect("Failed to parse ui.toml");
 
-    assert!(config.has_component("product_card"));
+    assert!(config.has_component("post_card"));
     assert!(config.has_component("text"));
     assert!(config.has_component("container"));
 }

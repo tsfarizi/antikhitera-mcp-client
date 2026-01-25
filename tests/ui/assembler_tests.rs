@@ -66,13 +66,13 @@ fn test_assemble_horizontal_left_layout() {
 
     let result = assembler.assemble(&intent, &steps).unwrap();
 
-    assert_eq!(result.component_name, "container");
+    assert_eq!(result.component_type, "container");
     assert_eq!(result.get_string_prop("direction"), Some("horizontal"));
 
     let children = result.children.as_ref().unwrap();
     assert_eq!(children.len(), 2);
-    assert_eq!(children[0].component_name, "product_card"); // left = first
-    assert_eq!(children[1].component_name, "text");
+    assert_eq!(children[0].component_type, "product_card"); // left = first
+    assert_eq!(children[1].component_type, "text");
 }
 
 #[test]
@@ -93,8 +93,8 @@ fn test_assemble_vertical_bottom_layout() {
 
     assert_eq!(result.get_string_prop("direction"), Some("vertical"));
     let children = result.children.as_ref().unwrap();
-    assert_eq!(children[0].component_name, "text"); // bottom = text first
-    assert_eq!(children[1].component_name, "product_card");
+    assert_eq!(children[0].component_type, "text"); // bottom = text first
+    assert_eq!(children[1].component_type, "product_card");
 }
 
 #[test]
@@ -369,4 +369,31 @@ fn test_select_specific_step() {
     // Should get data from step index 1
     assert_eq!(card.get_string_prop("title"), Some("Second Product"));
     assert_eq!(card.get_f64_prop("price"), Some(200.0));
+}
+
+#[test]
+fn test_structured_content_discovery() {
+    let assembler = UiAssembler::new(test_schema());
+
+    let intent = AgentLayoutIntent {
+        analysis_text: "Discovery!".into(),
+        selected_data_index: 0,
+        component_type: "product_card".into(),
+        layout_direction: "vertical".into(),
+        card_position: "top".into(),
+    };
+
+    let steps = vec![mock_step(json!({
+        "structuredContent": {
+            "title": "Discovery Card",
+            "price": 10.0,
+            "image": "img..."
+        }
+    }))];
+
+    let result = assembler.assemble(&intent, &steps).unwrap();
+    let children = result.children.as_ref().unwrap();
+    let card = &children[0];
+
+    assert_eq!(card.get_string_prop("title"), Some("Discovery Card"));
 }
