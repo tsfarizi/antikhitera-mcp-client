@@ -66,16 +66,23 @@ fn handle_key(state: &mut ChatState, key: KeyEvent) -> InputAction {
 
     match key.code {
         KeyCode::Enter => {
-            if state.input.is_empty() {
-                return InputAction::None;
-            }
-
             if state.is_command() {
+                if state.input.is_empty() {
+                    return InputAction::None;
+                }
                 let cmd = state.take_input();
                 return InputAction::Command(cmd);
             }
 
-            InputAction::Submit
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                if state.input.is_empty() {
+                    return InputAction::None;
+                }
+                InputAction::Submit
+            } else {
+                state.insert_char('\n');
+                InputAction::None
+            }
         }
         KeyCode::Esc => {
             if !state.input.is_empty() {
