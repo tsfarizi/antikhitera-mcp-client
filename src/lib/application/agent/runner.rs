@@ -205,8 +205,13 @@ impl<P: ModelProvider> Agent<P> {
                 if (s.starts_with("step_") || s.starts_with("result_")) && !s.contains(' ') {
                     if let Some(step_idx) = s.strip_prefix("step_").or_else(|| s.strip_prefix("result_")) {
                         if let Ok(idx) = step_idx.parse::<usize>() {
+                            // Try 0-based index first, then 1-based index (if idx > 0)
                             if let Some(step) = steps.get(idx) {
                                 return self.extract_result_data(&step.output);
+                            } else if idx > 0 {
+                                if let Some(step) = steps.get(idx - 1) {
+                                    return self.extract_result_data(&step.output);
+                                }
                             }
                         }
                     }
@@ -219,20 +224,32 @@ impl<P: ModelProvider> Agent<P> {
                 let mut modified = false;
 
                 // Iterate in reverse to avoid partial matches (e.g., "step_1" matching "step_10")
-                for i in (0..steps.len()).rev() {
+                // We check both 0-based and 1-based logic by iterating up to steps.len() + 1
+                for i in (0..=steps.len()).rev() {
                     let step_pattern = format!("step_{}", i);
                     let result_pattern = format!("result_{}", i);
                     
                     if result_str.contains(&step_pattern) || result_str.contains(&result_pattern) {
-                        let data = self.extract_result_data(&steps[i].output);
-                        let replacement = match &data {
-                            Value::String(inner_s) => inner_s.clone(),
-                            _ => serde_json::to_string(&data).unwrap_or_else(|_| "null".to_string()),
+                        // Resolve the index: if i is out of bounds, try i-1
+                        let step_to_use = if i < steps.len() {
+                            Some(&steps[i])
+                        } else if i > 0 && (i - 1) < steps.len() {
+                            Some(&steps[i - 1])
+                        } else {
+                            None
                         };
-                        
-                        result_str = result_str.replace(&step_pattern, &replacement);
-                        result_str = result_str.replace(&result_pattern, &replacement);
-                        modified = true;
+
+                        if let Some(step) = step_to_use {
+                            let data = self.extract_result_data(&step.output);
+                            let replacement = match &data {
+                                Value::String(inner_s) => inner_s.clone(),
+                                _ => serde_json::to_string(&data).unwrap_or_else(|_| "null".to_string()),
+                            };
+                            
+                            result_str = result_str.replace(&step_pattern, &replacement);
+                            result_str = result_str.replace(&result_pattern, &replacement);
+                            modified = true;
+                        }
                     }
                 }
 
@@ -272,6 +289,24 @@ impl<P: ModelProvider> Agent<P> {
                         return output.clone();
                     } else {
                         return Value::Object(filtered_obj);
+                    }
+                }
+            }
+
+            // Handle MCP content format: {"content": [{"type": "text", "text": "..."}]}
+            if let Some(content_arr) = obj.get("content").and_then(|c| c.as_array()) {
+                if content_arr.len() == 1 {
+                    if let Some(block) = content_arr[0].as_object() {
+                        if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                            if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                                // Try to parse the text as JSON
+                                if let Ok(parsed) = serde_json::from_str::<Value>(text) {
+                                    return parsed;
+                                }
+                                // If not JSON, return the text as a string
+                                return Value::String(text.to_string());
+                            }
+                        }
                     }
                 }
             }
