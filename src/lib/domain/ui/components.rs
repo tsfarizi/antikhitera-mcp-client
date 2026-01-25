@@ -17,6 +17,9 @@ pub struct DynamicComponent {
     #[serde(rename = "type")]
     pub component_type: String,
 
+    /// Unique session-based incrementing ID.
+    pub id: i64,
+
     /// Dynamic properties hydrated from MCP data per TOML schema.
     /// Keys must match `required_fields` + `optional_fields` from schema.
     #[schema(value_type = Object)]
@@ -34,9 +37,16 @@ impl DynamicComponent {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             component_type: name.into(),
+            id: 0,
             props: HashMap::new(),
             children: None,
         }
+    }
+
+    /// Set the unique ID for this component.
+    pub fn with_id(mut self, id: i64) -> Self {
+        self.id = id;
+        self
     }
 
     /// Add a property to this component.

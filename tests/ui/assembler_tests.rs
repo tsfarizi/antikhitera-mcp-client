@@ -397,3 +397,38 @@ fn test_structured_content_discovery() {
 
     assert_eq!(card.get_string_prop("title"), Some("Discovery Card"));
 }
+
+#[test]
+fn test_id_incrementing() {
+    let assembler = UiAssembler::new(test_schema());
+    let intent = basic_intent();
+    let steps = vec![mock_step(json!({
+        "title": "Test",
+        "price": 10.0,
+        "image": "img"
+    }))];
+
+    let result = assembler.assemble(&intent, &steps).unwrap();
+
+    // Result is a container with text and product_card children
+    // container id should be 3 (1: card, 2: text, 3: container)
+    // Wait, let's trace IDs:
+    // 1. data_component (id = 1)
+    // 2. text_component (id = 2)
+    // 3. container (id = 3)
+
+    assert_eq!(result.id, 3);
+    assert_eq!(result.component_type, "container");
+
+    let children = result.children.as_ref().unwrap();
+    // card_first defaults to true for horizontal/left
+    assert_eq!(children[0].id, 1);
+    assert_eq!(children[1].id, 2);
+
+    // Another assembly should continue the counter
+    let result2 = assembler.assemble(&intent, &steps).unwrap();
+    assert_eq!(result2.id, 6);
+    let children2 = result2.children.as_ref().unwrap();
+    assert_eq!(children2[0].id, 4);
+    assert_eq!(children2[1].id, 5);
+}

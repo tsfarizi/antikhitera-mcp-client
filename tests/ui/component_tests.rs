@@ -47,8 +47,9 @@ fn test_serialization_format() {
     let json_str = serde_json::to_string(&component).unwrap();
     let parsed: Value = serde_json::from_str(&json_str).unwrap();
 
-    // Verify "type" field is used (not "component_name")
+    // Verify "type" and "id" fields are used
     assert_eq!(parsed["type"], "text");
+    assert_eq!(parsed["id"], 0); // Default id
     assert_eq!(parsed["content"], "Hello World"); // Flattened
     // No children field when None
     assert!(parsed.get("children").is_none());
