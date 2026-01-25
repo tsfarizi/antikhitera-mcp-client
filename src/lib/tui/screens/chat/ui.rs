@@ -20,7 +20,7 @@ impl ChatUI {
             .constraints([
                 Constraint::Length(3), // Status bar
                 Constraint::Min(5),    // Messages area
-                Constraint::Length(3), // Input area
+                Constraint::Length(10), // Input area
                 Constraint::Length(1), // Help bar
             ])
             .split(area);
@@ -161,10 +161,22 @@ impl ChatUI {
             chars.into_iter().collect()
         };
 
-        let input_line = Line::from(vec![
-            Span::styled("> ", theme::title()),
-            Span::styled(display_input, input_style),
-        ]);
+        let mut lines = Vec::new();
+        let parts: Vec<&str> = display_input.split('\n').collect();
+
+        for (i, part) in parts.iter().enumerate() {
+            if i == 0 {
+                lines.push(Line::from(vec![
+                    Span::styled("> ", theme::title()),
+                    Span::styled(*part, input_style),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::styled("  ", theme::title()),
+                    Span::styled(*part, input_style),
+                ]));
+            }
+        }
 
         let block = Block::default()
             .borders(Borders::ALL)
@@ -174,12 +186,14 @@ impl ChatUI {
                 theme::border_active()
             })
             .title(if state.is_command() {
-                " Command "
+                " Command (Enter to execute) "
             } else {
-                " Message "
+                " Prompt (Ctrl+Enter to send) "
             });
 
-        let para = Paragraph::new(input_line).block(block);
+        let para = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false });
         frame.render_widget(para, area);
     }
 
@@ -192,11 +206,13 @@ impl ChatUI {
             ))
         } else {
             Line::from(vec![
-                Span::styled(" Enter", theme::key_hint()),
+                Span::styled("Ctrl+Enter", theme::key_hint()),
                 Span::raw(": Send │ "),
+                Span::styled("Enter", theme::key_hint()),
+                Span::raw(": NewLine │ "),
                 Span::styled("/help", theme::key_hint()),
-                Span::raw(": Commands │ "),
-                Span::styled("PageUp/Down", theme::key_hint()),
+                Span::raw(": Cmds │ "),
+                Span::styled("PgUp/Dn", theme::key_hint()),
                 Span::raw(": Scroll │ "),
                 Span::styled("q", theme::key_destructive()),
                 Span::raw(": Exit "),
