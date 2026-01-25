@@ -1,28 +1,24 @@
 use super::{ToolContext, ToolRuntime, json};
+use crate::config::PromptsConfig;
 
 impl ToolRuntime {
-    pub fn compose_system_instructions(&self, context: &ToolContext) -> String {
+    pub fn compose_system_instructions(
+        &self,
+        context: &ToolContext,
+        prompts: &PromptsConfig,
+    ) -> String {
         let mut lines = vec![
-            "You are an autonomous assistant that can call tools to solve user requests."
-                .to_string(),
-            "All responses must be valid JSON without commentary or code fences.".to_string(),
-            "When you need to invoke a tool, respond with: {\"action\":\"call_tool\",\"tool\":\"tool_name\",\"input\":{...}}."
-                .to_string(),
-            "To obtain the list of available tools, call the special tool: {\"action\":\"call_tool\",\"tool\":\"list_tools\"}."
-                .to_string(),
-            "When you are ready to give the final answer to the user, respond with: {\"action\":\"final\",\"response\":\"...\"}.".to_string(),
-            "If you have finding data that suitable for UI representation, you MUST use the following JSON structure for the 'response' field:".to_string(),
-            "{ \"analysisText\": \"Explaining what is shown\", \"selectedDataIndex\": <index_of_tool_step_containing_data>, \"componentType\": \"<component_name_from_ui_contract>\", \"layoutDirection\": \"vertical|horizontal\", \"cardPosition\": \"top|bottom|left|right\" }".to_string(),
-            "Example final response with UI intent: { \"action\": \"final\", \"response\": { \"analysisText\": \"Here are the latest posts\", \"selectedDataIndex\": 0, \"componentType\": \"post_card\", \"layoutDirection\": \"vertical\", \"cardPosition\": \"top\" } }".to_string(),
-            format!("Supported component types: {}.", self.build_dynamic_component_catalog()),
-            "Detect the user's language automatically and answer using that same language unless they explicitly request another language."
-                .to_string(),
-            "Do not call any translation-related tools; handle language understanding internally."
-                .to_string(),
+            prompts.agent_instructions().to_string(),
+            prompts.ui_instructions().to_string(),
+            format!(
+                "Available UI Components (UI Catalog):\n{}",
+                self.build_dynamic_component_catalog()
+            ),
+            prompts.language_instructions().to_string(),
         ];
 
         if context.is_empty() {
-            lines.push("No additional tools are currently configured.".to_string());
+            lines.push(prompts.no_tools_guidance().to_string());
             return lines.join(" ");
         }
 
@@ -71,19 +67,44 @@ impl ToolRuntime {
         payload.to_string()
     }
 
-    /// Build dynamic component catalog string for system prompt.
+    /// Build detailed dynamic component catalog for system prompt.
     fn build_dynamic_component_catalog(&self) -> String {
         let mut components: Vec<_> = self.ui_schema.components.keys().cloned().collect();
-        components.sort(); // Deterministic order
+        components.sort();
 
-        // Add descriptions if available (optional enhancement)
-        // For now, just listing types as requested: 'text', 'post_card', etc.
-        let list = components
-            .iter()
-            .map(|c| format!("'{}'", c))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let mut entries = Vec::new();
+        for name in &components {
+            if let Some(schema) = self.ui_schema.components.get(name) {
+                let desc = schema.description.as_deref().unwrap_or("No description");
+                let mut info = format!("- '{}': {}", name, desc);
 
-        list
+                if !schema.required_fields.is_empty() {
+                    info.push_str(&format!(
+                        " (Required props: {})",
+                        schema.required_fields.join(", ")
+                    ));
+                }
+
+                if schema.is_container {
+                    info.push_str(" [Container - supports children]");
+                }
+
+                if let Some(mapping) = &schema.mapping {
+                    let mapped_fields: Vec<_> = mapping.keys().collect();
+                    info.push_str(&format!(
+                        " [Supports Late-Binding for: {}]",
+                        mapped_fields
+                            .iter()
+                            .map(|s| s.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+
+                entries.push(info);
+            }
+        }
+
+        entries.join("\n")
     }
 }

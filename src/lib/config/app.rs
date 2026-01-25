@@ -54,6 +54,16 @@ pub struct PromptsConfig {
     pub json_retry_message: Option<String>,
     /// Instruction for tool result formatting
     pub tool_result_instruction: Option<String>,
+    /// Base autonomous assistant rules and JSON constraints
+    pub agent_instructions: Option<String>,
+    /// Rules for late-binding UI hydration
+    pub ui_instructions: Option<String>,
+    /// Instructions for language detection and adherence
+    pub language_instructions: Option<String>,
+    /// User-facing error message for interaction limits
+    pub agent_max_steps_error: Option<String>,
+    /// Guidance when no tools are available or configured
+    pub no_tools_guidance: Option<String>,
 }
 
 impl PromptsConfig {
@@ -80,6 +90,31 @@ impl PromptsConfig {
     /// Default tool result instruction (English)
     pub fn default_tool_result_instruction() -> &'static str {
         "Provide a valid JSON response: use {\"action\":\"call_tool\",\"tool\":\"...\",\"input\":{...}} for tool calls or {\"action\":\"final\",\"response\":\"...\"} for final answers. Do not include any text outside the JSON structure."
+    }
+
+    /// Default agent instructions
+    pub fn default_agent_instructions() -> &'static str {
+        "You are an autonomous assistant that can call tools to solve user requests.\nAll responses must be valid JSON without commentary or code fences.\nWhen you need to invoke a tool, respond with: {\"action\":\"call_tool\",\"tool\":\"tool_name\",\"input\":{...}}.\nTo obtain the list of available tools, call the special tool: {\"action\":\"call_tool\",\"tool\":\"list_tools\"}.\nWhen you are ready to give the final answer to the user, respond with: {\"action\":\"final\",\"response\":\"...\"}."
+    }
+
+    /// Default UI instructions
+    pub fn default_ui_instructions() -> &'static str {
+        "LATE-BINDING UI HYDRATION:\nIf you find data suitable for UI representation, you MUST use the 'Late-Binding' JSON structure for the 'response' field.\nInstead of generating actual data, use 'data_source': 'step_N' to refer to a tool output index.\nRules:\n1. Start with a 'container' component.\n2. Use 'text' components for analysis and explanations.\n3. Use data-driven components (like 'post_card') with 'data_source': 'step_N'.\n4. NEVER hallucinate strings or base64 data if 'data_source' can be used.\nExample final response: {\"action\": \"final\", \"response\": {\"type\": \"container\", \"direction\": \"vertical\", \"children\": [{\"type\": \"text\", \"content\": \"Analysis...\"}, {\"type\": \"post_card\", \"data_source\": \"step_0\"}]}}"
+    }
+
+    /// Default language instructions
+    pub fn default_language_instructions() -> &'static str {
+        "Detect the user's language automatically and answer using that same language unless they explicitly request another language.\nDo not call any translation-related tools; handle language understanding internally."
+    }
+
+    /// Default max steps error
+    pub fn default_agent_max_steps_error() -> &'static str {
+        "agent exceeded the maximum number of tool interactions"
+    }
+
+    /// Default no tools guidance
+    pub fn default_no_tools_guidance() -> &'static str {
+        "No additional tools are currently configured."
     }
 
     /// Get template with fallback to default
@@ -113,6 +148,41 @@ impl PromptsConfig {
         self.tool_result_instruction
             .as_deref()
             .unwrap_or(Self::default_tool_result_instruction())
+    }
+
+    /// Get agent instructions with fallback to default
+    pub fn agent_instructions(&self) -> &str {
+        self.agent_instructions
+            .as_deref()
+            .unwrap_or(Self::default_agent_instructions())
+    }
+
+    /// Get UI instructions with fallback to default
+    pub fn ui_instructions(&self) -> &str {
+        self.ui_instructions
+            .as_deref()
+            .unwrap_or(Self::default_ui_instructions())
+    }
+
+    /// Get language instructions with fallback to default
+    pub fn language_instructions(&self) -> &str {
+        self.language_instructions
+            .as_deref()
+            .unwrap_or(Self::default_language_instructions())
+    }
+
+    /// Get max steps error with fallback to default
+    pub fn agent_max_steps_error(&self) -> &str {
+        self.agent_max_steps_error
+            .as_deref()
+            .unwrap_or(Self::default_agent_max_steps_error())
+    }
+
+    /// Get no tools guidance with fallback to default
+    pub fn no_tools_guidance(&self) -> &str {
+        self.no_tools_guidance
+            .as_deref()
+            .unwrap_or(Self::default_no_tools_guidance())
     }
 }
 

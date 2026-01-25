@@ -18,7 +18,12 @@ pub struct DynamicComponent {
     pub component_type: String,
 
     /// Unique session-based incrementing ID.
+    #[serde(default)]
     pub id: i64,
+
+    /// Data source reference (e.g. "step_0") for late-binding hydration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_source: Option<String>,
 
     /// Dynamic properties hydrated from MCP data per TOML schema.
     /// Keys must match `required_fields` + `optional_fields` from schema.
@@ -38,9 +43,16 @@ impl DynamicComponent {
         Self {
             component_type: name.into(),
             id: 0,
+            data_source: None,
             props: HashMap::new(),
             children: None,
         }
+    }
+
+    /// Set the data source for late-binding.
+    pub fn with_data_source(mut self, source: impl Into<String>) -> Self {
+        self.data_source = Some(source.into());
+        self
     }
 
     /// Set the unique ID for this component.
