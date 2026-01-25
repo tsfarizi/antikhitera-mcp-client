@@ -8,13 +8,29 @@ use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
 
-/// Write both client.toml and model.toml to the temp directory
-fn write_configs(dir: &Path, client_content: &str, model_content: &str) -> std::path::PathBuf {
+/// Write client.toml, model.toml, and ui.toml to the temp directory
+fn write_configs(
+    dir: &Path,
+    client_content: &str,
+    model_content: &str,
+    ui_content: &str,
+) -> std::path::PathBuf {
     let client_path = dir.join("client.toml");
     let model_path = dir.join("model.toml");
+    let ui_path = dir.join("ui.toml");
     fs::write(&client_path, client_content).expect("Failed to write client.toml");
     fs::write(&model_path, model_content).expect("Failed to write model.toml");
+    fs::write(&ui_path, ui_content).expect("Failed to write ui.toml");
     client_path
+}
+
+fn minimal_ui() -> &'static str {
+    r#"
+[components.text]
+required_fields = ["content"]
+field_types = { content = "string" }
+is_container = false
+"#
 }
 
 fn minimal_client() -> &'static str {
@@ -39,7 +55,7 @@ prompt_template = "You are a helpful assistant."
 #[test]
 fn to_raw_toml_contains_required_fields() {
     let dir = tempdir().expect("tempdir");
-    let path = write_configs(dir.path(), minimal_client(), minimal_model());
+    let path = write_configs(dir.path(), minimal_client(), minimal_model(), minimal_ui());
 
     let config = AppConfig::load(Some(&path)).expect("load config");
     let raw = config.to_raw_toml();
@@ -53,7 +69,7 @@ fn to_raw_toml_contains_required_fields() {
 #[test]
 fn to_raw_toml_includes_provider_details() {
     let dir = tempdir().expect("tempdir");
-    let path = write_configs(dir.path(), minimal_client(), minimal_model());
+    let path = write_configs(dir.path(), minimal_client(), minimal_model(), minimal_ui());
 
     let config = AppConfig::load(Some(&path)).expect("load config");
     let raw = config.to_raw_toml();
@@ -79,7 +95,7 @@ model = "gemini-1.5-flash"
 prompt_template = "Template"
 system_prompt = "Be helpful and concise."
 "#;
-    let path = write_configs(dir.path(), client_content, model_content);
+    let path = write_configs(dir.path(), client_content, model_content, minimal_ui());
 
     let config = AppConfig::load(Some(&path)).expect("load config");
     let raw = config.to_raw_toml();

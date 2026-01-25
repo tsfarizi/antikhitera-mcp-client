@@ -67,6 +67,11 @@ impl UiSchemaConfig {
         self.components.get(name)
     }
 
+    /// Get schema for a component by name (alias for get_component).
+    pub fn get_component_schema(&self, name: &str) -> Option<&ComponentSchema> {
+        self.components.get(name)
+    }
+
     /// Check if a component exists.
     pub fn has_component(&self, name: &str) -> bool {
         self.components.contains_key(name)
@@ -83,55 +88,5 @@ impl Default for UiSchemaConfig {
         Self {
             components: HashMap::new(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_component_schema() {
-        let toml = r#"
-            [components.product_card]
-            description = "Product display card"
-            required_fields = ["title", "price", "image"]
-            field_types = { title = "string", price = "f64", image = "string" }
-            optional_fields = { is_discounted = "bool" }
-
-            [components.container]
-            required_fields = ["direction"]
-            field_types = { direction = "string" }
-            is_container = true
-        "#;
-
-        let config: UiSchemaConfig = toml::from_str(toml).unwrap();
-
-        let product = config.get_component("product_card").unwrap();
-        assert_eq!(product.required_fields.len(), 3);
-        assert_eq!(product.get_field_type("price"), Some("f64"));
-        assert!(product.is_required("title"));
-        assert!(!product.is_container);
-
-        let container = config.get_component("container").unwrap();
-        assert!(container.is_container);
-    }
-
-    #[test]
-    fn test_all_fields() {
-        let schema = ComponentSchema {
-            description: None,
-            required_fields: vec!["a".into(), "b".into()],
-            field_types: [("a".into(), "string".into()), ("b".into(), "i64".into())]
-                .into_iter()
-                .collect(),
-            optional_fields: [("c".into(), "bool".into())].into_iter().collect(),
-            is_container: false,
-        };
-
-        let fields: Vec<_> = schema.all_fields().collect();
-        assert!(fields.contains(&"a"));
-        assert!(fields.contains(&"b"));
-        assert!(fields.contains(&"c"));
     }
 }

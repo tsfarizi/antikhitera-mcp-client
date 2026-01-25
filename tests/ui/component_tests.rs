@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 #[test]
 fn test_component_creation() {
     let component = DynamicComponent::new("product_card");
-    assert_eq!(component.component_name, "product_card");
+    assert_eq!(component.component_type, "product_card");
     assert!(component.props.is_empty());
     assert!(!component.has_children());
 }
@@ -36,8 +36,8 @@ fn test_nested_container() {
     assert!(container.has_children());
     let children = container.children.as_ref().unwrap();
     assert_eq!(children.len(), 2);
-    assert_eq!(children[0].component_name, "product_card");
-    assert_eq!(children[1].component_name, "text");
+    assert_eq!(children[0].component_type, "product_card");
+    assert_eq!(children[1].component_type, "text");
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn test_serialization_format() {
 
     // Verify "type" field is used (not "component_name")
     assert_eq!(parsed["type"], "text");
-    assert_eq!(parsed["props"]["content"], "Hello World");
+    assert_eq!(parsed["content"], "Hello World"); // Flattened
     // No children field when None
     assert!(parsed.get("children").is_none());
 }
@@ -58,15 +58,13 @@ fn test_serialization_format() {
 fn test_deserialization() {
     let json_str = r#"{
         "type": "product_card",
-        "props": {
-            "title": "MacBook Pro",
-            "price": 2499.99,
-            "image": "base64encoded..."
-        }
+        "title": "MacBook Pro",
+        "price": 2499.99,
+        "image": "base64encoded..."
     }"#;
 
     let component: DynamicComponent = serde_json::from_str(json_str).unwrap();
-    assert_eq!(component.component_name, "product_card");
+    assert_eq!(component.component_type, "product_card");
     assert_eq!(component.get_string_prop("title"), Some("MacBook Pro"));
     assert_eq!(component.get_f64_prop("price"), Some(2499.99));
 }
