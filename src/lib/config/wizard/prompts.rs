@@ -1,6 +1,13 @@
 //! Interactive prompt functions (Single Responsibility)
 
 use super::ui;
+use crossterm::{
+    cursor,
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    execute,
+    style::{Color, Print, ResetColor, SetForegroundColor},
+    terminal::{disable_raw_mode, enable_raw_mode},
+};
 use std::error::Error;
 use std::io::{self, Write};
 
@@ -29,13 +36,85 @@ pub fn prompt_text(label: &str, default: Option<&str>) -> Result<String, Box<dyn
 }
 
 /// Prompt for password (hidden input on supported terminals)
-pub fn prompt_password(label: &str) -> Result<String, Box<dyn Error>> {
-    print!("  {}: ", label);
+pub fn prompt_password(label: &str, default: Option<&str>) -> Result<String, Box<dyn Error>> {
+    if let Some(d) = default {
+        print!("  {} [{}]: ", label, d);
+    } else {
+        print!("  {}: ", label);
+    }
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
+    let trimmed = input.trim();
 
-    Ok(input.trim().to_string())
+    if trimmed.is_empty() {
+        if let Some(d) = default {
+            return Ok(d.to_string());
+        }
+    }
+
+    Ok(trimmed.to_string())
+}
+
+/// Prompt for selection using arrow keys
+pub fn prompt_select(label: &str, options: &[&str]) -> Result<String, Box<dyn Error>> {
+    println!("  {}:", label);
+    let mut selected = 0;
+
+    enable_raw_mode()?;
+    execute!(io::stdout(), cursor::Hide)?;
+
+    loop {
+        for (i, option) in options.iter().enumerate() {
+            if i == selected {
+                execute!(
+                    io::stdout(),
+                    SetForegroundColor(Color::Cyan),
+                    Print(format!("    > {}\r\n", option)),
+                    ResetColor
+                )?;
+            } else {
+                execute!(io::stdout(), Print(format!("      {}\r\n", option)))?;
+            }
+        }
+
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Up => {
+                        if selected > 0 {
+                            selected -= 1;
+                        } else {
+                            selected = options.len() - 1;
+                        }
+                    }
+                    KeyCode::Down => {
+                        if selected < options.len() - 1 {
+                            selected += 1;
+                        } else {
+                            selected = 0;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        break;
+                    }
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        disable_raw_mode()?;
+                        execute!(io::stdout(), cursor::Show)?;
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        execute!(io::stdout(), cursor::MoveUp(options.len() as u16))?;
+    }
+
+    disable_raw_mode()?;
+    execute!(io::stdout(), cursor::Show)?;
+
+    Ok(options[selected].to_string())
 }
 
 /// Prompt for comma-separated list
