@@ -74,14 +74,14 @@ fn handle_key(state: &mut ChatState, key: KeyEvent) -> InputAction {
                 return InputAction::Command(cmd);
             }
 
-            if key.modifiers.contains(KeyModifiers::CONTROL) {
+            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                state.insert_char('\n');
+                InputAction::None
+            } else {
                 if state.input.is_empty() {
                     return InputAction::None;
                 }
                 InputAction::Submit
-            } else {
-                state.insert_char('\n');
-                InputAction::None
             }
         }
         KeyCode::Esc => {

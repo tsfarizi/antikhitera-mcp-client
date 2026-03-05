@@ -6,6 +6,7 @@
 //! - `[prompts]` - System prompt template and configurable prompts
 //! - `[[tools]]` - Tool definitions synced from MCP servers
 
+use crate::config::app::PromptsConfig;
 use crate::constants::MODEL_CONFIG_PATH;
 use std::collections::HashSet;
 use std::error::Error;
@@ -25,15 +26,47 @@ model = "{default_model}"
 # Prompts configuration
 [prompts]
 template = """
-You are a helpful AI assistant.
-
-{{{{custom_instruction}}}}
-
-{{{{language_guidance}}}}
-
-{{{{tool_guidance}}}}
+{}
 """
+
+tool_guidance = """
+{}
+"""
+
+fallback_guidance = "{}"
+
+json_retry_message = "{}"
+
+tool_result_instruction = """
+{}
+"""
+
+agent_instructions = """
+{}
+"""
+
+ui_instructions = """
+{}
+"""
+
+language_instructions = """
+{}
+"""
+
+agent_max_steps_error = "{}"
+
+no_tools_guidance = "{}"
 "#,
+        PromptsConfig::default_template(),
+        PromptsConfig::default_tool_guidance(),
+        PromptsConfig::default_fallback_guidance().replace("\"", "\\\""),
+        PromptsConfig::default_json_retry_message().replace("\"", "\\\""),
+        PromptsConfig::default_tool_result_instruction(),
+        PromptsConfig::default_agent_instructions(),
+        PromptsConfig::default_ui_instructions(),
+        PromptsConfig::default_language_instructions(),
+        PromptsConfig::default_agent_max_steps_error().replace("\"", "\\\""),
+        PromptsConfig::default_no_tools_guidance().replace("\"", "\\\""),
         provider_id = provider_id,
         default_model = default_model,
     );
