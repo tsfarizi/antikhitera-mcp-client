@@ -20,7 +20,10 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
     ui::print_info("Let's set up your MCP client.\n");
     ui::print_section("PROVIDER SETUP");
 
-    let provider_type = prompts::prompt_text("Provider Type (e.g. gemini, ollama, openai)", None)?;
+    let provider_type = prompts::prompt_select(
+        "Provider Type",
+        &["gemini", "ollama", "openai", "anthropic"],
+    )?;
     let provider_type_display = to_title_case(&provider_type);
     ui::print_hint(&format!("Saved as: {}", provider_type_display));
 
@@ -34,7 +37,10 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
     let endpoint = prompts::prompt_text("API Endpoint", Some(&default_endpoint))?;
 
     let api_key_env = format!("{}_API_KEY", provider_type.to_uppercase());
-    let api_key = prompts::prompt_password(&format!("API Key (saved to .env as {})", api_key_env))?;
+    let api_key = prompts::prompt_password(
+        &format!("API Key (saved to .env as {})", api_key_env),
+        Some(&api_key_env),
+    )?;
     ui::print_section("MODELS");
     let models = prompts::prompt_models()?;
 
