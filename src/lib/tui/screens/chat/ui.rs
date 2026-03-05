@@ -18,10 +18,10 @@ impl ChatUI {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Status bar
-                Constraint::Min(5),    // Messages area
+                Constraint::Length(3),  // Status bar
+                Constraint::Min(5),     // Messages area
                 Constraint::Length(10), // Input area
-                Constraint::Length(1), // Help bar
+                Constraint::Length(1),  // Help bar
             ])
             .split(area);
 
@@ -192,7 +192,7 @@ impl ChatUI {
             .title(if state.is_command() {
                 " Command (Enter to execute) "
             } else {
-                " Prompt (Ctrl+Enter to send) "
+                " Prompt (Enter to send) "
             });
 
         let para = Paragraph::new(lines)
@@ -210,9 +210,9 @@ impl ChatUI {
             ))
         } else {
             Line::from(vec![
-                Span::styled("Ctrl+Enter", theme::key_hint()),
-                Span::raw(": Send │ "),
                 Span::styled("Enter", theme::key_hint()),
+                Span::raw(": Send │ "),
+                Span::styled("Shift+Enter", theme::key_hint()),
                 Span::raw(": NewLine │ "),
                 Span::styled("/help", theme::key_hint()),
                 Span::raw(": Cmds │ "),
