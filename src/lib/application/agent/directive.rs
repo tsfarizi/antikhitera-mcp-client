@@ -4,4 +4,5 @@ use serde_json::Value;
 pub enum AgentDirective {
     Final { response: Value },
     CallTool { tool: String, input: Value },
+    CallTools(Vec<(String, Value)>),
 }

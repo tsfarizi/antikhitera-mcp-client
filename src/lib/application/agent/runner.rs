@@ -151,6 +151,7 @@ impl<P: ModelProvider> Agent<P> {
                     });
 
                     // Use configurable tool result instruction
+                    // Use configurable tool result instruction
                     let tool_result_instruction = self.client.prompts().tool_result_instruction();
                     next_prompt = json!({
                         "tool_result": {
@@ -160,6 +161,66 @@ impl<P: ModelProvider> Agent<P> {
                             "output": execution.output,
                             "message": execution.message,
                         },
+                        "instruction": tool_result_instruction,
+                    })
+                    .to_string();
+                }
+                AgentDirective::CallTools(tools) => {
+                    if remaining_steps == 0 {
+                        warn!("Agent exceeded max tool interactions");
+                        return Err(AgentError::InvalidResponse(
+                            self.client.prompts().agent_max_steps_error().into(),
+                        ));
+                    }
+                    remaining_steps -= 1;
+                    info!(
+                        count = tools.len(),
+                        "Agent requested parallel tool execution"
+                    );
+
+                    let executions = self.runtime.clone().execute_parallel(tools).await?;
+                    let mut aggregated_results = Vec::new();
+
+                    for exec_result in executions {
+                        match exec_result {
+                            Ok(execution) => {
+                                logs.push(format!(
+                                    "Tool '{}' executed (success: {})",
+                                    execution.tool, execution.success
+                                ));
+                                if let Some(message) = execution.message.as_deref() {
+                                    logs.push(format!(
+                                        "Tool message: {}",
+                                        McpClient::<P>::summarise(message)
+                                    ));
+                                }
+
+                                steps.push(AgentStep {
+                                    tool: execution.tool.clone(),
+                                    input: execution.input.clone(),
+                                    success: execution.success,
+                                    output: execution.output.clone(),
+                                    message: execution.message.clone(),
+                                });
+
+                                aggregated_results.push(json!({
+                                    "tool": execution.tool,
+                                    "input": execution.input,
+                                    "success": execution.success,
+                                    "output": execution.output,
+                                    "message": execution.message,
+                                }));
+                            }
+                            Err(e) => {
+                                warn!("One of the parallel tools failed: {}", e);
+                                logs.push(format!("Parallel tool failure: {}", e));
+                            }
+                        }
+                    }
+
+                    let tool_result_instruction = self.client.prompts().tool_result_instruction();
+                    next_prompt = json!({
+                        "tool_results": aggregated_results,
                         "instruction": tool_result_instruction,
                     })
                     .to_string();
