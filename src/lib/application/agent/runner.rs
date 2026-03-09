@@ -4,8 +4,9 @@ use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use crate::application::client::{ChatRequest, McpClient};
 use crate::model::ModelProvider;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
+use sysinfo::System;
 use tracing::{debug, info, warn};
 
 /// Maximum retry attempts for JSON parsing failures
@@ -36,7 +37,7 @@ impl<P: ModelProvider> Agent<P> {
         let mut steps = Vec::new();
         let mut logs = Vec::new();
 
-        let context = self.runtime.build_context().await;
+        let context = self.runtime.build_context(Some(&prompt)).await;
         let instructions = self
             .runtime
             .compose_system_instructions(&context, self.client.prompts());
@@ -59,10 +60,22 @@ impl<P: ModelProvider> Agent<P> {
 
         let mut remaining_steps = options.max_steps;
         let mut system_prompt_to_send = Some(system_prompt);
+        let mut system = System::new();
         let mut first_call = true;
         let initial_attachments = std::mem::take(&mut options.attachments);
 
         loop {
+            system.refresh_cpu_all();
+            system.refresh_memory();
+            let rss_mb = system.used_memory() / 1024 / 1024;
+            let cpu = system.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>()
+                / system.cpus().len().max(1) as f32;
+            debug!(
+                rss_mb = rss_mb,
+                cpu_usage = cpu,
+                "Agent resource utilization"
+            );
+
             debug!(
                 session = session_id.as_deref(),
                 remaining_steps, "Submitting agent turn to model provider"
@@ -165,7 +178,8 @@ impl<P: ModelProvider> Agent<P> {
         let outcome = self.run(prompt, options).await?;
 
         // 2. Process the response to embed tool results by replacing IDs with actual data
-        let processed_response = self.embed_tool_results_sync(outcome.response.clone(), &outcome.steps);
+        let processed_response =
+            self.embed_tool_results_sync(outcome.response.clone(), &outcome.steps);
 
         // 3. If the processed response is a string (meaning the LLM didn't follow JSON format),
         // wrap it in a proper structure with content field
@@ -203,7 +217,10 @@ impl<P: ModelProvider> Agent<P> {
                 // 1. Check if the entire string is just a step reference (e.g., "step_0")
                 // In this case, we replace the whole string with the actual data object/array
                 if (s.starts_with("step_") || s.starts_with("result_")) && !s.contains(' ') {
-                    if let Some(step_idx) = s.strip_prefix("step_").or_else(|| s.strip_prefix("result_")) {
+                    if let Some(step_idx) = s
+                        .strip_prefix("step_")
+                        .or_else(|| s.strip_prefix("result_"))
+                    {
                         if let Ok(idx) = step_idx.parse::<usize>() {
                             // Try 0-based index first, then 1-based index (if idx > 0)
                             if let Some(step) = steps.get(idx) {
@@ -228,7 +245,7 @@ impl<P: ModelProvider> Agent<P> {
                 for i in (0..=steps.len()).rev() {
                     let step_pattern = format!("step_{}", i);
                     let result_pattern = format!("result_{}", i);
-                    
+
                     if result_str.contains(&step_pattern) || result_str.contains(&result_pattern) {
                         // Resolve the index: if i is out of bounds, try i-1
                         let step_to_use = if i < steps.len() {
@@ -243,9 +260,10 @@ impl<P: ModelProvider> Agent<P> {
                             let data = self.extract_result_data(&step.output);
                             let replacement = match &data {
                                 Value::String(inner_s) => inner_s.clone(),
-                                _ => serde_json::to_string(&data).unwrap_or_else(|_| "null".to_string()),
+                                _ => serde_json::to_string(&data)
+                                    .unwrap_or_else(|_| "null".to_string()),
                             };
-                            
+
                             result_str = result_str.replace(&step_pattern, &replacement);
                             result_str = result_str.replace(&result_pattern, &replacement);
                             modified = true;

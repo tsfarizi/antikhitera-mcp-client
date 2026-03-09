@@ -1,14 +1,20 @@
 use super::{AgentDirective, AgentError, ToolRuntime, Value};
+use std::time::Instant;
+use tracing::debug;
 
 impl ToolRuntime {
     pub fn parse_agent_action(&self, content: &str) -> Result<AgentDirective, AgentError> {
-        if let Some(value) = extract_json(content) {
+        let start_time = Instant::now();
+        let result = if let Some(value) = extract_json(content) {
             self.parse_action_value(value)
         } else {
             Err(AgentError::InvalidResponse(
                 "expected JSON object in agent response".into(),
             ))
-        }
+        };
+        let elapsed = start_time.elapsed();
+        debug!(latency_us = ?elapsed.as_micros(), "Action parsing completed");
+        result
     }
 
     fn parse_action_value(&self, value: Value) -> Result<AgentDirective, AgentError> {

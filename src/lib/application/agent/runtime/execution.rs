@@ -1,4 +1,5 @@
 use super::{ToolError, ToolInvokeError, ToolRuntime, Value};
+use std::time::Instant;
 use tracing::{debug, info, warn};
 
 pub(crate) struct ToolExecution {
@@ -16,7 +17,7 @@ impl ToolRuntime {
         input: Value,
     ) -> Result<ToolExecution, ToolError> {
         if tool_name.eq_ignore_ascii_case("list_tools") {
-            let manifest = self.build_context().await;
+            let manifest = self.build_context(None).await;
             let output = serde_json::to_value(&manifest).unwrap_or_else(|_| Value::Null);
             debug!("Agent requested tool catalogue via list_tools");
             let execution = ToolExecution {
@@ -55,12 +56,15 @@ impl ToolRuntime {
         };
 
         debug!(tool = %tool_name, server = %server_name, "Dispatching tool via MCP");
+        let start_time = Instant::now();
         match self
             .bridge
             .invoke_tool(server_name, &tool_name, arguments)
             .await
         {
             Ok(result) => {
+                let elapsed = start_time.elapsed();
+                info!(latency_ms = ?elapsed.as_millis(), tool = %tool_name, "MCP tool execution round-trip completed");
                 let is_error = result
                     .get("isError")
                     .and_then(Value::as_bool)
