@@ -19,11 +19,8 @@ pub async fn tools_handler<P: ModelProvider>(
     State(state): State<Arc<ServerState<P>>>,
 ) -> Json<ToolInventoryResponse> {
     let client = state.client();
-    let runtime = ToolRuntime::new(
-        client.tools().to_vec(),
-        client.server_bridge(),
-    );
-    let context = runtime.build_context().await;
+    let runtime = ToolRuntime::new(client.tools().to_vec(), client.server_bridge());
+    let context = runtime.build_context(None).await;
     debug!(
         tool_count = context.tools.len(),
         server_count = context.servers.len(),
