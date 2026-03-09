@@ -1,4 +1,6 @@
 use super::{ToolError, ToolInvokeError, ToolRuntime, Value};
+use futures::stream::{FuturesUnordered, StreamExt};
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -89,6 +91,40 @@ impl ToolRuntime {
                 })
             }
         }
+    }
+
+    pub(crate) async fn execute_parallel(
+        &self,
+        tools: Vec<(String, Value)>,
+    ) -> Result<Vec<Result<ToolExecution, ToolError>>, ToolError> {
+        let mut futures = FuturesUnordered::new();
+
+        for (tool_name, input) in tools {
+            let runtime = self.clone();
+
+            futures.push(async move {
+                // Apply bounded concurrency backpressure using semaphore
+                let _permit = runtime.execution_semaphore.acquire().await.map_err(|_| {
+                    ToolError::Execution {
+                        tool: tool_name.clone(),
+                        source: ToolInvokeError::NotConfigured {
+                            server: "local_agent".into(),
+                        },
+                    }
+                })?;
+
+                // Track execution wait and process times individually
+                let result = runtime.execute(&tool_name, input).await;
+                result
+            });
+        }
+
+        let mut results = Vec::new();
+        while let Some(res) = futures.next().await {
+            results.push(res);
+        }
+
+        Ok(results)
     }
 }
 

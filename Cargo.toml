@@ -1,6 +1,6 @@
 [package]
 name = "antikhitera-mcp-client"
-version = "0.6.8"
+version = "0.7.0"
 edition = "2024"
 default-run = "menu"
 
@@ -33,6 +33,7 @@ crossterm = "0.28"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 sysinfo = "0.38.3"
+futures = "0.3.32"
 
 [dev-dependencies]
 tempfile = "3.10"

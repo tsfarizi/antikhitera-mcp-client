@@ -278,7 +278,10 @@ impl<P: ModelProvider> McpClient<P> {
         } else {
             // Normal mode: include system prompt and history
             let history = {
+                let start_wait = std::time::Instant::now();
                 let mut sessions = self.sessions.lock().await;
+                let elapsed = start_wait.elapsed();
+                tracing::debug!(lock_wait_us = ?elapsed.as_micros(), "Acquired session lock for reading history");
                 sessions.entry(session_id.clone()).or_default().clone()
             };
             debug!(
@@ -439,7 +442,11 @@ impl<P: ModelProvider> McpClient<P> {
         user_prompt: String,
         assistant: ChatMessage,
     ) {
+        let start_wait = std::time::Instant::now();
         let mut sessions = self.sessions.lock().await;
+        let elapsed = start_wait.elapsed();
+        tracing::debug!(lock_wait_us = ?elapsed.as_micros(), "Acquired session lock to persist exchange");
+
         let history = sessions.entry(session_id.to_string()).or_default();
         history.push(ChatMessage::new(MessageRole::User, user_prompt));
         history.push(assistant);
