@@ -1,52 +1,74 @@
-[package]
-name = "antikhitera-mcp-client"
-version = "0.7.0"
+[workspace]
+resolver = "2"
+members = [
+    "antikythera-core",
+    "antikythera-sdk",
+    "antikythera-cli",
+]
+
+[workspace.package]
+version = "0.8.0"
 edition = "2024"
-default-run = "menu"
+authors = ["antikythera Team"]
+license = "MIT"
+repository = "https://github.com/antikythera/mcp-client"
 
-[lib]
-path = "src/lib/mod.rs"
-
-[dependencies]
+[workspace.dependencies]
+# Async runtime
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "process", "io-std", "io-util"] }
+tokio-stream = "0.1"
+async-trait = "0.1"
+futures = "0.3.32"
+
+# HTTP and networking (for core only)
 reqwest = { version = "0.12", features = ["json", "stream"] }
 reqwest-eventsource = "0.6"
-tokio-stream = "0.1"
+axum = { version = "0.8", features = ["json"] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-clap = { version = "4.5", features = ["derive"] }
-thiserror = "2.0.17"
-async-trait = "0.1"
-uuid = { version = "1.8", features = ["v4"] }
-
 toml = "0.9.8"
-axum = { version = "0.8", features = ["json"] }
-utoipa = "5.4"
-utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
-tracing = { version = "0.1", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-tower-http = { version = "0.6", features = ["cors"] }
-dotenvy = "0.15"
-shellexpand = "3.0"
+postcard = { version = "1.0", features = ["alloc"] }
+
+# CLI and TUI
+clap = { version = "4.5", features = ["derive"] }
 ratatui = "0.29"
 crossterm = "0.28"
+
+# Error handling and logging
+thiserror = "2.0.17"
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+# Utilities
+uuid = { version = "1.8", features = ["v4"] }
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 sysinfo = "0.38.3"
-futures = "0.3.32"
+dotenvy = "0.15"
+shellexpand = "3.0"
 
-[dev-dependencies]
-tempfile = "3.10"
+# WASM support (for SDK)
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+ffi-support = "0.4"
 
-[[bin]]
-name = "menu"
-path = "src/bin/main.rs"
+# API documentation (for core)
+utoipa = "5.4"
+utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
 
-[[bin]]
-name = "rest"
-path = "src/bin/rest.rs"
+# Multi-Agent support (optional)
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+google-cloud-storage = { version = "0.15" }
 
-[[bin]]
-name = "stdio"
-path = "src/bin/stdio.rs"
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
 
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true

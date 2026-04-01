@@ -1,0 +1,86 @@
+[package]
+name = "antikythera-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core MCP protocol, transport layers, and agent runtime"
+
+[features]
+default = ["native-transport"]
+
+# Cloud integrations (Google Cloud Storage, Secret Manager)
+gcp = ["dep:reqwest", "dep:reqwest-eventsource"]
+
+# Sandboxed tool execution (WASM runtime)
+wasm-runtime = ["dep:wasmtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+
+# OS-level process management (Stdio transport)
+native-transport = ["tokio/process", "dep:sysinfo"]
+
+# Configuration cache (Postcard binary format)
+cache = ["dep:postcard"]
+
+# Wizard features (interactive setup)
+wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
+
+# Multi-Agent orchestration support
+multi-agent = ["dep:redis", "dep:google-cloud-storage"]
+
+# Full-featured build (all capabilities)
+full = ["gcp", "wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "dep:axum", "dep:tower-http", "dep:utoipa", "dep:utoipa-swagger-ui"]
+
+[dependencies]
+# Core async runtime
+tokio.workspace = true
+tokio-stream.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+
+# HTTP and networking
+reqwest = { workspace = true, optional = true }
+reqwest-eventsource = { workspace = true, optional = true }
+
+# REST API server (optional - for backward compatibility)
+axum = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+utoipa-swagger-ui = { workspace = true, optional = true }
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+postcard = { workspace = true, optional = true }
+
+# Error handling and logging
+thiserror.workspace = true
+tracing.workspace = true
+
+# Utilities
+uuid.workspace = true
+base64.workspace = true
+chrono.workspace = true
+sysinfo = { workspace = true, optional = true }
+dotenvy.workspace = true
+shellexpand.workspace = true
+clap = { workspace = true, optional = true }
+
+# TUI and wizard (optional)
+crossterm = { workspace = true, optional = true }
+ratatui = { workspace = true, optional = true }
+
+# WASM support (optional)
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+
+# WASM runtime (optional, for sandboxed execution)
+wasmtime = { version = "15.0", optional = true }
+
+# Multi-Agent support (optional)
+redis = { workspace = true, optional = true }
+google-cloud-storage = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = "3.10"
+tokio = { version = "1.39", features = ["test-util"] }

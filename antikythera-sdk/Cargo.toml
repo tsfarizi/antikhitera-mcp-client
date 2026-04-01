@@ -1,0 +1,61 @@
+[package]
+name = "antikythera-sdk"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "High-level API wrapper with FFI and WASM bindings"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Default: minimal WASM build with single agent support
+default = ["wasm", "single-agent"]
+
+# WASM support (optional)
+wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+
+# FFI support for C bindings
+ffi = ["dep:ffi-support"]
+
+# Agent modes - these control what antikythera-core includes
+single-agent = ["antikythera-core/native-transport"]
+multi-agent = ["antikythera-core/multi-agent"]
+
+# Optional capabilities
+cloud = ["antikythera-core/gcp"]
+wasm-sandbox = ["antikythera-core/wasm-runtime"]
+
+# Full-featured build (not recommended for WASM - large binary)
+full = ["wasm", "multi-agent", "cloud", "antikythera-core/full"]
+
+[dependencies]
+# Core with configurable features - SDK doesn't force features on core
+# Features are controlled by SDK's own features
+antikythera-core = { path = "../antikythera-core", version = "0.8.0", default-features = false }
+
+# Core async runtime (wasm-compatible)
+tokio = { version = "1.39", default-features = false, features = ["macros", "rt"] }
+futures = "0.3.32"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling and logging
+thiserror = "2.0.17"
+tracing = "0.1"
+
+# WASM support (optional)
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = "0.3"
+console_error_panic_hook = { version = "0.1", optional = true }
+tracing-wasm = { version = "0.2", optional = true }
+
+# FFI support (optional)
+ffi-support = { version = "0.4", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
