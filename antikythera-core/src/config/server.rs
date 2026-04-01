@@ -20,13 +20,13 @@
 //! url = "https://mcp-server.example.com"
 //! ```
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use shellexpand;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Transport type for MCP server connection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransportType {
     /// STDIO transport - spawns subprocess
     Stdio,
@@ -37,7 +37,7 @@ pub enum TransportType {
 /// Configuration for an MCP server connection.
 ///
 /// MCP servers can be connected via STDIO (subprocess) or HTTP.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerConfig {
     /// Unique name for this server
     pub name: String,

@@ -97,7 +97,6 @@ cargo build --release
 | **[🔌 FFI Reference](FFI_DOCUMENTATION.md)** | C/C++ API reference, usage examples (C, C++, Python, Node.js) |
 | **[🛠️ Build Guide](BUILD.md)** | Build instructions, feature flags, WASM compilation |
 | **[🃏 Postcard Cache](POSTCARD_CACHE.md)** | Binary configuration cache, performance benefits |
-| **[📋 Phase 2 Plan](PHASE2_IMPLEMENTATION.md)** | Multi-agent architecture, sandboxing, memory abstraction |
 
 ### Quick Reference
 

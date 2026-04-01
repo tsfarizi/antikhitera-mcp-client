@@ -1,5 +1,5 @@
 use super::app::{PromptsConfig, RestServerConfig};
-use super::cache::{ConfigCacheManager, load_config_with_cache};
+use super::cache::ConfigCacheManager;
 use super::error::ConfigError;
 use super::provider::{ModelProviderConfig, RawProviderConfig};
 use super::server::{RawServer, ServerConfig};
@@ -7,6 +7,7 @@ use super::tool::{RawTool, ToolConfig};
 use super::{CONFIG_PATH, ENV_PATH};
 use crate::constants::MODEL_CONFIG_PATH;
 use dotenvy::from_filename;
+use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::fs;
 use std::io;
@@ -17,18 +18,14 @@ use tracing::{debug, warn};
 static ENV_LOADER: Once = Once::new();
 
 /// Global cache manager instance (lazy-initialized)
-static mut CACHE_MANAGER: Option<ConfigCacheManager> = None;
+static CACHE_MANAGER: OnceCell<ConfigCacheManager> = OnceCell::new();
 
 /// Get or initialize the cache manager
 fn get_cache_manager() -> &'static ConfigCacheManager {
-    unsafe {
-        if CACHE_MANAGER.is_none() {
-            // Use current directory's config folder for cache
-            let cache_dir = PathBuf::from("./config/.cache");
-            CACHE_MANAGER = Some(ConfigCacheManager::new(cache_dir));
-        }
-        CACHE_MANAGER.as_ref().unwrap()
-    }
+    CACHE_MANAGER.get_or_init(|| {
+        let cache_dir = PathBuf::from("./config/.cache");
+        ConfigCacheManager::new(cache_dir)
+    })
 }
 
 /// Raw configuration structure for client.toml (providers, servers, REST settings)
@@ -79,7 +76,6 @@ pub fn load_config(path: Option<&Path>) -> Result<super::AppConfig, ConfigError>
 
     // Use cache for faster loading
     let cache_manager = get_cache_manager();
-    let cache_path = cache_manager.get_cache_path(client_path);
     
     // Try to load from cache first
     if cache_manager.cache_exists(client_path) {

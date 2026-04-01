@@ -35,16 +35,6 @@
 //! [prompts]
 //! template = "You are a helpful assistant."
 //! ```
-//!
-//! ## Loading Configuration
-//!
-//! ```no_run
-//! use antikythera_core::config::AppConfig;
-//! use std::path::Path;
-//!
-//! let config = AppConfig::load(Some(Path::new("config/client.toml")))
-//!     .expect("Failed to load config");
-//! ```
 
 pub mod cache;
 pub mod app;

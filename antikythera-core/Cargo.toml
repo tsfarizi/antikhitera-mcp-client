@@ -56,6 +56,7 @@ postcard = { workspace = true, optional = true }
 # Error handling and logging
 thiserror.workspace = true
 tracing.workspace = true
+once_cell = "1.19"
 
 # Utilities
 uuid.workspace = true

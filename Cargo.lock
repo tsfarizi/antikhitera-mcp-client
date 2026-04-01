@@ -142,6 +142,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "google-cloud-storage",
+ "once_cell",
  "postcard",
  "ratatui",
  "redis",
