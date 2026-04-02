@@ -23,12 +23,17 @@
 mod context;
 mod directive;
 mod errors;
+mod memory;
 mod models;
 mod runner;
 mod runtime;
 
 pub use context::{ServerGuidance, ToolContext, ToolDescriptor};
 pub use errors::{AgentError, ToolError};
+pub use memory::{
+    AgentStateSnapshot, Attachment, ConversationTurn, FilesystemMemory, MemoryError,
+    MemoryProvider, StateMetadata, STATE_SCHEMA_VERSION,
+};
 pub use models::{AgentOptions, AgentOutcome, AgentStep};
 pub use runner::Agent;
 pub(crate) use runtime::ToolRuntime;
