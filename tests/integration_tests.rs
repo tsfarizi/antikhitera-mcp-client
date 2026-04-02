@@ -4,7 +4,9 @@
 //! are not available. Each skipped test provides clear instructions on how to
 //! set up the required dependencies.
 
-use crate::test_utils::*;
+mod test_utils;
+
+use test_utils::*;
 
 /// Example test that requires configuration files
 #[test]
@@ -119,76 +121,10 @@ fn test_full_integration() {
     // Your full integration test logic here
 }
 
-/// Helper function to print test setup instructions
-fn print_setup_instructions() {
-    println!("\n📋 Test Setup Instructions:");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!();
-    println!("1. Configuration Files:");
-    println!("   cp config.example/client.toml config/client.toml");
-    println!("   cp config.example/model.toml config/model.toml");
-    println!();
-    println!("2. Local Provider (Ollama):");
-    println!("   # Install from https://ollama.ai");
-    println!("   ollama serve");
-    println!("   ollama pull llama3");
-    println!();
-    println!("3. Cloud Providers (Optional):");
-    println!("   export GEMINI_API_KEY=<your-gemini-key>");
-    println!("   export OPENAI_API_KEY=<your-openai-key>");
-    println!("   export ANTHROPIC_API_KEY=<your-anthropic-key>");
-    println!();
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-}
-
 /// Test to check test environment setup
 #[test]
 fn test_environment_check() {
-    println!("\n🔍 Checking test environment...\n");
-    
-    let mut all_good = true;
-    
-    // Check config
-    if config_available() {
-        println!("✅ Configuration files found");
-    } else {
-        println!("❌ Configuration files not found");
-        println!("   → Copy config.example/*.toml to config/\n");
-        all_good = false;
-    }
-    
-    // Check Ollama
-    if ollama_available() {
-        println!("✅ Ollama server running (port 11434)");
-    } else {
-        println!("❌ Ollama server not running");
-        println!("   → Run: ollama serve\n");
-        all_good = false;
-    }
-    
-    // Check API keys
-    let api_keys = [
-        ("GEMINI_API_KEY", "Gemini"),
-        ("OPENAI_API_KEY", "OpenAI"),
-        ("ANTHROPIC_API_KEY", "Anthropic"),
-    ];
-    
-    for (key, name) in api_keys.iter() {
-        if env_var_exists(key) {
-            println!("✅ {} API key set", name);
-        } else {
-            println!("ℹ️  {} API key not set (optional)", name);
-        }
-    }
-    
-    println!();
-    
-    if all_good {
-        println!("🎉 Test environment is ready!\n");
-    } else {
-        println!("⚠️  Some prerequisites are missing.\n");
-        print_setup_instructions();
-    }
+    check_environment();
     
     // This test always passes - it's just for checking environment
     assert!(true, "Environment check completed");
