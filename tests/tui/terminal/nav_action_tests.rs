@@ -1,6 +1,6 @@
 //! NavAction key mapping tests
 
-use antikhitera_mcp_client::tui::terminal::NavAction;
+use antikythera_core::tui::terminal::NavAction;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 
 fn make_key(code: KeyCode) -> KeyEvent {

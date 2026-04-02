@@ -1,6 +1,6 @@
 //! ChatState tests
 
-use antikhitera_mcp_client::tui::screens::chat::{ChatMessage, ChatState, MessageRole};
+use antikythera_core::tui::screens::chat::{ChatMessage, ChatState, MessageRole};
 
 #[test]
 fn test_chat_state_new() {

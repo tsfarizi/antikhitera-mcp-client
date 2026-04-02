@@ -1,6 +1,6 @@
 //! Menu navigation tests
 
-use antikhitera_mcp_client::tui::widgets::{Menu, MenuItem};
+use antikythera_core::tui::widgets::{Menu, MenuItem};
 
 #[test]
 fn test_menu_next_navigation() {

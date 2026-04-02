@@ -2,7 +2,7 @@
 //
 // Tests that spawn configured servers and verify JSON-RPC communication.
 
-use antikhitera_mcp_client::config::{AppConfig, ServerConfig};
+use antikythera_core::config::{AppConfig, ServerConfig};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;

@@ -3,7 +3,7 @@
 // Tests focused on configuration file loading and validation errors.
 // Updated to use split config: client.toml + model.toml
 
-use antikhitera_mcp_client::config::{AppConfig, ConfigError};
+use antikythera_core::config::{AppConfig, ConfigError};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;

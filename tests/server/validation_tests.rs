@@ -3,7 +3,7 @@
 // Tests that verify configuration references are valid.
 // These tests gracefully skip if config files don't exist.
 
-use antikhitera_mcp_client::config::AppConfig;
+use antikythera_core::config::AppConfig;
 use std::path::Path;
 
 #[test]

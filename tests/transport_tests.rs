@@ -3,8 +3,8 @@
 // Tests for HTTP transport configuration and JSON-RPC over HTTP.
 
 mod http_transport_tests {
-    use antikhitera_mcp_client::config::{ServerConfig, TransportType};
-    use antikhitera_mcp_client::tooling::transport::{
+    use antikythera_core::config::{ServerConfig, TransportType};
+    use antikythera_core::tooling::transport::{
         HttpTransport, HttpTransportConfig, TransportMode,
     };
     use std::collections::HashMap;
@@ -145,7 +145,7 @@ mod http_transport_tests {
 }
 
 mod http_transport_async_tests {
-    use antikhitera_mcp_client::tooling::transport::{
+    use antikythera_core::tooling::transport::{
         HttpTransport, HttpTransportConfig, McpTransport, TransportMode,
     };
     use std::collections::HashMap;

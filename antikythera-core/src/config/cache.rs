@@ -104,11 +104,21 @@ impl ConfigCacheManager {
         // Try to read and validate schema version
         match fs::read(&cache_path) {
             Ok(bytes) => {
+                // Try to deserialize as generic ConfigCache first
                 if let Ok(cache) = from_bytes::<ConfigCache<serde_json::Value>>(&bytes) {
-                    cache.is_valid()
-                } else {
-                    false
+                    // Check schema version
+                    if !cache.is_valid() {
+                        warn!(
+                            schema_version = cache.schema_version,
+                            expected = SCHEMA_VERSION,
+                            "Cache schema version mismatch"
+                        );
+                        return false;
+                    }
+                    return true;
                 }
+                // If deserialization fails, cache is invalid
+                false
             }
             Err(_) => false,
         }
@@ -333,38 +343,38 @@ mod tests {
     fn test_cache_validation() {
         let temp_dir = tempdir().unwrap();
         let manager = ConfigCacheManager::new(temp_dir.path().to_path_buf());
-        let source_path = Path::new("/test/config.toml");
+        let source_path = temp_dir.path().join("config.toml");
 
         // Cache doesn't exist initially
-        assert!(!manager.cache_exists(source_path));
+        assert!(!manager.cache_exists(&source_path));
 
         // Create cache
         let config = TestConfig {
             name: "test".to_string(),
             value: 42,
         };
-        manager.save_to_cache(config, source_path).unwrap();
+        manager.save_to_cache(config, &source_path).unwrap();
 
         // Cache exists now
-        assert!(manager.cache_exists(source_path));
+        assert!(manager.cache_exists(&source_path));
     }
 
     #[test]
     fn test_cache_invalidation() {
         let temp_dir = tempdir().unwrap();
         let manager = ConfigCacheManager::new(temp_dir.path().to_path_buf());
-        let source_path = Path::new("/test/config.toml");
+        let source_path = temp_dir.path().join("config.toml");
 
         // Create cache
         let config = TestConfig {
             name: "test".to_string(),
             value: 42,
         };
-        manager.save_to_cache(config, source_path).unwrap();
-        assert!(manager.cache_exists(source_path));
+        manager.save_to_cache(config, &source_path).unwrap();
+        assert!(manager.cache_exists(&source_path));
 
         // Invalidate cache
-        manager.invalidate_cache(source_path).unwrap();
-        assert!(!manager.cache_exists(source_path));
+        manager.invalidate_cache(&source_path).unwrap();
+        assert!(!manager.cache_exists(&source_path));
     }
 }

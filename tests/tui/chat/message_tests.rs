@@ -1,6 +1,6 @@
 //! ChatMessage tests
 
-use antikhitera_mcp_client::tui::screens::chat::{ChatMessage, MessageRole};
+use antikythera_core::tui::screens::chat::{ChatMessage, MessageRole};
 
 #[test]
 fn test_message_user() {

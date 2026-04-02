@@ -136,7 +136,7 @@ mod mask_sensitive_tests {
 }
 
 mod transport_config_tests {
-    use antikhitera_mcp_client::config::{ServerConfig, TransportType};
+    use antikythera_core::config::{ServerConfig, TransportType};
     use std::collections::HashMap;
     use std::path::PathBuf;
 

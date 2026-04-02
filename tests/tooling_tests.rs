@@ -2,8 +2,8 @@
 //
 // Tests for spawn_and_list_tools with different transport types.
 
-use antikhitera_mcp_client::application::tooling::spawn_and_list_tools;
-use antikhitera_mcp_client::config::{ServerConfig, TransportType};
+use antikythera_core::application::tooling::spawn_and_list_tools;
+use antikythera_core::config::{ServerConfig, TransportType};
 use std::collections::HashMap;
 
 #[tokio::test]

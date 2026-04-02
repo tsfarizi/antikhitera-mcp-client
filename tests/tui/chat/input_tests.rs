@@ -1,6 +1,6 @@
 //! Input handling tests
 
-use antikhitera_mcp_client::tui::screens::chat::ChatState;
+use antikythera_core::tui::screens::chat::ChatState;
 
 #[test]
 fn test_insert_char() {

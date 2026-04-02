@@ -1,7 +1,7 @@
-use antikhitera_mcp_client::application::client::{ClientConfig, McpClient};
-use antikhitera_mcp_client::application::services::chat::ChatService;
-use antikhitera_mcp_client::config::AppConfig;
-use antikhitera_mcp_client::infrastructure::model::DynamicModelProvider;
+use antikythera_core::application::client::{ClientConfig, McpClient};
+use antikythera_core::application::services::chat::ChatService;
+use antikythera_core::config::AppConfig;
+use antikythera_core::infrastructure::model::DynamicModelProvider;
 use std::sync::Arc;
 use tokio::task;
 

@@ -3,7 +3,7 @@
 // Tests for provider type detection and helper methods.
 // Updated to use split config: client.toml + model.toml
 
-use antikhitera_mcp_client::config::AppConfig;
+use antikythera_core::config::AppConfig;
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
