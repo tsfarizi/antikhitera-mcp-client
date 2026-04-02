@@ -104,12 +104,17 @@ impl ConfigCacheManager {
         // Try to read and validate schema version
         match fs::read(&cache_path) {
             Ok(bytes) => {
-                // Try to deserialize as generic ConfigCache first
-                if let Ok(cache) = from_bytes::<ConfigCache<serde_json::Value>>(&bytes) {
-                    // Check schema version
-                    if !cache.is_valid() {
+                // Try to deserialize just the schema version
+                // We use a minimal struct to check version
+                #[derive(serde::Deserialize)]
+                struct MinimalCache {
+                    schema_version: u32,
+                }
+                
+                if let Ok(minimal) = from_bytes::<MinimalCache>(&bytes) {
+                    if minimal.schema_version != SCHEMA_VERSION {
                         warn!(
-                            schema_version = cache.schema_version,
+                            schema_version = minimal.schema_version,
                             expected = SCHEMA_VERSION,
                             "Cache schema version mismatch"
                         );
