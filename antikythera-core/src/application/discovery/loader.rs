@@ -15,7 +15,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use antikhitera_mcp_client::application::discovery::{scanner, loader};
+//! use antikythera_core::application::discovery::{scanner, loader};
 //!
 //! // First scan for servers
 //! let mut servers = scanner::scan_folder("servers")?;

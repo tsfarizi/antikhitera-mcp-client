@@ -66,7 +66,7 @@ impl StartupDiscoveryResult {
 /// # Example
 ///
 /// ```ignore
-/// use antikhitera_mcp_client::application::discovery::startup;
+/// use antikythera_core::application::discovery::startup;
 ///
 /// let result = startup::run_startup_discovery(None).await;
 /// if result.has_loaded_servers() {

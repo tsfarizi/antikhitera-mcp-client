@@ -17,7 +17,7 @@
 //! ## Quick Start
 //!
 //! ```ignore
-//! use antikhitera_mcp_client::{Cli, run};
+//! use antikythera_core::{Cli, run};
 //!
 //! #[tokio::main]
 //! async fn main() {

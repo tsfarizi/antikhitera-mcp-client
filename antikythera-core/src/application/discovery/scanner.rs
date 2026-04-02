@@ -15,7 +15,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use antikhitera_mcp_client::application::discovery::scanner;
+//! use antikythera_core::application::discovery::scanner;
 //!
 //! let servers = scanner::scan_folder("servers")?;
 //! for server in servers {

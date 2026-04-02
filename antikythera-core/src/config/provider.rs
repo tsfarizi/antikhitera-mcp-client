@@ -143,7 +143,7 @@ impl ModelProviderConfig {
     /// # Examples
     ///
     /// ```
-    /// use antikhitera_mcp_client::config::ModelProviderConfig;
+    /// use antikythera_core::config::ModelProviderConfig;
     ///
     /// let provider = ModelProviderConfig {
     ///     id: "local".to_string(),
@@ -165,7 +165,7 @@ impl ModelProviderConfig {
     /// # Examples
     ///
     /// ```
-    /// use antikhitera_mcp_client::config::ModelProviderConfig;
+    /// use antikythera_core::config::ModelProviderConfig;
     ///
     /// let provider = ModelProviderConfig {
     ///     id: "google".to_string(),

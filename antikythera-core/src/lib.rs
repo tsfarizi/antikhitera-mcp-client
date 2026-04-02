@@ -9,6 +9,12 @@ pub mod constants;
 pub mod domain;
 pub mod infrastructure;
 
+#[macro_use]
+pub mod test_utils;
+
+#[cfg(test)]
+mod integration_tests;
+
 // Re-export commonly used types
 pub use application::agent::{Agent, AgentOptions, AgentOutcome, ToolDescriptor};
 pub use application::client::{ChatRequest, ClientConfig, McpClient};

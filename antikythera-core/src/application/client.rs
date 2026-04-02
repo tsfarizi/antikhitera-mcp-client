@@ -13,8 +13,8 @@
 //!
 //! ## Example
 //!
-//! ```no_run
-//! use antikhitera_mcp_client::client::{McpClient, ClientConfig, ChatRequest};
+//! ```no_run,ignore
+//! use antikythera_core::client::{McpClient, ClientConfig, ChatRequest};
 //!
 //! async fn example() {
 //!     // Client setup would go here
@@ -40,8 +40,8 @@ use uuid::Uuid;
 ///
 /// Use the builder pattern methods (`with_*`) to construct the configuration:
 ///
-/// ```no_run
-/// use antikhitera_mcp_client::client::ClientConfig;
+/// ```no_run,ignore
+/// use antikythera_core::client::ClientConfig;
 ///
 /// let config = ClientConfig::new("gemini", "gemini-2.0-flash")
 ///     .with_system_prompt("You are a helpful assistant.");

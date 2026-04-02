@@ -18,7 +18,7 @@
 //! ## Basic Scan and Load
 //!
 //! ```ignore
-//! use antikhitera_mcp_client::application::discovery;
+//! use antikythera_core::application::discovery;
 //!
 //! // Scan and load in one step
 //! let (servers, summary) = discovery::scan_and_load("servers").await?;
@@ -42,7 +42,7 @@
 //! ## Manual Two-Step Process
 //!
 //! ```ignore
-//! use antikhitera_mcp_client::application::discovery::{scanner, loader};
+//! use antikythera_core::application::discovery::{scanner, loader};
 //!
 //! // Step 1: Scan for servers
 //! let mut servers = scanner::scan_folder("servers")?;
