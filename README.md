@@ -93,10 +93,10 @@ cargo build --release
 
 | Document | Description |
 |:---------|:------------|
-| **[📖 CLI Guide](CLI_DOCUMENTATION.md)** | Complete CLI usage, commands, TUI interface, keyboard shortcuts |
-| **[🔌 FFI Reference](FFI_DOCUMENTATION.md)** | C/C++ API reference, usage examples (C, C++, Python, Node.js) |
-| **[🛠️ Build Guide](BUILD.md)** | Build instructions, feature flags, WASM compilation |
-| **[🃏 Postcard Cache](POSTCARD_CACHE.md)** | Binary configuration cache, performance benefits |
+| **[📖 CLI Guide](documentation/CLI_DOCUMENTATION.md)** | Complete CLI usage, commands, TUI interface, keyboard shortcuts |
+| **[🔌 FFI Reference](documentation/FFI_DOCUMENTATION.md)** | C/C++ API reference, usage examples (C, C++, Python, Node.js) |
+| **[🛠️ Build Guide](documentation/BUILD.md)** | Build instructions, feature flags, WASM compilation |
+| **[🃏 Postcard Cache](documentation/POSTCARD_CACHE.md)** | Binary configuration cache, performance benefits |
 
 ### Quick Reference
 
@@ -372,7 +372,7 @@ cargo clippy
 | **File Size** | ~5KB | ~2.5KB | **50% smaller** |
 | **Memory** | ~20KB | ~10KB | **50% less** |
 
-**Details:** [POSTCARD_CACHE.md](POSTCARD_CACHE.md)
+**Details:** [POSTCARD_CACHE.md](documentation/POSTCARD_CACHE.md)
 
 ---
 
@@ -408,7 +408,7 @@ Antikythera MCP Framework is licensed under the [MIT License](LICENSE).
 ## 🔗 Links
 
 - **GitHub:** [https://github.com/antikythera/mcp-framework](https://github.com/antikythera/mcp-framework)
-- **Documentation:** [CLI Guide](CLI_DOCUMENTATION.md) | [FFI Reference](FFI_DOCUMENTATION.md) | [Build Guide](BUILD.md)
+- **Documentation:** [CLI Guide](documentation/CLI_DOCUMENTATION.md) | [FFI Reference](documentation/FFI_DOCUMENTATION.md) | [Build Guide](documentation/BUILD.md)
 - **Issues:** [https://github.com/antikythera/mcp-framework/issues](https://github.com/antikythera/mcp-framework/issues)
 
 ---
