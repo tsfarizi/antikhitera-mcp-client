@@ -83,6 +83,35 @@ pub use wasm_config::{
     config_size_breakdown, config_summary,
 };
 
+// WASM types for server and agent management
+pub mod wasm_types;
+
+#[cfg(feature = "wasm-config")]
+pub use wasm_types::{
+    // Server Management Types
+    McpServerConfig, ServerTransport, ServerValidationResult,
+    ServerStatus, ServerOperationResult,
+    // Agent Management Types
+    AgentConfig, AgentType, SkillLevel, AgentCapability,
+    AgentValidationResult, AgentStatus, AgentTaskRequest,
+    AgentTaskResult, OrchestrationResult,
+};
+
+// WASM FFI for server and agent management
+pub mod wasm_ffi;
+
+#[cfg(feature = "wasm-config")]
+pub use wasm_ffi::{
+    // Server Management FFI
+    mcp_add_server, mcp_remove_server, mcp_list_servers,
+    mcp_get_server, mcp_validate_server, mcp_export_servers_config,
+    mcp_import_servers_config,
+    // Agent Management FFI
+    mcp_register_agent, mcp_unregister_agent, mcp_list_agents,
+    mcp_get_agent, mcp_get_agent_status, mcp_validate_agent,
+    mcp_export_agents_config, mcp_import_agents_config,
+};
+
 pub mod high_level_api;
 
 /// SDK version
