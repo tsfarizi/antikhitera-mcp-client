@@ -239,25 +239,46 @@ wasm-tools component wit *.wasm                   # View generated WIT
 
 ---
 
-## 🧩 WASM Component Model (Automatic WIT Generation)
+## 🧩 WASM Component Model (with Host Imports)
 
-The SDK uses **witgen** to automatically generate WIT interfaces from Rust code.
+The SDK uses WASM Component Model with **host imports** for I/O delegation.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│  Host Language (TypeScript/Python/etc)      │
+│  ├─ Load WASM Component                     │
+│  ├─ Implement host-imports interface        │
+│  │   ├─ call-llm() - Call LLM API          │
+│  │   ├─ emit-tool-call() - Execute tools   │
+│  │   ├─ log-message() - Logging            │
+│  │   ├─ save-state() - State persistence   │
+│  │   └─ load-state() - State restoration   │
+│  └─ Receive agent outcomes                 │
+│                                             │
+│  ┌───────────────────────────────────────┐ │
+│  │  WASM Component                       │ │
+│  │  ├─ Agent FSM logic                   │ │
+│  │  ├─ Directive parsing                 │ │
+│  │  ├─ Response formatting               │ │
+│  │  └─ Calls host-imports for I/O        │ │
+│  └───────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
+```
 
 ### How It Works
 
-```
-Rust code + #[witgen]  →  witgen  →  WIT auto-generated  →  cargo-component  →  *.wasm
-```
+1. **WASM runs agent logic** - FSM, parsing, formatting
+2. **WASM calls host imports** for I/O operations
+3. **Host executes I/O** - LLM API calls, tool execution, logging
+4. **Host returns results** to WASM
+5. **WASM continues** execution with results
 
-**No manual WIT editing needed!** Add functions to Rust traits and WIT is regenerated automatically.
-
-### Adding New Component Functions
+### Adding New Functions
 
 1. **Add to trait** in `antikythera-sdk/src/component.rs`:
 ```rust
-use witgen::witgen;
-
-#[witgen]
 pub trait MyInterface {
     /// My new function
     fn my_function(param: String) -> Result<String, String>;
@@ -269,39 +290,45 @@ pub trait MyInterface {
 cargo run --release -p build-scripts -- all
 ```
 
-3. **Done!** WIT is auto-generated at `wit/antikythera.wit` and component is built.
+3. **Done!** WIT is auto-generated at `wit/antikythera.wit`.
 
-### Key Rules for `#[witgen]`
+### Host Imports in WIT
 
-- ✅ Use `String` (not `&str`)
-- ✅ Use `Vec<T>` for lists
-- ✅ Use `Option<T>` for optional values
-- ✅ Use `Result<T, String>` for errors
-- ❌ No references (`&T`, `&mut T`)
-- ❌ No smart pointers (`Box`, `Rc`, `Arc`)
-- ❌ No generics
+```wit
+interface host-imports {
+    /// Call LLM API (host implements)
+    call-llm(request: llm-request) -> result<llm-response, string>;
+    
+    /// Execute tool call (host implements)
+    emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
+    
+    /// Logging
+    log-message(event: log-event);
+    
+    /// State persistence
+    save-state(context-id: string, state-json: string) -> result<_, string>;
+    load-state(context-id: string) -> result<option<string>, string>;
+}
+```
+
+### Key Rules
+
+- ✅ WASM focuses on **agent intelligence** (parsing, FSM, state)
+- ✅ Host handles **I/O** (APIs, tools, filesystem)
+- ✅ Clean separation of concerns
+- ✅ Portable across host languages
 
 ### Build Script Location
 
-Build scripts are in `scripts/` directory (idiomatic Rust, not bash):
-- `scripts/build-component.rs` - Main build script
+Build scripts are in `scripts/` directory (idiomatic Rust):
+- `scripts/build-component.rs` - WIT generator + component builder
 - Run with: `cargo run --release -p build-scripts -- <command>`
 
 ### WIT File Location
 
-Generated WIT file is at project root for easy visibility:
-- `wit/antikythera.wit` - Auto-generated from Rust traits
-- Don't edit this file manually!
-- Edit `antikythera-sdk/src/component.rs` instead
-
-### Workflow
-
-```
-1. Edit traits in antikythera-sdk/src/component.rs
-2. Run: cargo run --release -p build-scripts -- wit
-3. WIT auto-generated at: wit/antikythera.wit
-4. Build: cargo run --release -p build-scripts -- component
-```
+Generated WIT file is at project root:
+- `wit/antikythera.wit` - Auto-generated from Rust code
+- Includes both imports (from host) and exports (to host)
 
 ---
 

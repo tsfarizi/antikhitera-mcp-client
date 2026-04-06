@@ -1,209 +1,233 @@
 package antikythera:mcp-framework@1.0.0;
 
-/// PromptConfig
+/// LLM request from agent to host
+record llm-request {
+    prompt: string,
+    system-prompt: string,
+    temperature: option<float32>,
+    max-tokens: option<u32>,
+    response-format: option<string>,
+}
+
+/// LLM response from host to agent
+record llm-response {
+    content: string,
+    model: string,
+    tokens-used: option<u32>,
+    finish-reason: option<string>,
+}
+
+/// Tool call event from agent to host
+record tool-call-event {
+    tool-name: string,
+    arguments-json: string,
+    session-id: option<string>,
+    step-id: u32,
+}
+
+/// Tool execution result from host to agent
+record tool-execution-result {
+    tool-name: string,
+    success: bool,
+    output-json: string,
+    error-message: option<string>,
+    step-id: u32,
+}
+
+/// Logging event
+record log-event {
+    level: string,
+    message: string,
+    timestamp: option<string>,
+}
+
+/// Prompt configuration for AI agent behavior
 record prompt-config {
-  template: string,
-  tool-guidance: string,
-  fallback-guidance: string,
-  json-retry-message: string,
-  tool-result-instruction: string,
-  agent-instructions: string,
-  ui-instructions: string,
-  language-instructions: string,
-  agent-max-steps-error: string,
-  no-tools-guidance: string,
+    template: string,
+    tool-guidance: string,
+    fallback-guidance: string,
+    json-retry-message: string,
+    tool-result-instruction: string,
+    agent-instructions: string,
+    ui-instructions: string,
+    language-instructions: string,
+    agent-max-steps-error: string,
+    no-tools-guidance: string,
 }
 
-/// ModelProvider
+/// Model provider configuration
 record model-provider {
-  id: string,
-  provider-type: string,
-  base-url: string,
-  api-key: option<string>,
+    id: string,
+    provider-type: string,
+    base-url: string,
+    api-key: option<string>,
 }
 
-/// ServerConfig
+/// MCP server configuration
 record server-config {
-  name: string,
-  command: string,
-  args: list<string>,
-  env: list<tuple<string, string>>,
+    name: string,
+    command: string,
+    args: list<string>,
+    env: list<tuple<string, string>>,
 }
 
-/// ChatRequest
+/// Chat request parameters
 record chat-request {
-  prompt: string,
-  system-prompt: option<string>,
-  session-id: option<string>,
-  raw-mode: bool,
-  bypass-template: bool,
-  force-json: bool,
+    prompt: string,
+    system-prompt: option<string>,
+    session-id: option<string>,
+    raw-mode: bool,
+    bypass-template: bool,
+    force-json: bool,
 }
 
-/// ChatResponse
+/// Chat response
 record chat-response {
-  content: string,
-  session-id: option<string>,
-  tokens-used: option<u32>,
+    content: string,
+    session-id: option<string>,
+    tokens-used: option<u32>,
 }
 
-/// AgentOptions
+/// Agent execution options
 record agent-options {
-  max-steps: u32,
-  verbose: bool,
-  session-id: option<string>,
+    max-steps: u32,
+    verbose: bool,
+    session-id: option<string>,
 }
 
-/// AgentOutcome
+/// Agent execution outcome
 record agent-outcome {
-  response: string,
-  logs: list<string>,
-  session-id: option<string>,
-  steps-executed: u32,
+    response: string,
+    logs: list<string>,
+    session-id: option<string>,
+    steps-executed: u32,
 }
 
-/// ToolDescriptor
+/// Tool descriptor
 record tool-descriptor {
-  name: string,
-  description: string,
+    name: string,
+    description: string,
 }
 
-/// ToolInventory
+/// Tool inventory response
 record tool-inventory {
-  tools: list<tool-descriptor>,
+    tools: list<tool-descriptor>,
 }
 
-/// ReloadResponse
+/// Configuration reload response
 record reload-response {
-  success: bool,
-  message: string,
+    success: bool,
+    message: string,
 }
 
-/// PromptManager
+/// Host imports - functions that WASM calls in the host language
+/// This enables the agent to delegate I/O operations to the host
+interface host-imports {
+    /// Call LLM API (host implements actual API call)
+    call-llm(request: llm-request) -> result<llm-response, string>;
+
+    /// Emit tool call event to host for execution
+    emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
+
+    /// Log message to host
+    log-message(event: log-event);
+
+    /// Save agent state to host storage
+    save-state(context-id: string, state-json: string) -> result<_, string>;
+
+    /// Load agent state from host storage
+    load-state(context-id: string) -> result<option<string>, string>;
+}
+
+/// Prompt template management interface
 interface prompt-manager {
-  /// Get the main system prompt template
-  get-template() -> result<string, string>;
-  /// Update the main system prompt template
-  update-template(template: string) -> result<_, string>;
-  /// Reset the main template to default
-  reset-template() -> result<_, string>;
-  /// Get tool guidance prompt
-  get-tool-guidance() -> result<string, string>;
-  /// Update tool guidance prompt
-  update-tool-guidance(guidance: string) -> result<_, string>;
-  /// Reset tool guidance to default
-  reset-tool-guidance() -> result<_, string>;
-  /// Get fallback guidance prompt
-  get-fallback-guidance() -> result<string, string>;
-  /// Update fallback guidance prompt
-  update-fallback-guidance(guidance: string) -> result<_, string>;
-  /// Reset fallback guidance to default
-  reset-fallback-guidance() -> result<_, string>;
-  /// Get JSON retry message
-  get-json-retry-message() -> result<string, string>;
-  /// Update JSON retry message
-  update-json-retry-message(message: string) -> result<_, string>;
-  /// Reset JSON retry message to default
-  reset-json-retry-message() -> result<_, string>;
-  /// Get tool result instruction
-  get-tool-result-instruction() -> result<string, string>;
-  /// Update tool result instruction
-  update-tool-result-instruction(instruction: string) -> result<_, string>;
-  /// Reset tool result instruction to default
-  reset-tool-result-instruction() -> result<_, string>;
-  /// Get agent instructions
-  get-agent-instructions() -> result<string, string>;
-  /// Update agent instructions
-  update-agent-instructions(instructions: string) -> result<_, string>;
-  /// Reset agent instructions to default
-  reset-agent-instructions() -> result<_, string>;
-  /// Get UI instructions
-  get-ui-instructions() -> result<string, string>;
-  /// Update UI instructions
-  update-ui-instructions(instructions: string) -> result<_, string>;
-  /// Reset UI instructions to default
-  reset-ui-instructions() -> result<_, string>;
-  /// Get language instructions
-  get-language-instructions() -> result<string, string>;
-  /// Update language instructions
-  update-language-instructions(instructions: string) -> result<_, string>;
-  /// Reset language instructions to default
-  reset-language-instructions() -> result<_, string>;
-  /// Get agent max steps error message
-  get-agent-max-steps-error() -> result<string, string>;
-  /// Update agent max steps error message
-  update-agent-max-steps-error(message: string) -> result<_, string>;
-  /// Reset agent max steps error to default
-  reset-agent-max-steps-error() -> result<_, string>;
-  /// Get no tools guidance
-  get-no-tools-guidance() -> result<string, string>;
-  /// Update no tools guidance
-  update-no-tools-guidance(guidance: string) -> result<_, string>;
-  /// Reset no tools guidance to default
-  reset-no-tools-guidance() -> result<_, string>;
-  /// Get all prompts as JSON object
-  get-all-prompts() -> result<string, string>;
-  /// Reset all prompts to defaults
-  reset-all-prompts() -> result<_, string>;
-  /// Get the raw model.toml file content
-  get-raw-config() -> result<string, string>;
+    get-template() -> result<string, string>;
+    update-template(template: string) -> result<_, string>;
+    reset-template() -> result<_, string>;
+    get-tool-guidance() -> result<string, string>;
+    update-tool-guidance(guidance: string) -> result<_, string>;
+    reset-tool-guidance() -> result<_, string>;
+    get-fallback-guidance() -> result<string, string>;
+    update-fallback-guidance(guidance: string) -> result<_, string>;
+    reset-fallback-guidance() -> result<_, string>;
+    get-json-retry-message() -> result<string, string>;
+    update-json-retry-message(message: string) -> result<_, string>;
+    reset-json-retry-message() -> result<_, string>;
+    get-tool-result-instruction() -> result<string, string>;
+    update-tool-result-instruction(instruction: string) -> result<_, string>;
+    reset-tool-result-instruction() -> result<_, string>;
+    get-agent-instructions() -> result<string, string>;
+    update-agent-instructions(instructions: string) -> result<_, string>;
+    reset-agent-instructions() -> result<_, string>;
+    get-ui-instructions() -> result<string, string>;
+    update-ui-instructions(instructions: string) -> result<_, string>;
+    reset-ui-instructions() -> result<_, string>;
+    get-language-instructions() -> result<string, string>;
+    update-language-instructions(instructions: string) -> result<_, string>;
+    reset-language-instructions() -> result<_, string>;
+    get-agent-max-steps-error() -> result<string, string>;
+    update-agent-max-steps-error(message: string) -> result<_, string>;
+    reset-agent-max-steps-error() -> result<_, string>;
+    get-no-tools-guidance() -> result<string, string>;
+    update-no-tools-guidance(guidance: string) -> result<_, string>;
+    reset-no-tools-guidance() -> result<_, string>;
+    get-all-prompts() -> result<string, string>;
+    reset-all-prompts() -> result<_, string>;
+    get-raw-config() -> result<string, string>;
 }
 
-/// McpClient
+/// MCP client interface for chat and agent operations
 interface mcp-client {
-  /// Initialize client with configuration
-  init(config-json: string) -> result<_, string>;
-  /// Send a chat message
-  chat(request: chat-request) -> result<chat-response, string>;
-  /// Simple chat with just prompt
-  chat-simple(prompt: string) -> result<string, string>;
-  /// Run agent with autonomous tool execution
-  run-agent(prompt: string, options: agent-options) -> result<agent-outcome, string>;
-  /// List available tools
-  list-tools() -> result<tool-inventory, string>;
-  /// Get current prompt template
-  get-prompt-template() -> result<string, string>;
-  /// Reload configuration
-  reload-config() -> result<reload-response, string>;
+    init(config-json: string) -> result<_, string>;
+    chat(request: chat-request) -> result<chat-response, string>;
+    chat-simple(prompt: string) -> result<string, string>;
+    run-agent(prompt: string, options: agent-options) -> result<agent-outcome, string>;
+    list-tools() -> result<tool-inventory, string>;
+    get-prompt-template() -> result<string, string>;
+    reload-config() -> result<reload-response, string>;
 }
 
 /// FFI interface for external language bindings
 interface ffi-server {
-  mcp-server-create(addr: string) -> u32;
-  mcp-server-create-with-cors(addr: string, cors-origins: string) -> u32;
-  mcp-server-is-running(server-id: u32) -> s32;
-  mcp-server-stop(server-id: u32) -> s32;
-  mcp-server-stop-all() -> u32;
-  mcp-server-chat(server-id: u32, request-json: string, request-len: u32) -> string;
-  mcp-server-get-tools(server-id: u32) -> string;
-  mcp-server-get-config(server-id: u32) -> string;
-  mcp-server-reload(server-id: u32) -> string;
-  mcp-server-update-config(server-id: u32, config-json: string) -> string;
-  mcp-response-add-field(server-id: u32, field-name: string, field-value-json: string) -> s32;
-  mcp-response-remove-field(server-id: u32, field-name: string) -> s32;
-  mcp-response-get-fields(server-id: u32) -> string;
-  mcp-response-clear-fields(server-id: u32) -> u32;
-  mcp-response-apply-fields(server-id: u32, response-json: string) -> string;
-  mcp-response-field-count(server-id: u32) -> u32;
-  mcp-set-output-format(server-id: u32, format: string) -> s32;
-  mcp-get-output-format(server-id: u32) -> string;
-  mcp-format-response(server-id: u32, content: string, data-json: string) -> string;
-  mcp-format-final-message(raw-response: string, response-len: u32) -> string;
-  mcp-extract-final-content(final-message-json: string) -> string;
-  mcp-extract-final-data(final-message-json: string) -> string;
-  mcp-extract-final-metadata(final-message-json: string) -> string;
-  mcp-is-final-message(response-json: string) -> s32;
-  mcp-last-error() -> string;
-  mcp-clear-error();
-  mcp-string-free(ptr: string);
-  mcp-version() -> string;
-  mcp-server-count() -> u32;
-  mcp-server-list(buffer: list<u32>, buffer-len: u32) -> u32;
+    mcp-server-create(addr: string) -> u32;
+    mcp-server-create-with-cors(addr: string, cors-origins: string) -> u32;
+    mcp-server-is-running(server-id: u32) -> s32;
+    mcp-server-stop(server-id: u32) -> s32;
+    mcp-server-stop-all() -> u32;
+    mcp-server-chat(server-id: u32, request-json: string, request-len: u32) -> string;
+    mcp-server-get-tools(server-id: u32) -> string;
+    mcp-server-get-config(server-id: u32) -> string;
+    mcp-server-reload(server-id: u32) -> string;
+    mcp-server-update-config(server-id: u32, config-json: string) -> string;
+    mcp-response-add-field(server-id: u32, field-name: string, field-value-json: string) -> s32;
+    mcp-response-remove-field(server-id: u32, field-name: string) -> s32;
+    mcp-response-get-fields(server-id: u32) -> string;
+    mcp-response-clear-fields(server-id: u32) -> u32;
+    mcp-response-apply-fields(server-id: u32, response-json: string) -> string;
+    mcp-response-field-count(server-id: u32) -> u32;
+    mcp-set-output-format(server-id: u32, format: string) -> s32;
+    mcp-get-output-format(server-id: u32) -> string;
+    mcp-format-response(server-id: u32, content: string, data-json: string) -> string;
+    mcp-format-final-message(raw-response: string, response-len: u32) -> string;
+    mcp-extract-final-content(final-message-json: string) -> string;
+    mcp-extract-final-data(final-message-json: string) -> string;
+    mcp-extract-final-metadata(final-message-json: string) -> string;
+    mcp-is-final-message(response-json: string) -> s32;
+    mcp-last-error() -> string;
+    mcp-clear-error();
+    mcp-string-free(ptr: string);
+    mcp-version() -> string;
+    mcp-server-count() -> u32;
+    mcp-server-list(buffer: list<u32>, buffer-len: u32) -> u32;
 }
 
-/// Combined world exporting both interfaces
+/// Combined world with host imports and exports
 world antikythera-mcp {
-  export prompt-manager;
-  export mcp-client;
-  export ffi-server;
+    /// Import from host (I/O operations)
+    import host-imports;
+
+    /// Export to host (agent functionality)
+    export prompt-manager;
+    export mcp-client;
+    export ffi-server;
 }

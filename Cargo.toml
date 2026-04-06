@@ -5,7 +5,6 @@ members = [
     "antikythera-sdk",
     "antikythera-cli",
     "scripts",
-    "tests/ffi-tests",
 ]
 
 [workspace.package]

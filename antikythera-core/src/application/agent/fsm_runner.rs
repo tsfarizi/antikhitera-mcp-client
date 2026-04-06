@@ -408,11 +408,11 @@ impl<P: ModelProvider> FsmAgent<P> {
         match directive {
             AgentDirective::Final { response } => {
                 info!("Agent returned final response");
-                
+
                 // Format response as JSON if it's a string
-                let formatted_response = if let Some(response_str) = response.as_str() {
+                let formatted_response = {
                     // Try to parse as JSON first
-                    match serde_json::from_str::<serde_json::Value>(response_str) {
+                    match serde_json::from_str::<serde_json::Value>(&response) {
                         Ok(json_value) => {
                             // Already valid JSON
                             json_value.to_string()
@@ -420,16 +420,13 @@ impl<P: ModelProvider> FsmAgent<P> {
                         Err(_) => {
                             // Not JSON - wrap in JSON structure
                             serde_json::json!({
-                                "response": response_str,
+                                "response": response,
                                 "type": "text"
                             }).to_string()
                         }
                     }
-                } else {
-                    // Response is already a JSON value
-                    response.to_string()
                 };
-                
+
                 // Try to extract structured data if response is JSON
                 let (content, data, metadata) = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&formatted_response) {
                     // Check if it has 'response' or 'content' field
