@@ -9,12 +9,20 @@ description = "High-level API wrapper with FFI and WASM bindings"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[package.metadata.component]
+package = "antikythera:mcp-framework"
+
+[package.metadata.component.dependencies]
+
 [features]
 # Default: minimal WASM build with single agent support
 default = ["wasm", "single-agent"]
 
 # WASM support (optional)
 wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+
+# WASM Component Model support
+component = ["dep:wit-bindgen-rt"]
 
 # FFI support for C bindings
 ffi = ["dep:ffi-support"]
@@ -53,6 +61,11 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 js-sys = "0.3"
 console_error_panic_hook = { version = "0.1", optional = true }
 tracing-wasm = { version = "0.2", optional = true }
+
+# WASM Component Model
+witgen = "0.5"
+wit-bindgen = "0.37"
+wit-bindgen-rt = { version = "0.37", features = ["bitflags"], optional = true }
 
 # FFI support (optional)
 ffi-support = { version = "0.4", optional = true }

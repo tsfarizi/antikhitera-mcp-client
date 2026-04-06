@@ -1,0 +1,12 @@
+[package]
+name = "build-scripts"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "component-builder"
+path = "build-component.rs"
+
+[dependencies]
+# No external dependencies needed - use stdlib only

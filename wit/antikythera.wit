@@ -1,0 +1,174 @@
+package antikythera:mcp-framework@1.0.0;
+
+/// PromptConfig
+record prompt-config {
+  template: string,
+  tool-guidance: string,
+  fallback-guidance: string,
+  json-retry-message: string,
+  tool-result-instruction: string,
+  agent-instructions: string,
+  ui-instructions: string,
+  language-instructions: string,
+  agent-max-steps-error: string,
+  no-tools-guidance: string,
+}
+
+/// ModelProvider
+record model-provider {
+  id: string,
+  provider-type: string,
+  base-url: string,
+  api-key: option<string>,
+}
+
+/// ServerConfig
+record server-config {
+  name: string,
+  command: string,
+  args: list<string>,
+  env: list<tuple<string, string>>,
+}
+
+/// ChatRequest
+record chat-request {
+  prompt: string,
+  system-prompt: option<string>,
+  session-id: option<string>,
+  raw-mode: bool,
+  bypass-template: bool,
+  force-json: bool,
+}
+
+/// ChatResponse
+record chat-response {
+  content: string,
+  session-id: option<string>,
+  tokens-used: option<u32>,
+}
+
+/// AgentOptions
+record agent-options {
+  max-steps: u32,
+  verbose: bool,
+  session-id: option<string>,
+}
+
+/// AgentOutcome
+record agent-outcome {
+  response: string,
+  logs: list<string>,
+  session-id: option<string>,
+  steps-executed: u32,
+}
+
+/// ToolDescriptor
+record tool-descriptor {
+  name: string,
+  description: string,
+}
+
+/// ToolInventory
+record tool-inventory {
+  tools: list<tool-descriptor>,
+}
+
+/// ReloadResponse
+record reload-response {
+  success: bool,
+  message: string,
+}
+
+/// PromptManager
+interface prompt-manager {
+  /// Get the main system prompt template
+  get-template() -> result<string, string>;
+  /// Update the main system prompt template
+  update-template(template: string) -> result<_, string>;
+  /// Reset the main template to default
+  reset-template() -> result<_, string>;
+  /// Get tool guidance prompt
+  get-tool-guidance() -> result<string, string>;
+  /// Update tool guidance prompt
+  update-tool-guidance(guidance: string) -> result<_, string>;
+  /// Reset tool guidance to default
+  reset-tool-guidance() -> result<_, string>;
+  /// Get fallback guidance prompt
+  get-fallback-guidance() -> result<string, string>;
+  /// Update fallback guidance prompt
+  update-fallback-guidance(guidance: string) -> result<_, string>;
+  /// Reset fallback guidance to default
+  reset-fallback-guidance() -> result<_, string>;
+  /// Get JSON retry message
+  get-json-retry-message() -> result<string, string>;
+  /// Update JSON retry message
+  update-json-retry-message(message: string) -> result<_, string>;
+  /// Reset JSON retry message to default
+  reset-json-retry-message() -> result<_, string>;
+  /// Get tool result instruction
+  get-tool-result-instruction() -> result<string, string>;
+  /// Update tool result instruction
+  update-tool-result-instruction(instruction: string) -> result<_, string>;
+  /// Reset tool result instruction to default
+  reset-tool-result-instruction() -> result<_, string>;
+  /// Get agent instructions
+  get-agent-instructions() -> result<string, string>;
+  /// Update agent instructions
+  update-agent-instructions(instructions: string) -> result<_, string>;
+  /// Reset agent instructions to default
+  reset-agent-instructions() -> result<_, string>;
+  /// Get UI instructions
+  get-ui-instructions() -> result<string, string>;
+  /// Update UI instructions
+  update-ui-instructions(instructions: string) -> result<_, string>;
+  /// Reset UI instructions to default
+  reset-ui-instructions() -> result<_, string>;
+  /// Get language instructions
+  get-language-instructions() -> result<string, string>;
+  /// Update language instructions
+  update-language-instructions(instructions: string) -> result<_, string>;
+  /// Reset language instructions to default
+  reset-language-instructions() -> result<_, string>;
+  /// Get agent max steps error message
+  get-agent-max-steps-error() -> result<string, string>;
+  /// Update agent max steps error message
+  update-agent-max-steps-error(message: string) -> result<_, string>;
+  /// Reset agent max steps error to default
+  reset-agent-max-steps-error() -> result<_, string>;
+  /// Get no tools guidance
+  get-no-tools-guidance() -> result<string, string>;
+  /// Update no tools guidance
+  update-no-tools-guidance(guidance: string) -> result<_, string>;
+  /// Reset no tools guidance to default
+  reset-no-tools-guidance() -> result<_, string>;
+  /// Get all prompts as JSON object
+  get-all-prompts() -> result<string, string>;
+  /// Reset all prompts to defaults
+  reset-all-prompts() -> result<_, string>;
+  /// Get the raw model.toml file content
+  get-raw-config() -> result<string, string>;
+}
+
+/// McpClient
+interface mcp-client {
+  /// Initialize client with configuration
+  init(config-json: string) -> result<_, string>;
+  /// Send a chat message
+  chat(request: chat-request) -> result<chat-response, string>;
+  /// Simple chat with just prompt
+  chat-simple(prompt: string) -> result<string, string>;
+  /// Run agent with autonomous tool execution
+  run-agent(prompt: string, options: agent-options) -> result<agent-outcome, string>;
+  /// List available tools
+  list-tools() -> result<tool-inventory, string>;
+  /// Get current prompt template
+  get-prompt-template() -> result<string, string>;
+  /// Reload configuration
+  reload-config() -> result<reload-response, string>;
+}
+
+/// Combined world exporting both interfaces
+world antikythera-mcp {
+  export prompt-manager;
+  export mcp-client;
+}

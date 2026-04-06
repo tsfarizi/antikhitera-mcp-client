@@ -43,8 +43,18 @@ pub use antikythera_core::application::agent::multi_agent::{
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+#[cfg(feature = "wasm")]
+pub mod wasm_prompt;
+
 #[cfg(feature = "ffi")]
 pub mod ffi;
+
+// WASM Component Model support
+#[cfg(feature = "component")]
+pub mod component;
+
+#[cfg(feature = "component")]
+pub use component::{PromptManager, McpClient, PromptConfig, ChatRequest, ChatResponse, AgentOptions, AgentOutcome};
 
 pub mod high_level_api;
 

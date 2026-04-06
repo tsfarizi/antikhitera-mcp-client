@@ -143,7 +143,7 @@ pub fn update_tool_result_instruction(value: &str) -> Result<(), Box<dyn Error>>
 }
 
 /// Generic function to update a field in [prompts] section
-fn update_prompts_field(
+pub fn update_prompts_field(
     field_name: &str,
     value: &str,
     multiline: bool,

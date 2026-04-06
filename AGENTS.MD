@@ -85,6 +85,22 @@ config/                         # ⭐ SPLIT CONFIGURATION
 ├── client.toml                # Infrastructure: providers, servers, REST
 ├── model.toml                 # Model: default_provider, model, prompt, tools
 └── .env                       # API keys (gitignored)
+
+wit/                           # ⭐ AUTO-GENERATED WIT INTERFACES
+└── antikythera.wit           # Generated from Rust traits (don't edit!)
+
+antikythera-sdk/               # SDK & WASM bindings
+├── src/
+│   ├── lib.rs                # Main SDK entry point
+│   ├── component.rs          # ⭐ Traits for WIT generation (source of truth)
+│   ├── wasm.rs               # wasm-bindgen bindings (browser)
+│   ├── wasm_prompt.rs        # Prompt WASM functions (browser)
+│   └── high_level_api.rs     # Native Rust API
+└── Cargo.toml                # SDK configuration
+
+scripts/                       # ⭐ BUILD SCRIPTS (Rust idiomatic)
+├── build-component.rs        # WIT generator + component builder
+└── Cargo.toml                # Build script package
 ```
 
 ---
@@ -213,6 +229,78 @@ cargo build                  # Build debug
 cargo build --release        # Build production
 cargo clippy                 # Lint
 cargo fmt                    # Format
+
+# WASM Component (Automatic WIT Generation)
+cargo run --release -p build-scripts -- wit       # Generate WIT from Rust → wit/antikythera.wit
+cargo run --release -p build-scripts -- component # Build WASM component
+cargo run --release -p build-scripts -- all       # Generate + Build
+wasm-tools component wit *.wasm                   # View generated WIT
+```
+
+---
+
+## 🧩 WASM Component Model (Automatic WIT Generation)
+
+The SDK uses **witgen** to automatically generate WIT interfaces from Rust code.
+
+### How It Works
+
+```
+Rust code + #[witgen]  →  witgen  →  WIT auto-generated  →  cargo-component  →  *.wasm
+```
+
+**No manual WIT editing needed!** Add functions to Rust traits and WIT is regenerated automatically.
+
+### Adding New Component Functions
+
+1. **Add to trait** in `antikythera-sdk/src/component.rs`:
+```rust
+use witgen::witgen;
+
+#[witgen]
+pub trait MyInterface {
+    /// My new function
+    fn my_function(param: String) -> Result<String, String>;
+}
+```
+
+2. **Build**:
+```bash
+cargo run --release -p build-scripts -- all
+```
+
+3. **Done!** WIT is auto-generated at `wit/antikythera.wit` and component is built.
+
+### Key Rules for `#[witgen]`
+
+- ✅ Use `String` (not `&str`)
+- ✅ Use `Vec<T>` for lists
+- ✅ Use `Option<T>` for optional values
+- ✅ Use `Result<T, String>` for errors
+- ❌ No references (`&T`, `&mut T`)
+- ❌ No smart pointers (`Box`, `Rc`, `Arc`)
+- ❌ No generics
+
+### Build Script Location
+
+Build scripts are in `scripts/` directory (idiomatic Rust, not bash):
+- `scripts/build-component.rs` - Main build script
+- Run with: `cargo run --release -p build-scripts -- <command>`
+
+### WIT File Location
+
+Generated WIT file is at project root for easy visibility:
+- `wit/antikythera.wit` - Auto-generated from Rust traits
+- Don't edit this file manually!
+- Edit `antikythera-sdk/src/component.rs` instead
+
+### Workflow
+
+```
+1. Edit traits in antikythera-sdk/src/component.rs
+2. Run: cargo run --release -p build-scripts -- wit
+3. WIT auto-generated at: wit/antikythera.wit
+4. Build: cargo run --release -p build-scripts -- component
 ```
 
 ---
@@ -269,3 +357,5 @@ graph TD
 | `serde` | Serialization |
 | `clap` | CLI parsing |
 | `tracing` | Logging |
+| `wasm-bindgen` | WASM browser bindings |
+| `wit-bindgen-rt` | WASM Component Model bindings |

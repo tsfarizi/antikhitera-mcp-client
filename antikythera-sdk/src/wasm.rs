@@ -107,7 +107,7 @@ impl WasmClient {
     #[wasm_bindgen]
     pub fn list_tools(&self) -> js_sys::Promise {
         let tools = self.core_client.tools().to_vec();
-        
+
         future_to_promise(async move {
             let tools_json = json!({
                 "tools": tools.iter().map(|t| json!({
@@ -115,9 +115,22 @@ impl WasmClient {
                     "description": t.description,
                 })).collect::<Vec<_>>()
             });
-            
+
             Ok(JsValue::from_str(&tools_json.to_string()))
         })
+    }
+
+    /// Get the current system prompt template
+    #[wasm_bindgen(js_name = getPromptTemplate)]
+    pub fn get_prompt_template(&self) -> Result<String, JsValue> {
+        use antikythera_core::config::app::AppConfig;
+        use std::path::Path;
+        
+        let config_path = Path::new(antikythera_core::constants::CONFIG_PATH);
+        let config = AppConfig::load(Some(config_path))
+            .map_err(|e| JsValue::from_str(&format!("Failed to load config: {}", e)))?;
+        
+        Ok(config.prompt_template().to_string())
     }
 }
 
