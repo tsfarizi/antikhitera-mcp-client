@@ -179,11 +179,32 @@ mod wit_from_rust {
         let traits = parse_traits(&content)?;
         wit.push_str(&traits);
         
+        // Parse FFI functions from ffi.rs
+        let ffi_rs_path = component_rs.parent()
+            .ok_or("Failed to get parent directory")?
+            .join("ffi.rs");
+        
+        let ffi_funcs = if ffi_rs_path.exists() {
+            let ffi_content = fs::read_to_string(&ffi_rs_path)
+                .map_err(|e| format!("Failed to read ffi.rs: {}", e))?;
+            parse_ffi_functions(&ffi_content)?
+        } else {
+            String::new()
+        };
+        
+        if !ffi_funcs.is_empty() {
+            wit.push_str("/// FFI interface for external language bindings\n");
+            wit.push_str("interface ffi-server {\n");
+            wit.push_str(&ffi_funcs);
+            wit.push_str("}\n\n");
+        }
+        
         // Add world definition
         wit.push_str("/// Combined world exporting both interfaces\n");
         wit.push_str("world antikythera-mcp {\n");
         wit.push_str("  export prompt-manager;\n");
         wit.push_str("  export mcp-client;\n");
+        wit.push_str("  export ffi-server;\n");
         wit.push_str("}\n");
 
         Ok(wit)
@@ -636,6 +657,185 @@ mod wit_from_rust {
             Some((name, typ))
         } else {
             None
+        }
+    }
+
+    /// Parse FFI functions (extern "C" with #[no_mangle])
+    fn parse_ffi_functions(content: &str) -> Result<String, String> {
+        let mut result = String::new();
+        let mut pos = 0;
+        
+        while pos < content.len() {
+            // Find #[no_mangle]
+            if let Some(nomangle_pos) = content[pos..].find("#[no_mangle]") {
+                let nomangle_start = pos + nomangle_pos;
+                
+                // Find the extern "C" after #[no_mangle]
+                if let Some(extern_pos) = content[nomangle_start..].find("extern \"C\"") {
+                    let extern_start = nomangle_start + extern_pos;
+                    
+                    // Find "fn " after extern "C"
+                    if let Some(fn_pos) = content[extern_start..].find("fn ") {
+                        let fn_start = extern_start + fn_pos;
+                        
+                        // Get the function signature line (may span multiple lines)
+                        let mut sig_lines = String::new();
+                        let mut line_start = fn_start;
+                        
+                        // Collect lines until we find opening brace or semicolon
+                        for line in content[line_start..].lines() {
+                            sig_lines.push_str(line);
+                            sig_lines.push(' ');
+                            
+                            if line.contains('{') || line.contains("->") {
+                                break;
+                            }
+                            
+                            line_start += line.len() + 1; // +1 for newline
+                        }
+                        
+                        // Parse the function
+                        if let Some(func_wit) = parse_ffi_function(&sig_lines) {
+                            result.push_str(&func_wit);
+                            pos = line_start + 1;
+                            continue;
+                        }
+                    }
+                }
+                
+                pos = nomangle_start + "#[no_mangle]".len();
+            } else {
+                break;
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Parse a single FFI function
+    fn parse_ffi_function(func_content: &str) -> Option<String> {
+        let func_line = func_content.lines().next()?;
+        
+        // Extract function name
+        if !func_line.contains("fn ") {
+            return None;
+        }
+        
+        let fn_start = func_line.find("fn ")?;
+        let after_fn = &func_line[fn_start + 3..];
+        
+        // Get function name
+        let fn_name_end = after_fn.find('(')?;
+        let fn_name = after_fn[..fn_name_end].trim();
+        let wit_name = camel_to_kebab(fn_name);
+        
+        // Get parameters between ( and )
+        let params_start = fn_name_end + 1;
+        if let Some(params_end) = after_fn[params_start..].find(')') {
+            let params_str = &after_fn[params_start..params_start + params_end];
+            let after_paren = &after_fn[params_start + params_end + 1..].trim();
+            
+            // Parse parameters
+            let params = parse_params(params_str);
+            
+            // Parse return type (stop at '{' which is function body)
+            let return_type = if let Some(brace_pos) = after_paren.find('{') {
+                let before_brace = after_paren[..brace_pos].trim();
+                if before_brace.contains("->") {
+                    let arrow_pos = before_brace.find("->")?;
+                    let ret = before_brace[arrow_pos + 2..].trim();
+                    Some(ret.to_string())
+                } else {
+                    None
+                }
+            } else if after_paren.contains("->") {
+                let arrow_pos = after_paren.find("->")?;
+                let ret = after_paren[arrow_pos + 2..].trim();
+                Some(ret.to_string())
+            } else {
+                None
+            };
+            
+            // Build WIT function signature
+            let mut wit_func = String::new();
+            
+            // Always include parentheses
+            if params.is_empty() {
+                wit_func.push_str(&format!("  {}()", wit_name));
+            } else {
+                let params_wit: Vec<String> = params.iter()
+                    .map(|(name, typ)| {
+                        let wit_name = camel_to_kebab(name);
+                        let wit_type = c_type_to_wit(typ);
+                        format!("{}: {}", wit_name, wit_type)
+                    })
+                    .collect();
+                
+                wit_func.push_str(&format!("  {}({})", wit_name, params_wit.join(", ")));
+            }
+            
+            // Add return type
+            if let Some(ret) = return_type {
+                let wit_ret = c_type_to_wit(&ret);
+                if !wit_ret.is_empty() {
+                    wit_func.push_str(&format!(" -> {}", wit_ret));
+                }
+            }
+            
+            wit_func.push_str(";\n");
+            
+            Some(wit_func)
+        } else {
+            None
+        }
+    }
+
+    /// Convert C types to WIT types
+    fn c_type_to_wit(c_type: &str) -> String {
+        let c_type = c_type.trim();
+        
+        match c_type {
+            // Integer types
+            "u8" | "uint8_t" => "u8".to_string(),
+            "u16" | "uint16_t" => "u16".to_string(),
+            "u32" | "uint32_t" | "c_uint" => "u32".to_string(),
+            "u64" | "uint64_t" | "c_ulonglong" => "u64".to_string(),
+            "i8" | "int8_t" => "s8".to_string(),
+            "i16" | "int16_t" => "s16".to_string(),
+            "i32" | "int32_t" | "c_int" => "s32".to_string(),
+            "i64" | "int64_t" | "c_longlong" => "s64".to_string(),
+            "usize" | "size_t" => "u32".to_string(),
+            "isize" | "ssize_t" => "s32".to_string(),
+            
+            // Pointer types
+            "*const c_char" | "*mut c_char" | "const char*" | "char*" => "string".to_string(),
+            "*const u8" | "*mut u8" | "*const c_void" | "*mut c_void" => "pointer".to_string(),
+            "*const u32" | "*mut u32" => "list<u32>".to_string(),
+            
+            // Void
+            "()" | "void" => String::new(),
+            
+            // Bool
+            "bool" | "c_bool" => "bool".to_string(),
+            
+            // Float
+            "f32" | "c_float" => "float32".to_string(),
+            "f64" | "c_double" => "float64".to_string(),
+            
+            _ => {
+                // Handle complex types
+                if c_type.contains('*') {
+                    // It's a pointer - determine what it points to
+                    if c_type.contains("c_char") {
+                        "string".to_string()
+                    } else {
+                        "pointer".to_string()
+                    }
+                } else {
+                    // Unknown type - convert to kebab case
+                    camel_to_kebab(c_type)
+                }
+            }
         }
     }
 }

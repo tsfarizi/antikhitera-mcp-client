@@ -46,8 +46,23 @@ pub mod wasm;
 #[cfg(feature = "wasm")]
 pub mod wasm_prompt;
 
+// FFI support (optional)
 #[cfg(feature = "ffi")]
 pub mod ffi;
+
+#[cfg(feature = "ffi")]
+pub use ffi::{
+    mcp_server_create, mcp_server_create_with_cors, mcp_server_is_running,
+    mcp_server_stop, mcp_server_stop_all, mcp_server_chat, mcp_server_get_tools,
+    mcp_server_get_config, mcp_server_reload, mcp_server_update_config,
+    mcp_response_add_field, mcp_response_remove_field, mcp_response_get_fields,
+    mcp_response_clear_fields, mcp_response_apply_fields, mcp_response_field_count,
+    mcp_set_output_format, mcp_get_output_format, mcp_format_response,
+    mcp_format_final_message, mcp_extract_final_content, mcp_extract_final_data,
+    mcp_extract_final_metadata, mcp_is_final_message,
+    mcp_last_error, mcp_clear_error, mcp_string_free, mcp_version,
+    mcp_server_count, mcp_server_list,
+};
 
 // WASM Component Model support
 #[cfg(feature = "component")]
@@ -55,6 +70,18 @@ pub mod component;
 
 #[cfg(feature = "component")]
 pub use component::{PromptManager, McpClient, PromptConfig, ChatRequest, ChatResponse, AgentOptions, AgentOutcome};
+
+// WASM configuration binary format
+#[cfg(feature = "wasm-config")]
+pub mod wasm_config;
+
+#[cfg(feature = "wasm-config")]
+pub use wasm_config::{
+    WasmConfig, ClientSection, ModelSection, PromptSection, AgentSection,
+    ProviderConfig, ServerConfig, ToolConfig, RestServerConfig,
+    config_to_binary_simple, config_from_binary_simple,
+    config_size_breakdown, config_summary,
+};
 
 pub mod high_level_api;
 

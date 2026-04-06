@@ -172,10 +172,12 @@ name = "antikythera-sdk"
 version = "0.8.0"
 dependencies = [
  "antikythera-core",
+ "chrono",
  "console_error_panic_hook",
  "ffi-support",
  "futures",
  "js-sys",
+ "postcard",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -1039,6 +1041,14 @@ checksum = "27838c6815cfe9de2d3aeb145ffd19e565f577414b33f3bdbf42fe040e9e0ff6"
 dependencies = [
  "lazy_static",
  "log",
+]
+
+[[package]]
+name = "ffi-tests"
+version = "0.1.0"
+dependencies = [
+ "antikythera-sdk",
+ "libc",
 ]
 
 [[package]]

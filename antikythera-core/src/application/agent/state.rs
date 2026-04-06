@@ -20,6 +20,17 @@ pub enum AgentState {
     RecoveringError { error: String, retry_count: u8 },
     /// Finalizing response
     FinalizingResponse,
+    /// ⭐ NEW: Final message with formatted JSON response
+    /// This state holds the AI's final response after it has been
+    /// parsed and formatted as a proper JSON object (not a tool call)
+    FinalMessage {
+        /// The final response content from AI
+        content: String,
+        /// Optional structured data extracted from response
+        data: Option<serde_json::Value>,
+        /// Response metadata (tokens, model, etc.)
+        metadata: Option<serde_json::Value>,
+    },
     /// Terminated
     Terminated { reason: TerminationReason },
 }
@@ -85,6 +96,7 @@ impl std::fmt::Display for AgentState {
             AgentState::WaitingForContext => write!(f, "WaitingForContext"),
             AgentState::RecoveringError { .. } => write!(f, "RecoveringError"),
             AgentState::FinalizingResponse => write!(f, "FinalizingResponse"),
+            AgentState::FinalMessage { .. } => write!(f, "FinalMessage"),
             AgentState::Terminated { .. } => write!(f, "Terminated"),
         }
     }

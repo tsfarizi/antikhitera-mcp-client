@@ -167,8 +167,43 @@ interface mcp-client {
   reload-config() -> result<reload-response, string>;
 }
 
+/// FFI interface for external language bindings
+interface ffi-server {
+  mcp-server-create(addr: string) -> u32;
+  mcp-server-create-with-cors(addr: string, cors-origins: string) -> u32;
+  mcp-server-is-running(server-id: u32) -> s32;
+  mcp-server-stop(server-id: u32) -> s32;
+  mcp-server-stop-all() -> u32;
+  mcp-server-chat(server-id: u32, request-json: string, request-len: u32) -> string;
+  mcp-server-get-tools(server-id: u32) -> string;
+  mcp-server-get-config(server-id: u32) -> string;
+  mcp-server-reload(server-id: u32) -> string;
+  mcp-server-update-config(server-id: u32, config-json: string) -> string;
+  mcp-response-add-field(server-id: u32, field-name: string, field-value-json: string) -> s32;
+  mcp-response-remove-field(server-id: u32, field-name: string) -> s32;
+  mcp-response-get-fields(server-id: u32) -> string;
+  mcp-response-clear-fields(server-id: u32) -> u32;
+  mcp-response-apply-fields(server-id: u32, response-json: string) -> string;
+  mcp-response-field-count(server-id: u32) -> u32;
+  mcp-set-output-format(server-id: u32, format: string) -> s32;
+  mcp-get-output-format(server-id: u32) -> string;
+  mcp-format-response(server-id: u32, content: string, data-json: string) -> string;
+  mcp-format-final-message(raw-response: string, response-len: u32) -> string;
+  mcp-extract-final-content(final-message-json: string) -> string;
+  mcp-extract-final-data(final-message-json: string) -> string;
+  mcp-extract-final-metadata(final-message-json: string) -> string;
+  mcp-is-final-message(response-json: string) -> s32;
+  mcp-last-error() -> string;
+  mcp-clear-error();
+  mcp-string-free(ptr: string);
+  mcp-version() -> string;
+  mcp-server-count() -> u32;
+  mcp-server-list(buffer: list<u32>, buffer-len: u32) -> u32;
+}
+
 /// Combined world exporting both interfaces
 world antikythera-mcp {
   export prompt-manager;
   export mcp-client;
+  export ffi-server;
 }

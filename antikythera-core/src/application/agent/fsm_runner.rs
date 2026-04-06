@@ -406,9 +406,68 @@ impl<P: ModelProvider> FsmAgent<P> {
         _steps: &mut Vec<AgentStep>,
     ) -> Result<AgentState, AgentError> {
         match directive {
-            AgentDirective::Final { response: _ } => {
+            AgentDirective::Final { response } => {
                 info!("Agent returned final response");
-                Ok(AgentState::FinalizingResponse)
+                
+                // Format response as JSON if it's a string
+                let formatted_response = if let Some(response_str) = response.as_str() {
+                    // Try to parse as JSON first
+                    match serde_json::from_str::<serde_json::Value>(response_str) {
+                        Ok(json_value) => {
+                            // Already valid JSON
+                            json_value.to_string()
+                        }
+                        Err(_) => {
+                            // Not JSON - wrap in JSON structure
+                            serde_json::json!({
+                                "response": response_str,
+                                "type": "text"
+                            }).to_string()
+                        }
+                    }
+                } else {
+                    // Response is already a JSON value
+                    response.to_string()
+                };
+                
+                // Try to extract structured data if response is JSON
+                let (content, data, metadata) = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&formatted_response) {
+                    // Check if it has 'response' or 'content' field
+                    let content = json.get("response")
+                        .or_else(|| json.get("content"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    
+                    // Extract data field if present
+                    let data = json.get("data").cloned();
+                    
+                    // Build metadata from remaining fields
+                    let mut metadata_obj = serde_json::Map::new();
+                    if let Some(obj) = json.as_object() {
+                        for (key, value) in obj {
+                            if key != "response" && key != "content" && key != "data" {
+                                metadata_obj.insert(key.clone(), value.clone());
+                            }
+                        }
+                    }
+                    let metadata = if metadata_obj.is_empty() {
+                        None
+                    } else {
+                        Some(serde_json::Value::Object(metadata_obj))
+                    };
+                    
+                    (content, data, metadata)
+                } else {
+                    // Plain text response
+                    (formatted_response.clone(), None, None)
+                };
+                
+                Ok(AgentState::FinalMessage {
+                    content,
+                    data,
+                    metadata,
+                })
             }
             AgentDirective::CallTool { tool, input } => {
                 if *remaining_steps == 0 {
@@ -453,6 +512,31 @@ impl<P: ModelProvider> FsmAgent<P> {
         steps: Vec<AgentStep>,
     ) -> Result<AgentOutcome, AgentError> {
         match state {
+            // ⭐ NEW: Handle FinalMessage state with JSON response formatting
+            AgentState::FinalMessage { content, data, metadata } => {
+                info!("Agent reached FinalMessage state with structured response");
+                
+                // Build structured JSON response
+                let mut response_obj = serde_json::Map::new();
+                response_obj.insert("content".to_string(), serde_json::Value::String(content.clone()));
+                
+                if let Some(data_value) = data {
+                    response_obj.insert("data".to_string(), data_value);
+                }
+                
+                if let Some(metadata_value) = metadata {
+                    response_obj.insert("metadata".to_string(), metadata_value);
+                }
+                
+                let structured_response = Value::Object(response_obj);
+                
+                Ok(AgentOutcome {
+                    logs,
+                    session_id: session_id.unwrap_or_default(),
+                    response: structured_response,
+                    steps,
+                })
+            }
             AgentState::Terminated { reason } => match reason {
                 TerminationReason::Success if !steps.is_empty() => {
                     let last_step = steps.last().unwrap();
