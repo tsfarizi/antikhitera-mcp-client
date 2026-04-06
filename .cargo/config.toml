@@ -1,0 +1,15 @@
+# Cargo configuration
+# 
+# Usage:
+#   cargo run              → Run CLI directly
+#   cargo build            → Build CLI (native)
+#   cargo build-wasm       → Build WASM component
+#   cargo wit              → Generate WIT from Rust code
+#   cargo build-all        → Build both CLI and WASM
+
+[alias]
+run = "run -p antikythera-cli"
+build-wasm = "component build -p antikythera-sdk --target wasm32-wasip1 --release"
+wit = "run -p build-scripts --release -- wit"
+build-cli = "build -p antikythera-cli --release"
+build-sdk = "build -p antikythera-sdk --release"

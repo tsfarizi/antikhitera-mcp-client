@@ -6,6 +6,7 @@ members = [
     "antikythera-cli",
     "scripts",
 ]
+default-members = ["antikythera-cli"]
 
 [workspace.package]
 version = "0.8.0"

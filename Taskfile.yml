@@ -1,0 +1,226 @@
+# Taskfile for Antikythera MCP Framework
+# Usage: task <task-name>
+# Docs: https://taskfile.dev
+
+version: '3'
+
+silent: true
+
+dotenv:
+  - config/.env
+
+vars:
+  WASM_TARGET: wasm32-wasip1
+  WASM_BINARY: target/{{.WASM_TARGET}}/release/antikythera_sdk.wasm
+  CLI_BINARY: target/release/antikythera{{exeExt}}
+
+tasks:
+
+  # ===========================================================================
+  # Default Task - Show Help
+  # ===========================================================================
+  default:
+    desc: Show available tasks
+    cmds:
+      - |
+        echo "Antikythera MCP Framework - Available Tasks"
+        echo ""
+        echo "  task run           - Run CLI application"
+        echo "  task build         - Build WASM component"
+        echo "  task build-cli     - Build native CLI binary"
+        echo "  task build-all     - Build both CLI and WASM"
+        echo "  task wit           - Generate WIT from Rust code"
+        echo "  task clean         - Clean all build artifacts"
+        echo "  task clean-wasm    - Clean WASM build artifacts"
+        echo "  task clean-cli     - Clean CLI build artifacts"
+        echo "  task check         - Check code without building"
+        echo "  task check-wasm    - Check WASM compilation"
+        echo "  task test          - Run all tests"
+        echo "  task test-sdk      - Run SDK tests"
+        echo "  task test-ffi      - Run FFI tests"
+        echo "  task test-component - Run component tests"
+        echo "  task lint          - Run clippy linter"
+        echo "  task format        - Format code with rustfmt"
+        echo "  task inspect       - Inspect WASM component"
+        echo "  task size          - Show binary sizes"
+        echo ""
+
+  # ===========================================================================
+  # Build Tasks
+  # ===========================================================================
+
+  build:
+    desc: Build WASM component
+    deps:
+      - wit
+    cmds:
+      - echo "Building WASM component..."
+      - cargo component build --target {{.WASM_TARGET}} --release
+      - echo ""
+      - echo "✓ WASM component built: {{.WASM_BINARY}}"
+      - task: size
+
+  build-cli:
+    desc: Build native CLI binary
+    cmds:
+      - echo "Building CLI binary..."
+      - cargo build -p antikythera-cli --release
+      - echo ""
+      - echo "✓ CLI binary built: {{.CLI_BINARY}}"
+      - task: size
+
+  build-all:
+    desc: Build both CLI and WASM component
+    cmds:
+      - task: build
+      - task: build-cli
+
+  wit:
+    desc: Generate WIT from Rust code
+    cmds:
+      - echo "Generating WIT from Rust code..."
+      - cargo run -p build-scripts --release -- wit
+
+  # ===========================================================================
+  # Run Tasks
+  # ===========================================================================
+
+  run:
+    desc: Run CLI application
+    cmds:
+      - cargo run -p antikythera-cli {{.CLI_ARGS}}
+
+  # ===========================================================================
+  # Test Tasks
+  # ===========================================================================
+
+  test:
+    desc: Run all tests
+    cmds:
+      - echo "Running all tests..."
+      - cargo test --workspace
+      - echo ""
+      - echo "✓ All tests passed"
+
+  test-sdk:
+    desc: Run SDK tests
+    cmds:
+      - echo "Running SDK tests..."
+      - cargo test -p antikythera-sdk --lib
+      - echo ""
+      - echo "✓ SDK tests passed"
+
+  test-ffi:
+    desc: Run FFI tests
+    cmds:
+      - echo "Running FFI tests..."
+      - cargo test -p antikythera-sdk --lib ffi
+      - echo ""
+      - echo "✓ FFI tests passed"
+
+  test-component:
+    desc: Run component tests
+    cmds:
+      - echo "Running component tests..."
+      - cargo test -p antikythera-sdk --lib component
+      - echo ""
+      - echo "✓ Component tests passed"
+
+  # ===========================================================================
+  # Check Tasks
+  # ===========================================================================
+
+  check:
+    desc: Check code without building
+    cmds:
+      - echo "Checking code..."
+      - cargo check --workspace
+      - echo ""
+      - echo "✓ Code check passed"
+
+  check-wasm:
+    desc: Check WASM compilation
+    cmds:
+      - echo "Checking WASM compilation..."
+      - cargo check -p antikythera-sdk --target {{.WASM_TARGET}}
+      - echo ""
+      - echo "✓ WASM check passed"
+
+  # ===========================================================================
+  # Clean Tasks
+  # ===========================================================================
+
+  clean:
+    desc: Clean all build artifacts
+    cmds:
+      - echo "Cleaning all build artifacts..."
+      - cargo clean
+      - echo "✓ Clean complete"
+
+  clean-wasm:
+    desc: Clean WASM build artifacts
+    cmds:
+      - echo "Cleaning WASM artifacts..."
+      - rm -rf target/{{.WASM_TARGET}}
+      - echo "✓ WASM clean complete"
+
+  clean-cli:
+    desc: Clean CLI build artifacts
+    cmds:
+      - echo "Cleaning CLI artifacts..."
+      - rm -f {{.CLI_BINARY}}
+      - echo "✓ CLI clean complete"
+
+  # ===========================================================================
+  # Quality Tasks
+  # ===========================================================================
+
+  lint:
+    desc: Run clippy linter
+    cmds:
+      - echo "Running clippy..."
+      - cargo clippy --workspace -- -D warnings
+      - echo ""
+      - echo "✓ Clippy passed"
+
+  format:
+    desc: Format code with rustfmt
+    cmds:
+      - echo "Formatting code..."
+      - cargo fmt --all
+      - echo ""
+      - echo "✓ Code formatted"
+
+  # ===========================================================================
+  # Inspection Tasks
+  # ===========================================================================
+
+  inspect:
+    desc: Inspect WASM component
+    deps:
+      - build
+    cmds:
+      - echo "Inspecting WASM component..."
+      - wasm-tools component info {{.WASM_BINARY}} || echo "wasm-tools not installed"
+      - echo ""
+      - wasm-tools component wit {{.WASM_BINARY}} || echo "wasm-tools not installed"
+
+  size:
+    desc: Show binary sizes
+    cmds:
+      - |
+        echo "Binary Sizes:"
+        echo "─────────────────────────────────"
+        if [ -f "{{.CLI_BINARY}}" ]; then
+          CLI_SIZE=$(stat -f%z "{{.CLI_BINARY}}" 2>/dev/null || stat -c%s "{{.CLI_BINARY}}" 2>/dev/null || echo "?")
+          echo "  CLI:    $CLI_SIZE bytes"
+        else
+          echo "  CLI:    not built"
+        fi
+        if [ -f "{{.WASM_BINARY}}" ]; then
+          WASM_SIZE=$(stat -f%z "{{.WASM_BINARY}}" 2>/dev/null || stat -c%s "{{.WASM_BINARY}}" 2>/dev/null || echo "?")
+          echo "  WASM:   $WASM_SIZE bytes"
+        else
+          echo "  WASM:   not built"
+        fi
+        echo "─────────────────────────────────"
