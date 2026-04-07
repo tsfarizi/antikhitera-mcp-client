@@ -1,36 +1,36 @@
 //! CLI Configuration
 //!
-//! Configuration for CLI/native testing only.
+//! Configuration for CLI/native testing only (Gemini & Ollama only).
 //! NOT used by WASM - WASM receives LLM responses from host.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // ============================================================================
 // CLI Configuration (for testing only)
 // ============================================================================
-
-/// Provider configuration (CLI testing only)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CliProviderConfig {
-    /// Provider ID
-    pub id: String,
-    /// Provider type (openai, anthropic, ollama, gemini)
-    pub provider_type: String,
-    /// API endpoint
-    pub endpoint: String,
-    /// API key (or env var name)
-    pub api_key: String,
-    /// Available models
-    pub models: Vec<ModelInfo>,
-}
 
 /// Model information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
     pub name: String,
     pub display_name: String,
+}
+
+/// Provider configuration (CLI testing only)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CliProviderConfig {
+    /// Provider ID
+    pub id: String,
+    /// Provider type (gemini or ollama only)
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    /// API endpoint
+    pub endpoint: String,
+    /// API key (or env var name) - None for Ollama
+    pub api_key: String,
+    /// Available models
+    pub models: Vec<ModelInfo>,
 }
 
 /// Server configuration (REST server settings)
@@ -52,9 +52,10 @@ impl Default for ServerConfig {
 }
 
 /// Complete CLI configuration (for testing only)
+/// Only GEMINI and OLLAMA providers supported.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliConfig {
-    /// Providers (for testing)
+    /// Providers (gemini or ollama)
     pub providers: Vec<CliProviderConfig>,
     /// Default provider
     pub default_provider: String,
@@ -62,9 +63,6 @@ pub struct CliConfig {
     pub model: String,
     /// Server settings
     pub server: ServerConfig,
-    /// Custom data
-    #[serde(default)]
-    pub custom: HashMap<String, String>,
 }
 
 impl Default for CliConfig {
@@ -74,7 +72,6 @@ impl Default for CliConfig {
             default_provider: "ollama".to_string(),
             model: "llama3".to_string(),
             server: ServerConfig::default(),
-            custom: HashMap::new(),
         }
     }
 }

@@ -16,6 +16,7 @@ Welcome to the comprehensive documentation for Antikythera MCP Framework.
 | [Config Import/Export](config-import-export.md) | Backup/restore config for infrastructure rebuilds |
 | [JSON Schema Validation](json-schema-validation.md) | Enforce JSON output format with validation & auto-retry |
 | [WASM Agent Architecture](wasm-agent-architecture.md) | Host-driven LLM calls, WASM processes responses |
+| [CLI Clean Architecture](cli-clean-architecture.md) | Clean Architecture for CLI (Gemini & Ollama only) |
 
 ### Build & Deployment
 

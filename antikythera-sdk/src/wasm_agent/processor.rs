@@ -4,7 +4,6 @@
 //! WASM does NOT call LLM APIs - host handles that.
 
 use super::types::*;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ============================================================================

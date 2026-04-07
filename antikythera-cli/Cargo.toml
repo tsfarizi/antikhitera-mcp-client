@@ -21,11 +21,15 @@ antikythera-sdk = { path = "../antikythera-sdk", version = "0.9.0" }
 # Core async runtime
 tokio.workspace = true
 futures.workspace = true
+async-trait.workspace = true
+
+# HTTP client (for LLM API calls)
+reqwest = { workspace = true, features = ["json"] }
 
 # Serialization
 serde.workspace = true
 serde_json.workspace = true
-toml.workspace = true
+postcard = { workspace = true }
 
 # CLI and TUI
 clap.workspace = true

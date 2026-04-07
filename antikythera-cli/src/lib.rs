@@ -1,15 +1,24 @@
-//! # Antikythera CLI
+//! Antikythera CLI
 //!
-//! Terminal User Interface (TUI), command-line interface, and setup wizard.
+//! Clean Architecture:
+//! - domain/ (core entities & use cases)
+//! - infrastructure/ (LLM providers, config loading)
+//! - presentation/ (TUI)
+//!
+//! CLI acts as the "host" - it calls LLM APIs directly (native binary).
+//! WASM receives LLM responses from host via FFI (WASM binary).
 
-pub mod cli;
-pub mod tui;
-pub mod wizard;
+// Domain layer (innermost, no external deps)
+pub mod domain;
 
-// Re-export commonly used types
-pub use cli::{Cli, RunMode};
+// Infrastructure layer (implements domain ports)
+pub mod infrastructure;
 
-/// Run the CLI with the given arguments
-pub async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
-    tui::run_tui_with_cli(cli).await
-}
+// Presentation layer (TUI)
+pub mod presentation;
+
+// Config module (for CLI testing)
+pub mod config;
+
+// Re-exports for convenience
+pub use config::CliConfig;
