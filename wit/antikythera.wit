@@ -380,10 +380,75 @@ interface mcp-client {
     reload-config() -> result<reload-response, string>;
 }
 
-/// Response formatting configuration
-record response-format {
-    /// When true, output is JSON. When false, output is Markdown/Text.
-    format-is-json: bool,
+/// JSON Schema type for validation
+variant schema-type {
+    string,
+    integer,
+    float,
+    boolean,
+    /// Array with nested type
+    array-item(string),
+    /// Object with fields (represented as JSON string)
+    object-fields(string),
+}
+
+/// JSON Schema field definition
+record schema-field {
+    type: schema-type,
+    required: bool,
+    description: option<string>,
+}
+
+/// JSON Schema definition
+record json-schema {
+    name: string,
+    root-type: schema-type,
+    description: option<string>,
+    allow-additional: bool,
+}
+
+/// Validation result
+record validation-result {
+    valid: bool,
+    error: option<string>,
+    retry-count: u32,
+    json: option<string>,
+}
+
+/// JSON Schema Management Interface
+interface json-schema-manager {
+    /// Register a new JSON schema
+    register-schema(schema-name: string, schema-json: string) -> result<string, string>;
+
+    /// Get registered schema
+    get-schema(schema-name: string) -> result<string, string>;
+
+    /// List all registered schemas
+    list-schemas() -> result<string, string>;
+
+    /// Remove a schema
+    remove-schema(schema-name: string) -> result<string, string>;
+
+    /// Generate example JSON from schema
+    generate-example(schema-name: string) -> result<string, string>;
+
+    /// Validate JSON against schema
+    validate(schema-name: string, json-response: string, max-retries: u32) -> result<string, string>;
+
+    /// Get schema prompt instruction
+    get-schema-prompt(schema-name: string) -> result<string, string>;
+
+    /// Initialize retry manager
+    init-retry(session-id: string, max-retries: u32) -> result<string, string>;
+
+    /// Record validation error
+    record-error(session-id: string, error-message: string) -> result<string, string>;
+
+    /// Generate retry prompt
+    get-retry-prompt(session-id: string, schema-name: string, last-response: string) -> result<string, string>;
+
+    /// Check if retries exhausted
+    is-retry-exhausted(session-id: string) -> result<string, string>;
 }
 
 /// FFI interface for external language bindings
@@ -528,6 +593,7 @@ world antikythera-mcp {
     /// Export to host (agent functionality)
     export prompt-manager;
     export mcp-client;
+    export json-schema-manager;
     export ffi-server;
     export server-manager;
     export agent-manager;

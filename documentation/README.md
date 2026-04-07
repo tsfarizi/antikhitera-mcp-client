@@ -14,6 +14,7 @@ Welcome to the comprehensive documentation for Antikythera MCP Framework.
 | [CLI Documentation](CLI_DOCUMENTATION.md) | Complete CLI usage, commands, TUI interface, keyboard shortcuts |
 | [Postcard Cache](POSTCARD_CACHE.md) | Binary configuration cache, performance benefits |
 | [Config Import/Export](config-import-export.md) | Backup/restore config for infrastructure rebuilds |
+| [JSON Schema Validation](json-schema-validation.md) | Enforce JSON output format with validation & auto-retry |
 
 ### Build & Deployment
 

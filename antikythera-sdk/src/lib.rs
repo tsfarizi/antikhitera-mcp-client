@@ -138,6 +138,28 @@ pub use config_ffi::{
     mcp_config_set_agent_verbose, mcp_config_set_agent_auto_execute,
 };
 
+/// JSON Schema Validation (enforce JSON output format)
+pub mod json_schema;
+
+pub use json_schema::{
+    // Types
+    JsonSchema, SchemaType, SchemaField, ValidationError,
+    // Validator
+    JsonValidator, ValidationResult, RetryManager,
+    // FFI Functions
+    ffi::mcp_json_schema_register,
+    ffi::mcp_json_schema_get,
+    ffi::mcp_json_schema_list,
+    ffi::mcp_json_schema_remove,
+    ffi::mcp_json_schema_example,
+    ffi::mcp_json_validate,
+    ffi::mcp_json_schema_prompt,
+    ffi::mcp_json_retry_init,
+    ffi::mcp_json_retry_record_error,
+    ffi::mcp_json_retry_prompt,
+    ffi::mcp_json_retry_is_exhausted,
+};
+
 /// WASM Component feature slice (Host Imports)
 pub mod component;
 
