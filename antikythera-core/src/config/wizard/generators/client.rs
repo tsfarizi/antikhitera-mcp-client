@@ -1,6 +1,6 @@
 //! Client configuration generator
 //!
-//! Generates and modifies config/client.toml containing:
+//! Generates and modifies client.toml containing:
 //! - `[[providers]]` - API provider configurations
 //! - `[[servers]]` - MCP server definitions
 //! - `[server]` - REST settings (CORS, docs)
@@ -62,7 +62,7 @@ models = [
 
 /// Generate the .env file with API keys
 pub fn generate_env(api_key_env: &str, api_key: &str) -> Result<(), Box<dyn Error>> {
-    let env_path = Path::new("config/.env");
+    let env_path = Path::new(".env");
 
     let content = if env_path.exists() {
         let existing = fs::read_to_string(env_path)?;

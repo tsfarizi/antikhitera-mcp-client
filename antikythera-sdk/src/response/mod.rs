@@ -1,50 +1,16 @@
 //! Response Formatting Feature Slice
 //!
 //! Provides output format configuration and response formatting via FFI.
+//! When `format_is_json` is true, responses are formatted as JSON.
+//! When false, responses are formatted as Markdown/Text.
 
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::sync::{Mutex, LazyLock};
 
-/// Output format options
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OutputFormat {
-    /// JSON format (structured)
-    Json,
-    /// Markdown format (text with formatting)
-    Markdown,
-    /// Plain text format
-    Text,
-}
-
-impl Default for OutputFormat {
-    fn default() -> Self {
-        OutputFormat::Json
-    }
-}
-
-impl OutputFormat {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            OutputFormat::Json => "json",
-            OutputFormat::Markdown => "markdown",
-            OutputFormat::Text => "text",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Result<Self, String> {
-        match s.to_lowercase().as_str() {
-            "json" => Ok(OutputFormat::Json),
-            "markdown" | "md" => Ok(OutputFormat::Markdown),
-            "text" | "plain" => Ok(OutputFormat::Text),
-            _ => Err(format!("Invalid output format: {}. Use 'json', 'markdown', or 'text'", s)),
-        }
-    }
-}
-
-/// Server output format registry
-static OUTPUT_FORMATS: LazyLock<Mutex<HashMap<u32, OutputFormat>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Server output format registry (true = JSON, false = Markdown/Text)
+static OUTPUT_FORMATS: LazyLock<Mutex<HashMap<u32, bool>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn to_c_string(s: &str) -> *mut c_char {
     match CString::new(s) {
@@ -66,27 +32,15 @@ fn from_c_string(ptr: *const c_char) -> Result<String, String> {
 }
 
 /// Set the output format for server responses
+///
+/// # Parameters
+/// - `server_id`: Server ID
+/// - `format_is_json`: true for JSON format, false for Markdown/Text format
 #[unsafe(no_mangle)]
-pub extern "C" fn mcp_set_output_format(server_id: u32, format: *const c_char) -> i32 {
-    let format_str = match from_c_string(format) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Invalid format string: {}", e);
-            return 0;
-        }
-    };
-
-    let output_format = match OutputFormat::from_str(&format_str) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("{}", e);
-            return 0;
-        }
-    };
-
+pub extern "C" fn mcp_set_output_format(server_id: u32, format_is_json: i32) -> i32 {
     match OUTPUT_FORMATS.lock() {
         Ok(mut formats) => {
-            formats.insert(server_id, output_format);
+            formats.insert(server_id, format_is_json != 0);
             1
         }
         Err(_) => 0,
@@ -94,19 +48,29 @@ pub extern "C" fn mcp_set_output_format(server_id: u32, format: *const c_char) -
 }
 
 /// Get the current output format for a server
+///
+/// # Returns
+/// "true" if JSON format, "false" if Markdown/Text format
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_get_output_format(server_id: u32) -> *mut c_char {
     match OUTPUT_FORMATS.lock() {
         Ok(formats) => {
-            let default_format = OutputFormat::default();
-            let format = formats.get(&server_id).unwrap_or(&default_format);
-            to_c_string(format.as_str())
+            let is_json = formats.get(&server_id).copied().unwrap_or(true);
+            to_c_string(if is_json { "true" } else { "false" })
         }
         Err(_) => std::ptr::null_mut(),
     }
 }
 
 /// Format a response according to the server's output format setting
+///
+/// # Parameters
+/// - `server_id`: Server ID
+/// - `content`: Response content
+/// - `data_json`: Optional data as JSON (can be NULL)
+///
+/// # Returns
+/// Formatted response string
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_format_response(
     server_id: u32,
@@ -127,41 +91,33 @@ pub extern "C" fn mcp_format_response(
         }
     };
 
-    let format = OUTPUT_FORMATS.lock()
+    // Get format setting (true = JSON, false = Markdown/Text)
+    let format_is_json = OUTPUT_FORMATS.lock()
         .ok()
         .and_then(|formats| formats.get(&server_id).copied())
-        .unwrap_or_default();
+        .unwrap_or(true); // Default to JSON
 
-    let formatted = match format {
-        OutputFormat::Json => {
-            let mut obj = serde_json::Map::new();
-            obj.insert("content".to_string(), serde_json::Value::String(content_str));
-            if let Some(data) = data_value {
-                obj.insert("data".to_string(), data);
-            }
-            obj.insert("format".to_string(), serde_json::Value::String("json".to_string()));
-            serde_json::Value::Object(obj).to_string()
+    let formatted = if format_is_json {
+        // JSON format
+        let mut obj = serde_json::Map::new();
+        obj.insert("content".to_string(), serde_json::Value::String(content_str));
+        if let Some(data) = data_value {
+            obj.insert("data".to_string(), data);
         }
-        OutputFormat::Markdown => {
-            let mut md = String::new();
-            md.push_str("# Response\n\n");
-            md.push_str(&content_str);
-            if let Some(data) = data_value {
-                md.push_str("\n\n## Data\n\n");
-                md.push_str("```json\n");
-                md.push_str(&data.to_string());
-                md.push_str("\n```\n");
-            }
-            md
+        obj.insert("format_is_json".to_string(), serde_json::Value::Bool(true));
+        serde_json::Value::Object(obj).to_string()
+    } else {
+        // Markdown/Text format
+        let mut md = String::new();
+        md.push_str("# Response\n\n");
+        md.push_str(&content_str);
+        if let Some(data) = data_value {
+            md.push_str("\n\n## Data\n\n");
+            md.push_str("```json\n");
+            md.push_str(&data.to_string());
+            md.push_str("\n```\n");
         }
-        OutputFormat::Text => {
-            let mut text = content_str.clone();
-            if let Some(data) = data_value {
-                text.push_str("\n\nData:\n");
-                text.push_str(&data.to_string());
-            }
-            text
-        }
+        md
     };
 
     to_c_string(&formatted)

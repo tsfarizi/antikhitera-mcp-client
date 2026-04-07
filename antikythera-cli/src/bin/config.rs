@@ -126,6 +126,18 @@ pub enum ConfigCommand {
     Migrate,
     /// Check migration status
     MigrationStatus,
+    /// Use an existing Postcard config file (copy to project root)
+    UseConfig {
+        /// Path to existing .pc config file
+        #[arg(name = "path")]
+        path: String,
+    },
+    /// Backup current config to a file
+    BackupConfig {
+        /// Output path for backup (default: config-backup.pc)
+        #[arg(name = "output")]
+        output: Option<String>,
+    },
 }
 
 /// Execute CLI command
@@ -372,6 +384,66 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
 
         ConfigCommand::MigrationStatus => {
             println!("{}", migration_status());
+            Ok(())
+        }
+
+        ConfigCommand::UseConfig { path } => {
+            // Verify source file exists
+            if !std::path::Path::new(&path).exists() {
+                return Err(format!("Config file not found: {}", path));
+            }
+
+            // Copy to project root as app.pc
+            let dest = "app.pc";
+            std::fs::copy(&path, dest)
+                .map_err(|e| format!("Failed to copy config file: {}", e))?;
+
+            println!("✓ Config loaded from: {}", path);
+            println!("  Saved as: {}", dest);
+
+            // Verify it's valid
+            let size = std::fs::metadata(dest)
+                .map_err(|e| format!("Failed to read config: {}", e))?
+                .len();
+            println!("  Size: {} bytes", size);
+            println!("\nVerifying config...");
+
+            match load_config(None) {
+                Ok(config) => {
+                    println!("  ✓ Config is valid");
+                    println!("  Provider: {}/{}", config.model.default_provider, config.model.model);
+                    println!("  Providers: {}", config.providers.len());
+                    println!("  Agent max steps: {}", config.agent.max_steps);
+                }
+                Err(e) => {
+                    println!("  ✗ Config may be corrupted: {}", e);
+                    println!("  Keeping file anyway at: {}", dest);
+                }
+            }
+
+            Ok(())
+        }
+
+        ConfigCommand::BackupConfig { output } => {
+            // Load current config
+            let config = load_config(None)
+                .map_err(|e| format!("Failed to load current config: {}", e))?;
+
+            let backup_path = output.unwrap_or_else(|| "config-backup.pc".to_string());
+
+            // Save to backup file
+            save_config(&config, Some(std::path::Path::new(&backup_path)))
+                .map_err(|e| format!("Failed to save backup: {}", e))?;
+
+            let size = std::fs::metadata(&backup_path)
+                .map_err(|e| format!("Failed to read backup: {}", e))?
+                .len();
+
+            println!("✓ Config backed up to: {}", backup_path);
+            println!("  Size: {} bytes", size);
+            println!("\nThis file can be used later with:");
+            println!("  antikythera-config use-config {}", backup_path);
+
             Ok(())
         }
     }

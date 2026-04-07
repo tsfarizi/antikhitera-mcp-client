@@ -380,6 +380,12 @@ interface mcp-client {
     reload-config() -> result<reload-response, string>;
 }
 
+/// Response formatting configuration
+record response-format {
+    /// When true, output is JSON. When false, output is Markdown/Text.
+    format-is-json: bool,
+}
+
 /// FFI interface for external language bindings
 interface ffi-server {
     mcp-server-create(addr: string) -> u32;
@@ -398,9 +404,9 @@ interface ffi-server {
     mcp-response-clear-fields(server-id: u32) -> u32;
     mcp-response-apply-fields(server-id: u32, response-json: string) -> string;
     mcp-response-field-count(server-id: u32) -> u32;
-    mcp-set-output-format(server-id: u32, format: string) -> s32;
-    mcp-get-output-format(server-id: u32) -> string;
-    mcp-format-response(server-id: u32, content: string, data-json: string) -> string;
+    mcp-set-output-format(server-id: u32, format-is-json: bool);
+    mcp-get-output-format(server-id: u32) -> bool;
+    mcp-format-response(server-id: u32, content: string, data-json: option<string>) -> string;
     mcp-format-final-message(raw-response: string, response-len: u32) -> string;
     mcp-extract-final-content(final-message-json: string) -> string;
     mcp-extract-final-data(final-message-json: string) -> string;

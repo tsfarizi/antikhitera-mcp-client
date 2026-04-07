@@ -46,6 +46,8 @@ pub use core::{
     mcp_config_export,
     mcp_config_import,
     mcp_config_reset,
+    mcp_config_use_from,
+    mcp_config_backup_to,
 };
 
 // Field-level operations
@@ -59,6 +61,11 @@ pub use providers::{
     mcp_config_add_provider,
     mcp_config_remove_provider,
     mcp_config_list_providers,
+    mcp_config_set_provider_api_key,
+    mcp_config_get_provider_api_key,
+    mcp_config_add_provider_model,
+    mcp_config_remove_provider_model,
+    mcp_config_list_provider_models,
 };
 
 // Prompt management

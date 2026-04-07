@@ -2,17 +2,14 @@
 //!
 //! Single source of truth for paths and other constants.
 
-/// Client configuration file path (providers, servers, REST settings)
-pub const CONFIG_PATH: &str = "config/client.toml";
+/// Unified Postcard configuration file path (project root)
+pub const CONFIG_PATH: &str = "app.pc";
 
-/// Model configuration file path (default_provider, model, prompt_template, tools)
-pub const MODEL_CONFIG_PATH: &str = "config/model.toml";
+/// Environment file path (project root)
+pub const ENV_PATH: &str = ".env";
 
-/// Default environment file path
-pub const ENV_PATH: &str = "config/.env";
-
-/// Configuration directory
-pub const CONFIG_DIR: &str = "config";
+/// Example environment file path (project root)
+pub const ENV_EXAMPLE_PATH: &str = ".env.example";
 
 /// Default Gemini API path (fallback when not specified in config)
 pub const DEFAULT_GEMINI_API_PATH: &str = "v1beta/models";

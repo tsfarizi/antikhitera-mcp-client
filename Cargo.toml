@@ -9,48 +9,48 @@ members = [
 default-members = ["antikythera-cli"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.1"
 edition = "2024"
-authors = ["antikythera Team"]
+authors = ["tsfarizi"]
 license = "MIT"
 repository = "https://github.com/antikythera/mcp-client"
 
 [workspace.dependencies]
 # Async runtime
-tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "process", "io-std", "io-util"] }
+tokio = { version = "1.51.0", features = ["macros", "rt-multi-thread", "process", "io-std", "io-util"] }
 tokio-stream = "0.1"
 async-trait = "0.1"
 futures = "0.3.32"
 
 # HTTP and networking (for core only)
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.13.2", features = ["json", "stream"] }
 reqwest-eventsource = "0.6"
 axum = { version = "0.8", features = ["json"] }
-tower-http = { version = "0.6", features = ["cors"] }
+tower-http = { version = "0.6.8", features = ["cors"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.9.8"
+serde_json = "1.0.149"
+toml = "1.1.2+spec-1.1.0"
 postcard = { version = "1.0", features = ["alloc"] }
 
 # CLI and TUI
-clap = { version = "4.5", features = ["derive"] }
-ratatui = "0.29"
-crossterm = "0.28"
+clap = { version = "4.6.0", features = ["derive"] }
+ratatui = "0.30.0"
+crossterm = "0.29.0"
 
 # Error handling and logging
-thiserror = "2.0.17"
-tracing = { version = "0.1", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+thiserror = "2.0.18"
+tracing = { version = "0.1.44", features = ["log"] }
+tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 
 # Utilities
-uuid = { version = "1.8", features = ["v4"] }
+uuid = { version = "1.23.0", features = ["v4"] }
 base64 = "0.22"
-chrono = { version = "0.4", features = ["serde"] }
-sysinfo = "0.38.3"
+chrono = { version = "0.4.44", features = ["serde"] }
+sysinfo = "0.38.4"
 dotenvy = "0.15"
-shellexpand = "3.0"
+shellexpand = "3.1.2"
 
 # WASM support (for SDK)
 wasm-bindgen = "0.2"
@@ -62,8 +62,8 @@ utoipa = "5.4"
 utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
 
 # Multi-Agent support (optional)
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
-google-cloud-storage = { version = "0.15" }
+redis = { version = "1.2.0", features = ["tokio-comp", "connection-manager"] }
+google-cloud-storage = { version = "1.10.0" }
 
 [profile.release]
 lto = true

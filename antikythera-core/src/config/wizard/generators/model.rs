@@ -1,17 +1,15 @@
-//! Model configuration generator
+//! Model configuration generator (LEGACY - TOML format)
 //!
-//! Generates and modifies config/model.toml containing:
-//! - `default_provider` - Default API provider ID
-//! - `model` - Default model name
-//! - `[prompts]` - System prompt template and configurable prompts
-//! - `[[tools]]` - Tool definitions synced from MCP servers
+//! ⚠️ DEPRECATED: This module generates TOML files for backward compatibility.
+//! New code should use `postcard_config` module for unified Postcard-based config.
 
 use crate::config::app::PromptsConfig;
-use crate::constants::MODEL_CONFIG_PATH;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+
+const MODEL_TOML_PATH: &str = "model.toml";
 
 /// Generate the model configuration file with new [prompts] section format
 pub fn generate(provider_id: &str, default_model: &str) -> Result<(), Box<dyn Error>> {
@@ -72,14 +70,14 @@ no_tools_guidance = "{}"
     );
 
     fs::create_dir_all("config")?;
-    fs::write(MODEL_CONFIG_PATH, config_content)?;
+    fs::write(MODEL_TOML_PATH, config_content)?;
 
     Ok(())
 }
 
 /// Update the default provider
 pub fn update_default_provider(provider_id: &str) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new(MODEL_CONFIG_PATH);
+    let config_path = Path::new(MODEL_TOML_PATH);
     let content = fs::read_to_string(config_path)?;
 
     let mut result = String::new();
@@ -99,7 +97,7 @@ pub fn update_default_provider(provider_id: &str) -> Result<(), Box<dyn Error>> 
 
 /// Update the default model
 pub fn update_default_model(model_name: &str) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new(MODEL_CONFIG_PATH);
+    let config_path = Path::new(MODEL_TOML_PATH);
     let content = fs::read_to_string(config_path)?;
 
     let mut result = String::new();
@@ -148,7 +146,7 @@ pub fn update_prompts_field(
     value: &str,
     multiline: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new(MODEL_CONFIG_PATH);
+    let config_path = Path::new(MODEL_TOML_PATH);
     let content = fs::read_to_string(config_path)?;
 
     let mut result = String::new();
@@ -244,7 +242,7 @@ pub fn sync_tools_from_server(
     server_name: &str,
     tools: Vec<(String, String)>,
 ) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new(MODEL_CONFIG_PATH);
+    let config_path = Path::new(MODEL_TOML_PATH);
     let content = fs::read_to_string(config_path)?;
 
     // Collect tool names we're about to sync

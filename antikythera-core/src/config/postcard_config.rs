@@ -183,8 +183,8 @@ impl Default for AgentConfig {
 // Postcard Serialization
 // ============================================================================
 
-/// Configuration file path
-pub const CONFIG_PATH: &str = "config/app.pc";
+/// Configuration file path (project root)
+pub const CONFIG_PATH: &str = "app.pc";
 
 /// Serialize configuration to Postcard binary
 pub fn config_to_postcard(config: &AppConfig) -> Result<Vec<u8>, String> {
@@ -254,17 +254,14 @@ pub fn config_size(path: Option<&Path>) -> Result<usize, String> {
 // Path Helpers
 // ============================================================================
 
-/// Get the config directory path
+/// Get the current working directory (config is stored at project root)
 pub fn config_dir() -> PathBuf {
-    Path::new(CONFIG_PATH)
-        .parent()
-        .unwrap_or(Path::new("config"))
-        .to_path_buf()
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// Get the environment file path
 pub fn env_path() -> PathBuf {
-    config_dir().join(".env")
+    PathBuf::from(".env")
 }
 
 /// Check if config file exists

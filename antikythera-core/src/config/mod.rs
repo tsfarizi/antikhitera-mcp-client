@@ -52,7 +52,7 @@ pub mod postcard_config;
 /// Migration from TOML to Postcard
 pub mod migration;
 
-pub use crate::constants::{CONFIG_PATH, ENV_PATH, MODEL_CONFIG_PATH};
+pub use crate::constants::{CONFIG_PATH, ENV_PATH};
 
 pub use app::{AppConfig, DocServerConfig, PromptsConfig};
 pub use error::ConfigError;

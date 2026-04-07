@@ -100,7 +100,6 @@ pub use agents::{
 pub mod response;
 
 pub use response::{
-    OutputFormat,
     mcp_set_output_format, mcp_get_output_format, mcp_format_response,
 };
 
@@ -124,10 +123,14 @@ pub use config_ffi::{
     mcp_config_init, mcp_config_exists, mcp_config_size,
     mcp_config_get_all, mcp_config_set_all,
     mcp_config_export, mcp_config_import, mcp_config_reset,
+    mcp_config_use_from, mcp_config_backup_to,
     // Field-level FFI
     mcp_config_get, mcp_config_set,
     // Provider FFI
     mcp_config_add_provider, mcp_config_remove_provider, mcp_config_list_providers,
+    mcp_config_set_provider_api_key, mcp_config_get_provider_api_key,
+    mcp_config_add_provider_model, mcp_config_remove_provider_model,
+    mcp_config_list_provider_models,
     // Prompt FFI
     mcp_config_get_prompt, mcp_config_set_prompt, mcp_config_list_prompts,
     // Agent FFI

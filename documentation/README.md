@@ -13,6 +13,7 @@ Welcome to the comprehensive documentation for Antikythera MCP Framework.
 | [FFI Reference](ffi.md) | Complete FFI API reference with examples in Python, Node.js, C#, Java |
 | [CLI Documentation](CLI_DOCUMENTATION.md) | Complete CLI usage, commands, TUI interface, keyboard shortcuts |
 | [Postcard Cache](POSTCARD_CACHE.md) | Binary configuration cache, performance benefits |
+| [Config Import/Export](config-import-export.md) | Backup/restore config for infrastructure rebuilds |
 
 ### Build & Deployment
 

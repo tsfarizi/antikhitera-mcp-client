@@ -62,14 +62,14 @@ models = [
     );
 
     fs::create_dir_all("config")?;
-    fs::write("config/client.toml", config_content)?;
+    fs::write("client.toml", config_content)?;
 
     Ok(())
 }
 
 /// Generate the .env file with API keys
 pub fn generate_env(api_key_env: &str, api_key: &str) -> Result<(), Box<dyn Error>> {
-    let env_path = Path::new("config/.env");
+    let env_path = Path::new(".env");
 
     let content = if env_path.exists() {
         let existing = fs::read_to_string(env_path)?;
@@ -109,7 +109,7 @@ pub fn add_provider(
     endpoint: &str,
     api_key_env: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
     let mut new_provider = format!(
         r#"
@@ -135,7 +135,7 @@ pub fn update_provider(
     new_endpoint: &str,
     new_api_key_env: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
     let mut lines: Vec<String> = content.lines().map(String::from).collect();
     let mut in_target_provider = false;
@@ -168,7 +168,7 @@ pub fn add_model_to_provider(
     model_name: &str,
     display_name: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
     let new_model = format!(
         "    {{ name = \"{}\", display_name = \"{}\" }}",
@@ -209,7 +209,7 @@ pub fn remove_model_from_provider(
     provider_id: &str,
     model_name: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
 
     let mut result = String::new();
@@ -248,7 +248,7 @@ pub fn add_server_to_config(
     command: &str,
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
 
     if !config_path.exists() {
         return Err("Config file not found. Run setup wizard first.".into());
@@ -285,7 +285,7 @@ command = "{}"{}"#,
 
 /// Remove a server from the config
 pub fn remove_server_from_config(server_name: &str) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
 
     let mut result = String::new();
@@ -330,7 +330,7 @@ pub fn sync_tools_from_server(
 ) -> Result<(), Box<dyn Error>> {
     use std::collections::HashSet;
 
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
 
     // Collect tool names we're about to sync
@@ -404,7 +404,7 @@ fn extract_tool_name(line: &str) -> Option<String> {
 
 /// Update the prompt template
 pub fn update_prompt_template(template: &str) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
     let mut result = String::new();
     let mut in_template = false;
@@ -440,7 +440,7 @@ pub fn update_prompt_template(template: &str) -> Result<(), Box<dyn Error>> {
 
 /// Update the default provider
 pub fn update_default_provider(provider_id: &str) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
 
     let mut result = String::new();
@@ -460,7 +460,7 @@ pub fn update_default_provider(provider_id: &str) -> Result<(), Box<dyn Error>> 
 
 /// Update the default model
 pub fn update_default_model(model_name: &str) -> Result<(), Box<dyn Error>> {
-    let config_path = Path::new("config/client.toml");
+    let config_path = Path::new("client.toml");
     let content = fs::read_to_string(config_path)?;
 
     let mut result = String::new();

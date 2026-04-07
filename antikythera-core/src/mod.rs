@@ -29,8 +29,8 @@
 //! ## Configuration
 //!
 //! The client uses two configuration files:
-//! - `config/client.toml` - Provider settings, servers, CORS configuration
-//! - `config/model.toml` - Model selection, prompts, and tool definitions
+//! - `Postcard config (app.pc)` - Provider settings, servers, CORS configuration
+//! - `Postcard config (app.pc)` - Model selection, prompts, and tool definitions
 //!
 //! See [`config::AppConfig`] for details on the configuration structure.
 

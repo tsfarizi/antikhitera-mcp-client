@@ -4,11 +4,13 @@
 
 use antikythera_core::config::app::PromptsConfig;
 use antikythera_core::config::wizard::generators::model;
-use antikythera_core::constants::{CONFIG_PATH, MODEL_CONFIG_PATH};
+use antikythera_core::constants::CONFIG_PATH;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
 use std::fs;
+
+const MODEL_TOML_PATH: &str = "model.toml";
 
 fn to_c_string(s: &str) -> *mut c_char {
     match CString::new(s) {
@@ -118,7 +120,7 @@ pub extern "C" fn mcp_get_all_prompts() -> *mut c_char {
 /// Get the raw model.toml file content
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_get_raw_config() -> *mut c_char {
-    let config_path = Path::new(MODEL_CONFIG_PATH);
+    let config_path = Path::new(LEGACY_MODEL_TOML);
     match fs::read_to_string(config_path) {
         Ok(content) => to_c_string(&content),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),

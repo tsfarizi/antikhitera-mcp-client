@@ -68,9 +68,9 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
     client::generate_env(&api_key_env, &api_key)?;
 
     ui::print_success("Configuration saved!");
-    ui::print_info("  → config/client.toml");
-    ui::print_info("  → config/model.toml");
-    ui::print_info("  → config/.env");
+    ui::print_info("  → client.toml");
+    ui::print_info("  → model.toml");
+    ui::print_info("  → .env");
 
     Ok(())
 }

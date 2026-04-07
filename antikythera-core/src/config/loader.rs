@@ -5,7 +5,6 @@ use super::provider::{ModelProviderConfig, RawProviderConfig};
 use super::server::{RawServer, ServerConfig};
 use super::tool::{RawTool, ToolConfig};
 use super::{CONFIG_PATH, ENV_PATH};
-use crate::constants::MODEL_CONFIG_PATH;
 use dotenvy::from_filename;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
@@ -23,7 +22,7 @@ static CACHE_MANAGER: OnceCell<ConfigCacheManager> = OnceCell::new();
 /// Get or initialize the cache manager
 fn get_cache_manager() -> &'static ConfigCacheManager {
     CACHE_MANAGER.get_or_init(|| {
-        let cache_dir = PathBuf::from("./config/.cache");
+        let cache_dir = PathBuf::from(".cache");
         ConfigCacheManager::new(cache_dir)
     })
 }
@@ -53,7 +52,7 @@ struct RawModelConfig {
     pub prompts: PromptsConfig,
 }
 
-/// Ensures environment variables are loaded from config/.env
+/// Ensures environment variables are loaded from .env (project root)
 pub fn ensure_env_loaded() {
     ENV_LOADER.call_once(|| {
         let _ = from_filename(ENV_PATH);
@@ -61,7 +60,6 @@ pub fn ensure_env_loaded() {
 }
 
 /// Load and validate configuration from file paths
-/// Loads from both client.toml and model.toml
 /// Uses Postcard cache for faster subsequent loads
 pub fn load_config(path: Option<&Path>) -> Result<super::AppConfig, ConfigError> {
     ensure_env_loaded();
@@ -71,7 +69,7 @@ pub fn load_config(path: Option<&Path>) -> Result<super::AppConfig, ConfigError>
     let model_path = if let Some(parent) = client_path.parent() {
         parent.join("model.toml")
     } else {
-        Path::new(MODEL_CONFIG_PATH).to_path_buf()
+        PathBuf::from("model.toml")
     };
 
     // Use cache for faster loading
