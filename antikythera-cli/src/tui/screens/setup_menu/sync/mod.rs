@@ -6,7 +6,6 @@ mod display;
 
 use super::load_config;
 use antikythera_core::config::ServerConfig;
-use antikythera_core::config::wizard::generators::model;
 use antikythera_core::application::tooling::spawn_and_list_tools;
 use crate::tui::terminal::Tui;
 use ratatui::style::Color;
@@ -58,7 +57,7 @@ pub fn run_sync_single_server_tui(
                     }
                     tool_data.push((tool_name.clone(), description.clone()));
                 }
-                model::sync_tools_from_server(&server.name, tool_data)?;
+                // TODO: sync_tools_from_server (Postcard)(&server.name, tool_data)?;
 
                 show_result_tui(
                     terminal,
@@ -135,7 +134,7 @@ pub fn run_sync_all_servers_tui(
 
                     let tool_data: Vec<(String, String)> = tools.into_iter().collect();
                     let total = tool_data.len();
-                    model::sync_tools_from_server(&server.name, tool_data)?;
+                    // TODO: sync_tools_from_server (Postcard)(&server.name, tool_data)?;
 
                     results.push((server.name.clone(), true, total, new_count));
                 }

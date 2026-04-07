@@ -7,8 +7,8 @@ use std::os::raw::c_char;
 use std::collections::HashMap;
 use std::sync::{Mutex, LazyLock};
 
-use super::types::{JsonSchema, SchemaType, SchemaField, ValidationError};
-use super::validator::{JsonValidator, ValidationResult, RetryManager};
+use super::types::{JsonSchema, ValidationError};
+use super::validator::{JsonValidator, RetryManager};
 
 // ============================================================================
 // Schema Registry
@@ -16,10 +16,6 @@ use super::validator::{JsonValidator, ValidationResult, RetryManager};
 
 /// Global schema registry
 static SCHEMA_REGISTRY: LazyLock<Mutex<HashMap<String, JsonSchema>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Global validator registry
-static VALIDATOR_REGISTRY: LazyLock<Mutex<HashMap<String, JsonValidator>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Global retry managers
@@ -61,10 +57,6 @@ fn serialize_result<T: serde::Serialize>(result: &T) -> *mut c_char {
 
 fn error_response(message: &str) -> *mut c_char {
     to_c_string(&format!(r#"{{"error": "{}"}}"#, message))
-}
-
-fn success_response() -> *mut c_char {
-    to_c_string(r#"{"success": true}"#)
 }
 
 fn success_with(fields: &[(&str, serde_json::Value)]) -> *mut c_char {

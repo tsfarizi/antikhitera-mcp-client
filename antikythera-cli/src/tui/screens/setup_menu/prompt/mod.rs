@@ -12,8 +12,8 @@ mod editors;
 mod viewers;
 
 use super::load_config;
+use antikythera_core::config::postcard_config;
 use antikythera_core::config::PromptsConfig;
-use antikythera_core::config::wizard::generators::model as generator;
 use crate::tui::terminal::{NavAction, Tui, read_key};
 use crate::tui::widgets::{Menu, MenuItem};
 use ratatui::style::Color;
@@ -97,14 +97,21 @@ fn get_default_value(field_name: &str) -> &'static str {
 
 /// Update a field in config
 pub(crate) fn update_field(field_name: &str, value: &str) -> Result<(), Box<dyn Error>> {
+    let mut pc = postcard_config::load_config(None)
+        .map_err(|e| format!("Failed to load config: {}", e))?;
+
     match field_name {
-        "template" => generator::update_prompt_template(value),
-        "tool_guidance" => generator::update_tool_guidance(value),
-        "fallback_guidance" => generator::update_fallback_guidance(value),
-        "json_retry_message" => generator::update_json_retry_message(value),
-        "tool_result_instruction" => generator::update_tool_result_instruction(value),
-        _ => Ok(()),
+        "template" => pc.prompts.template = value.to_string(),
+        "tool_guidance" => pc.prompts.tool_guidance = value.to_string(),
+        "fallback_guidance" => pc.prompts.fallback_guidance = value.to_string(),
+        "json_retry_message" => pc.prompts.json_retry_message = value.to_string(),
+        "tool_result_instruction" => pc.prompts.tool_result_instruction = value.to_string(),
+        _ => {}
     }
+
+    postcard_config::save_config(&pc, None)
+        .map_err(|e| format!("Failed to save config: {}", e))?;
+    Ok(())
 }
 
 /// Main prompts management screen

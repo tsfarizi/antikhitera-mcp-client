@@ -23,5 +23,5 @@ pub mod validator;
 pub mod ffi;
 
 // Re-export main types for convenience
-pub use types::{JsonSchema, SchemaType, SchemaField, ValidationError};
-pub use validator::{JsonValidator, ValidationResult, RetryManager};
+pub use types::{JsonSchema, ValidationError};
+pub use validator::{JsonValidator, RetryManager};

@@ -4,6 +4,7 @@ use super::load_config;
 use crate::tui::TableRow;
 use crate::tui::terminal::{NavAction, Tui, read_key};
 use crate::tui::widgets::{Menu, MenuItem, TableMenu};
+use antikythera_core::config::postcard_config;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -12,7 +13,6 @@ use std::error::Error;
 
 /// Manage providers screen (uses existing terminal)
 pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
-    use antikythera_core::config::wizard::generators::model;
 
     let mut selected_idx: usize = 0;
 
@@ -60,7 +60,11 @@ pub fn run_manage_providers_with_terminal(terminal: &mut Tui) -> Result<(), Box<
             NavAction::Select => {
                 if menu.is_row_selected() {
                     let provider_id = &config.providers[menu.selected_index()].id;
-                    model::update_default_provider(provider_id)?;
+                    let mut pc = postcard_config::load_config(None)
+                        .map_err(|e| format!("Failed to load config: {}", e))?;
+                    pc.model.default_provider = provider_id.clone();
+                    postcard_config::save_config(&pc, None)
+                        .map_err(|e| format!("Failed to save config: {}", e))?;
                 } else if let Some(action_idx) = menu.selected_action_index() {
                     match action_idx {
                         0 => {

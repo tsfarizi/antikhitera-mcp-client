@@ -66,7 +66,7 @@ pub mod prompts;
 pub use prompts::{
     mcp_get_template, mcp_update_template, mcp_reset_template,
     mcp_get_tool_guidance, mcp_update_tool_guidance,
-    mcp_get_all_prompts, mcp_get_raw_config,
+    mcp_get_all_prompts,
 };
 
 /// Server Management feature slice
@@ -143,9 +143,9 @@ pub mod json_schema;
 
 pub use json_schema::{
     // Types
-    JsonSchema, SchemaType, SchemaField, ValidationError,
+    JsonSchema, ValidationError,
     // Validator
-    JsonValidator, ValidationResult, RetryManager,
+    JsonValidator, RetryManager,
     // FFI Functions
     ffi::mcp_json_schema_register,
     ffi::mcp_json_schema_get,

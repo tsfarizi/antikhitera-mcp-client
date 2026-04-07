@@ -30,6 +30,9 @@ mod runner;
 mod runtime;
 mod state;
 
+#[cfg(feature = "multi-agent")]
+pub mod multi_agent;
+
 pub use context::{ServerGuidance, ToolContext, ToolDescriptor};
 pub use errors::{AgentError, ToolError};
 pub use fsm_runner::FsmAgent;

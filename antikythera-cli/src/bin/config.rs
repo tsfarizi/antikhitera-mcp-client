@@ -5,7 +5,6 @@
 
 use clap::{Parser, Subcommand};
 use antikythera_core::config::postcard_config::*;
-use antikythera_core::config::migration::*;
 use serde_json;
 
 #[derive(Parser)]
@@ -363,27 +362,25 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
         }
 
         ConfigCommand::Migrate => {
-            if !needs_migration() {
-                println!("No migration needed.");
-                if config_exists() {
-                    println!("Postcard config already exists at: {}", CONFIG_PATH);
-                } else {
-                    println!("No TOML config found. Run 'init' to create default config.");
-                }
-                return Ok(());
+            println!("TOML migration is no longer supported.");
+            println!("The system now uses Postcard config (app.pc) exclusively.");
+            println!("If you have existing TOML config, please manually migrate to Postcard.");
+            if !config_exists() {
+                println!("\nNo Postcard config found. Initializing default...");
+                init_default_config(None)?;
+                println!("✓ Default Postcard config created at: {}", CONFIG_PATH);
             }
-
-            println!("Migrating from TOML to Postcard...");
-            let config = migrate_toml_to_postcard()?;
-            println!("✓ Migration complete!");
-            println!("  New config size: {} bytes", config_size(None)?);
-            println!("  Providers: {}", config.providers.len());
-            println!("  Default model: {}/{}", config.model.default_provider, config.model.model);
             Ok(())
         }
 
         ConfigCommand::MigrationStatus => {
-            println!("{}", migration_status());
+            if config_exists() {
+                println!("✓ Postcard config exists at: {}", CONFIG_PATH);
+                println!("  Size: {} bytes", config_size(None).unwrap_or(0));
+            } else {
+                println!("✗ No Postcard config found.");
+                println!("  Run 'init' to create default config.");
+            }
             Ok(())
         }
 

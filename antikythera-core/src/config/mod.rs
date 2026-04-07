@@ -2,41 +2,21 @@
 //!
 //! This module handles all configuration loading, parsing, and validation for the MCP client.
 //!
-//! ## Configuration Files
+//! ## Configuration
 //!
-//! The client uses a split configuration approach:
+//! The client uses a single Postcard binary configuration file:
 //!
-//! - **`client.toml`** - Contains provider settings, MCP servers, and REST server configuration
-//! - **`model.toml`** - Contains model selection, prompt templates, and tool definitions
-//!
-//! ## Configuration Cache (Postcard)
-//!
-//! For faster loading, configurations are cached in Postcard binary format:
-//!
-//! - **First load**: TOML → Postcard cache
-//! - **Subsequent loads**: Postcard cache directly (much faster)
-//! - **On update**: TOML → Postcard cache (re-generated)
+//! - **`app.pc`** - All settings (providers, model, prompts, agent, server)
 //!
 //! ## Key Types
 //!
-//! - [`AppConfig`] - Main configuration struct loaded from both files
+//! - [`AppConfig`] - Main configuration struct
 //! - [`ModelProviderConfig`] - API provider configuration (Gemini, OpenAI, Ollama)
 //! - [`PromptsConfig`] - Configurable prompts for agent behavior
 //! - [`ToolConfig`] - Tool definition synced from MCP servers
 //! - [`ServerConfig`] - MCP server connection settings
-//!
-//! ## Example Configuration
-//!
-//! ```toml
-//! # model.toml
-//! default_provider = "gemini"
-//! model = "gemini-2.0-flash"
-//!
-//! [prompts]
-//! template = "You are a helpful assistant."
-//! ```
+//! - [`postcard_config::AppConfig`] - Postcard-based unified config
 
-pub mod cache;
 pub mod app;
 pub mod error;
 pub mod loader;
@@ -49,7 +29,7 @@ pub mod wizard;
 /// Unified Postcard-based configuration
 pub mod postcard_config;
 
-/// Migration from TOML to Postcard
+/// Migration stubs (TOML → Postcard no longer supported)
 pub mod migration;
 
 pub use crate::constants::{CONFIG_PATH, ENV_PATH};

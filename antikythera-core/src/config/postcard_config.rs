@@ -138,7 +138,7 @@ pub struct PromptsConfig {
 impl Default for PromptsConfig {
     fn default() -> Self {
         Self {
-            template: "You are a helpful AI assistant.\n\n{{custom_instruction}}\n\n{{language_guidance}}\n\n{{tool_guidance}}".to_string(),
+            template: Self::default_template().to_string(),
             tool_guidance: "You have access to the following tools. Use them only when necessary to fulfill the user request:".to_string(),
             fallback_guidance: "If the request is outside the scope of available tools, apologize politely and explain your limitations.".to_string(),
             json_retry_message: "System Error: Invalid JSON format returned. Please output ONLY the raw JSON object for the tool call or final response. Do not use Markdown blocks or explanations.".to_string(),
@@ -149,6 +149,13 @@ impl Default for PromptsConfig {
             agent_max_steps_error: "agent exceeded the maximum number of tool interactions".to_string(),
             no_tools_guidance: "No additional tools are currently configured.".to_string(),
         }
+    }
+}
+
+impl PromptsConfig {
+    /// Default prompt template
+    pub fn default_template() -> &'static str {
+        "You are a helpful AI assistant.\n\n{{custom_instruction}}\n\n{{language_guidance}}\n\n{{tool_guidance}}"
     }
 }
 

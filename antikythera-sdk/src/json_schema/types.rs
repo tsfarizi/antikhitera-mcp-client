@@ -11,7 +11,7 @@ use std::collections::HashMap;
 // ============================================================================
 
 /// Supported data types for JSON schema
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SchemaType {
     /// String value
@@ -26,6 +26,20 @@ pub enum SchemaType {
     Array { items: Box<SchemaType> },
     /// Object with nested fields
     Object { fields: HashMap<String, SchemaField> },
+}
+
+impl PartialEq for SchemaType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (SchemaType::String, SchemaType::String) => true,
+            (SchemaType::Integer, SchemaType::Integer) => true,
+            (SchemaType::Float, SchemaType::Float) => true,
+            (SchemaType::Boolean, SchemaType::Boolean) => true,
+            (SchemaType::Array { items: a }, SchemaType::Array { items: b }) => a == b,
+            (SchemaType::Object { fields: a }, SchemaType::Object { fields: b }) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl SchemaType {
@@ -81,6 +95,14 @@ pub struct SchemaField {
 }
 
 fn default_true() -> bool { true }
+
+impl PartialEq for SchemaField {
+    fn eq(&self, other: &Self) -> bool {
+        self.field_type == other.field_type
+            && self.required == other.required
+            && self.description == other.description
+    }
+}
 
 // ============================================================================
 // JSON Schema Definition
@@ -259,7 +281,7 @@ fn generate_schema_instruction(schema_type: &SchemaType, indent: usize) -> Strin
 
 impl JsonSchema {
     /// Create a simple string field schema
-    pub fn string_field(name: &str, required: bool, description: Option<&str>) -> SchemaField {
+    pub fn string_field(_name: &str, required: bool, description: Option<&str>) -> SchemaField {
         SchemaField {
             field_type: SchemaType::String,
             required,
@@ -269,7 +291,7 @@ impl JsonSchema {
     }
 
     /// Create a simple integer field schema
-    pub fn int_field(name: &str, required: bool, description: Option<&str>) -> SchemaField {
+    pub fn int_field(_name: &str, required: bool, description: Option<&str>) -> SchemaField {
         SchemaField {
             field_type: SchemaType::Integer,
             required,
@@ -279,7 +301,7 @@ impl JsonSchema {
     }
 
     /// Create a simple boolean field schema
-    pub fn bool_field(name: &str, required: bool, description: Option<&str>) -> SchemaField {
+    pub fn bool_field(_name: &str, required: bool, description: Option<&str>) -> SchemaField {
         SchemaField {
             field_type: SchemaType::Boolean,
             required,
@@ -289,7 +311,7 @@ impl JsonSchema {
     }
 
     /// Create a nested object field schema
-    pub fn object_field(name: &str, fields: HashMap<String, SchemaField>, required: bool, description: Option<&str>) -> SchemaField {
+    pub fn object_field(_name: &str, fields: HashMap<String, SchemaField>, required: bool, description: Option<&str>) -> SchemaField {
         SchemaField {
             field_type: SchemaType::Object { fields },
             required,
@@ -299,7 +321,7 @@ impl JsonSchema {
     }
 
     /// Create an array field schema
-    pub fn array_field(name: &str, item_type: SchemaType, required: bool, description: Option<&str>) -> SchemaField {
+    pub fn array_field(_name: &str, item_type: SchemaType, required: bool, description: Option<&str>) -> SchemaField {
         SchemaField {
             field_type: SchemaType::Array { items: Box::new(item_type) },
             required,

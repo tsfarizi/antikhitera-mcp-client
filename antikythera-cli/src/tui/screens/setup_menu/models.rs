@@ -4,6 +4,7 @@ use super::load_config;
 use crate::tui::TableRow;
 use crate::tui::terminal::{NavAction, Tui, read_key};
 use crate::tui::widgets::{Menu, MenuItem, TableMenu};
+use antikythera_core::config::postcard_config;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -12,7 +13,6 @@ use std::error::Error;
 
 /// Manage models screen (uses existing terminal)
 pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn Error>> {
-    use antikythera_core::config::wizard::generators::model;
     let provider_idx: usize;
     let mut prov_selected: usize = 0;
     loop {
@@ -106,7 +106,11 @@ pub fn run_manage_models_with_terminal(terminal: &mut Tui) -> Result<(), Box<dyn
             NavAction::Select => {
                 if menu.is_row_selected() {
                     let model_name = &provider.models[menu.selected_index()].name;
-                    model::update_default_model(model_name)?;
+                    let mut pc = postcard_config::load_config(None)
+                        .map_err(|e| format!("Failed to load config: {}", e))?;
+                    pc.model.model = model_name.clone();
+                    postcard_config::save_config(&pc, None)
+                        .map_err(|e| format!("Failed to save config: {}", e))?;
                 } else if let Some(action_idx) = menu.selected_action_index() {
                     match action_idx {
                         0 => {

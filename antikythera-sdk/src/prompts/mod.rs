@@ -1,16 +1,10 @@
 //! Prompt Management Feature Slice
 //!
-//! Provides FFI bindings for managing prompt templates.
+//! Provides FFI bindings for managing prompt templates via Postcard config.
 
-use antikythera_core::config::app::PromptsConfig;
-use antikythera_core::config::wizard::generators::model;
-use antikythera_core::constants::CONFIG_PATH;
+use antikythera_core::config::postcard_config;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::path::Path;
-use std::fs;
-
-const MODEL_TOML_PATH: &str = "model.toml";
 
 fn to_c_string(s: &str) -> *mut c_char {
     match CString::new(s) {
@@ -31,19 +25,19 @@ fn from_c_string(ptr: *const c_char) -> Result<String, String> {
     }
 }
 
-fn load_prompts_config() -> Result<PromptsConfig, String> {
-    use antikythera_core::config::app::AppConfig;
-    let config_path = Path::new(CONFIG_PATH);
-    let config = AppConfig::load(Some(config_path))
-        .map_err(|e| format!("Failed to load config: {}", e))?;
-    Ok(config.prompts)
+fn load_config() -> Result<postcard_config::AppConfig, String> {
+    postcard_config::load_config(None)
+}
+
+fn save_config(config: &postcard_config::AppConfig) -> Result<(), String> {
+    postcard_config::save_config(config, None)
 }
 
 /// Get the main system prompt template
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_get_template() -> *mut c_char {
-    match load_prompts_config() {
-        Ok(config) => to_c_string(config.template()),
+    match load_config() {
+        Ok(config) => to_c_string(&config.prompts.template),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
 }
@@ -56,7 +50,14 @@ pub extern "C" fn mcp_update_template(template: *const c_char) -> *mut c_char {
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     };
 
-    match model::update_prompt_template(&template_str) {
+    let mut config = match load_config() {
+        Ok(c) => c,
+        Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
+    };
+
+    config.prompts.template = template_str;
+
+    match save_config(&config) {
         Ok(()) => to_c_string(r#"{"success": true}"#),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
@@ -65,7 +66,14 @@ pub extern "C" fn mcp_update_template(template: *const c_char) -> *mut c_char {
 /// Reset the main template to default
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_reset_template() -> *mut c_char {
-    match model::update_prompt_template(PromptsConfig::default_template()) {
+    let mut config = match load_config() {
+        Ok(c) => c,
+        Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
+    };
+
+    config.prompts.template = postcard_config::PromptsConfig::default_template().to_string();
+
+    match save_config(&config) {
         Ok(()) => to_c_string(r#"{"success": true}"#),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
@@ -74,8 +82,8 @@ pub extern "C" fn mcp_reset_template() -> *mut c_char {
 /// Get tool guidance prompt
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_get_tool_guidance() -> *mut c_char {
-    match load_prompts_config() {
-        Ok(config) => to_c_string(config.tool_guidance()),
+    match load_config() {
+        Ok(config) => to_c_string(&config.prompts.tool_guidance),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
 }
@@ -88,7 +96,14 @@ pub extern "C" fn mcp_update_tool_guidance(guidance: *const c_char) -> *mut c_ch
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     };
 
-    match model::update_tool_guidance(&guidance_str) {
+    let mut config = match load_config() {
+        Ok(c) => c,
+        Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
+    };
+
+    config.prompts.tool_guidance = guidance_str;
+
+    match save_config(&config) {
         Ok(()) => to_c_string(r#"{"success": true}"#),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
@@ -97,32 +112,22 @@ pub extern "C" fn mcp_update_tool_guidance(guidance: *const c_char) -> *mut c_ch
 /// Get all prompts as JSON object
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_get_all_prompts() -> *mut c_char {
-    match load_prompts_config() {
+    match load_config() {
         Ok(config) => {
             let json = serde_json::json!({
-                "template": config.template(),
-                "tool_guidance": config.tool_guidance(),
-                "fallback_guidance": config.fallback_guidance(),
-                "json_retry_message": config.json_retry_message(),
-                "tool_result_instruction": config.tool_result_instruction(),
-                "agent_instructions": config.agent_instructions(),
-                "ui_instructions": config.ui_instructions(),
-                "language_instructions": config.language_instructions(),
-                "agent_max_steps_error": config.agent_max_steps_error(),
-                "no_tools_guidance": config.no_tools_guidance()
+                "template": config.prompts.template,
+                "tool_guidance": config.prompts.tool_guidance,
+                "fallback_guidance": config.prompts.fallback_guidance,
+                "json_retry_message": config.prompts.json_retry_message,
+                "tool_result_instruction": config.prompts.tool_result_instruction,
+                "agent_instructions": config.prompts.agent_instructions,
+                "ui_instructions": config.prompts.ui_instructions,
+                "language_instructions": config.prompts.language_instructions,
+                "agent_max_steps_error": config.prompts.agent_max_steps_error,
+                "no_tools_guidance": config.prompts.no_tools_guidance
             });
             to_c_string(&json.to_string())
         }
-        Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    }
-}
-
-/// Get the raw model.toml file content
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_raw_config() -> *mut c_char {
-    let config_path = Path::new(LEGACY_MODEL_TOML);
-    match fs::read_to_string(config_path) {
-        Ok(content) => to_c_string(&content),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
 }
