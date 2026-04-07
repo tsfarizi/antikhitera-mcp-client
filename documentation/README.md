@@ -17,6 +17,7 @@ Welcome to the comprehensive documentation for Antikythera MCP Framework.
 | [JSON Schema Validation](json-schema-validation.md) | Enforce JSON output format with validation & auto-retry |
 | [WASM Agent Architecture](wasm-agent-architecture.md) | Host-driven LLM calls, WASM processes responses |
 | [CLI Clean Architecture](cli-clean-architecture.md) | Clean Architecture for CLI (Gemini & Ollama only) |
+| [Logging System](logging-system.md) | Unified logging with subscription & polling |
 
 ### Build & Deployment
 

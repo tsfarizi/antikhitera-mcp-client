@@ -9,11 +9,21 @@ pub mod constants;
 pub mod domain;
 pub mod infrastructure;
 
+/// Unified logging system for all core operations
+pub mod logging;
+
 // Re-export commonly used types
 pub use application::agent::{Agent, AgentOptions, AgentOutcome, ToolDescriptor};
 pub use application::client::{ChatRequest, ClientConfig, McpClient};
 pub use config::AppConfig;
 pub use infrastructure::model::{DynamicModelProvider, ModelProvider};
+
+/// Re-export logging for easy access
+pub use logging::{
+    get_logger, clear_all_loggers, logger_count,
+    ConfigLogger, AgentLogger, TransportLogger, ProviderLogger,
+    query_logs, get_latest_logs, get_logs_json, subscribe_logs, clear_logs,
+};
 
 /// Crate version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

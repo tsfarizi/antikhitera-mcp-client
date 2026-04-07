@@ -4,12 +4,13 @@ members = [
     "antikythera-core",
     "antikythera-sdk",
     "antikythera-cli",
+    "antikythera-log",
     "scripts",
 ]
 default-members = ["antikythera-cli"]
 
 [workspace.package]
-version = "0.9.2"
+version = "0.9.3"
 edition = "2024"
 authors = ["tsfarizi"]
 license = "MIT"

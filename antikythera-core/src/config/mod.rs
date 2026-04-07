@@ -42,3 +42,6 @@ pub use error::ConfigError;
 pub use provider::{ModelInfo, ModelProviderConfig};
 pub use server::{ServerConfig, TransportType};
 pub use tool::ToolConfig;
+
+// Re-export logging for config operations
+pub use crate::logging::ConfigLogger;

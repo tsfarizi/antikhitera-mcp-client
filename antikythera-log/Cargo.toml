@@ -1,0 +1,28 @@
+[package]
+name = "antikythera-log"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Unified logging system for Antikythera MCP Framework"
+
+[features]
+default = ["std"]
+std = []
+wasm = ["dep:wasm-bindgen"]
+subscriber = ["dep:tokio", "dep:crossbeam-channel"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+
+# WASM support
+wasm-bindgen = { workspace = true, optional = true }
+
+# Subscriber support (real-time streaming)
+tokio = { version = "1.39", features = ["sync", "macros"], optional = true }
+crossbeam-channel = { version = "0.5", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.39", features = ["macros", "rt", "time"] }
