@@ -6,6 +6,7 @@ members = [
     "antikythera-cli",
     "antikythera-log",
     "antikythera-session",
+    "tests",
     "scripts",
 ]
 default-members = ["antikythera-cli"]

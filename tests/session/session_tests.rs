@@ -1,4 +1,10 @@
-//! Session Manager Tests
+//! Antikythera Session Module Tests
+//!
+//! Tests for session management including:
+//! - Session creation and deletion
+//! - Message handling
+//! - Session export/import
+//! - Batch operations
 
 use antikythera_session::*;
 

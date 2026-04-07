@@ -225,6 +225,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "antikythera-tests"
+version = "0.9.0"
+dependencies = [
+ "antikythera-core",
+ "antikythera-log",
+ "antikythera-sdk",
+ "antikythera-session",
+ "chrono",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"

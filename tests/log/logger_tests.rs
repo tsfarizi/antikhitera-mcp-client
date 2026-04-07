@@ -1,4 +1,10 @@
-//! Logger Tests
+//! Antikythera Log Module Tests
+//!
+//! Tests for the unified logging system including:
+//! - Basic logging operations
+//! - Log filtering and pagination
+//! - Log serialization
+//! - Session-based logging
 
 use antikythera_log::*;
 
@@ -61,7 +67,7 @@ fn test_log_json() {
     let json = batch.to_json().unwrap();
 
     assert!(json.contains("Test message"));
-    assert!(json.contains("info")); // lowercase due to serde rename
+    assert!(json.contains("info"));
 }
 
 #[test]

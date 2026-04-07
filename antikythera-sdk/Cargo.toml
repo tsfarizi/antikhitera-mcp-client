@@ -84,18 +84,3 @@ ffi-support = { version = "0.4", optional = true }
 [dev-dependencies]
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
 serial_test = "3.0"
-
-[[test]]
-name = "sdk_servers"
-path = "../tests/sdk/servers/server_tests.rs"
-harness = true
-
-[[test]]
-name = "sdk_agents"
-path = "../tests/sdk/agents/agent_tests.rs"
-harness = true
-
-[[test]]
-name = "sdk_config"
-path = "../tests/sdk/config/config_tests.rs"
-harness = true

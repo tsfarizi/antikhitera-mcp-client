@@ -1,0 +1,52 @@
+[package]
+name = "antikythera-tests"
+version = "0.9.0"
+edition = "2024"
+publish = false
+
+# ============================================================================
+# Log Module Tests
+# ============================================================================
+
+[[test]]
+name = "log_tests"
+path = "log/logger_tests.rs"
+
+# ============================================================================
+# Session Module Tests
+# ============================================================================
+
+[[test]]
+name = "session_tests"
+path = "session/session_tests.rs"
+
+# ============================================================================
+# SDK Module Tests
+# ============================================================================
+
+[[test]]
+name = "sdk_servers"
+path = "sdk/servers/server_tests.rs"
+
+[[test]]
+name = "sdk_agents"
+path = "sdk/agents/agent_tests.rs"
+
+[[test]]
+name = "sdk_config"
+path = "sdk/config/config_tests.rs"
+
+# ============================================================================
+# Dependencies
+# ============================================================================
+
+[dependencies]
+antikythera-log = { path = "../antikythera-log" }
+antikythera-session = { path = "../antikythera-session" }
+antikythera-core = { path = "../antikythera-core", features = ["full"] }
+antikythera-sdk = { path = "../antikythera-sdk" }
+serde_json.workspace = true
+chrono.workspace = true
+tempfile = "3.10"
+tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
+serial_test = "3.0"
