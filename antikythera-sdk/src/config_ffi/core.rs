@@ -5,6 +5,7 @@
 use std::os::raw::c_char;
 use super::config;
 use super::helpers::*;
+use crate::sdk_logging::ConfigFfiLogger;
 
 /// Initialize default configuration and save as Postcard
 ///
@@ -12,19 +13,28 @@ use super::helpers::*;
 /// JSON with `success`, `path`, and `size_bytes` fields
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_config_init() -> *mut c_char {
+    let logger = ConfigFfiLogger::new("ffi-config");
+    logger.ffi_call("mcp_config_init", "{}");
+
     if config::config_exists() {
+        logger.ffi_error("mcp_config_init", "Config already exists");
         return error_response("Config already exists. Use reset to overwrite.");
     }
 
     match config::init_default_config(None) {
         Ok(_) => {
             let size = config::config_size(None).unwrap_or(0);
+            logger.config_saved(config::CONFIG_PATH, size);
+            logger.ffi_result("mcp_config_init", true, size);
             success_with(&[
                 ("path", serde_json::json!(config::CONFIG_PATH)),
                 ("size_bytes", serde_json::json!(size)),
             ])
         }
-        Err(e) => error_response(&e),
+        Err(e) => {
+            logger.ffi_error("mcp_config_init", &e);
+            error_response(&e)
+        }
     }
 }
 
@@ -95,12 +105,20 @@ pub extern "C" fn mcp_config_set_all(config_json: *const c_char) -> *mut c_char 
 /// Formatted JSON string of entire config
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_config_export() -> *mut c_char {
+    let logger = ConfigFfiLogger::new("ffi-config");
+    logger.ffi_call("mcp_config_export", "{}");
+
     match config::load_config(None) {
-        Ok(cfg) => match serde_json::to_string_pretty(&cfg) {
-            Ok(json) => to_c_string(&json),
-            Err(e) => error_response(&format!("Serialization failed: {}", e)),
-        },
-        Err(e) => error_response(&e),
+        Ok(cfg) => {
+            let json = serde_json::to_string_pretty(&cfg).unwrap_or_default();
+            let size = json.len();
+            logger.ffi_result("mcp_config_export", true, size);
+            to_c_string(&json)
+        }
+        Err(e) => {
+            logger.ffi_error("mcp_config_export", &e);
+            error_response(&e)
+        }
     }
 }
 
@@ -118,14 +136,27 @@ pub extern "C" fn mcp_config_import(config_json: *const c_char) -> *mut c_char {
         Err(e) => return error_response(&e),
     };
 
+    let logger = ConfigFfiLogger::new("ffi-config");
+    logger.ffi_call("mcp_config_import", &json_str);
+
     let cfg: config::AppConfig = match serde_json::from_str(&json_str) {
         Ok(c) => c,
-        Err(e) => return error_response(&format!("Invalid JSON: {}", e)),
+        Err(e) => {
+            logger.ffi_error("mcp_config_import", &format!("Invalid JSON: {}", e));
+            return error_response(&format!("Invalid JSON: {}", e));
+        }
     };
 
     match config::save_config(&cfg, None) {
-        Ok(()) => success_response(),
-        Err(e) => error_response(&e),
+        Ok(()) => {
+            logger.config_saved(config::CONFIG_PATH, json_str.len());
+            logger.ffi_result("mcp_config_import", true, json_str.len());
+            success_response()
+        }
+        Err(e) => {
+            logger.ffi_error("mcp_config_import", &e);
+            error_response(&e)
+        }
     }
 }
 
@@ -135,15 +166,23 @@ pub extern "C" fn mcp_config_import(config_json: *const c_char) -> *mut c_char {
 /// JSON with `success`, `path`, and `size_bytes` fields
 #[unsafe(no_mangle)]
 pub extern "C" fn mcp_config_reset() -> *mut c_char {
+    let logger = ConfigFfiLogger::new("ffi-config");
+    logger.ffi_call("mcp_config_reset", "{}");
+
     match config::init_default_config(None) {
         Ok(_) => {
             let size = config::config_size(None).unwrap_or(0);
+            logger.config_saved(config::CONFIG_PATH, size);
+            logger.ffi_result("mcp_config_reset", true, size);
             success_with(&[
                 ("path", serde_json::json!(config::CONFIG_PATH)),
                 ("size_bytes", serde_json::json!(size)),
             ])
         }
-        Err(e) => error_response(&e),
+        Err(e) => {
+            logger.ffi_error("mcp_config_reset", &e);
+            error_response(&e)
+        }
     }
 }
 

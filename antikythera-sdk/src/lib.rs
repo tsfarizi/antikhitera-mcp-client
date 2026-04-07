@@ -160,6 +160,18 @@ pub use json_schema::{
     ffi::mcp_json_retry_is_exhausted,
 };
 
+/// SDK Logging module
+pub mod sdk_logging;
+
+pub use sdk_logging::{
+    // Global functions
+    get_sdk_logger, clear_sdk_loggers,
+    // Module loggers
+    ConfigFfiLogger, ServerLogger, AgentLogger, PromptLogger, ResponseLogger, WasmAgentLogger,
+    // Query API
+    query_sdk_logs, get_latest_sdk_logs, get_sdk_logs_json, subscribe_sdk_logs, clear_sdk_session_logs,
+};
+
 /// WASM Agent Module (processes LLM responses from host)
 pub mod wasm_agent;
 

@@ -45,6 +45,9 @@ full = ["wasm", "multi-agent", "cloud", "antikythera-core/full"]
 # Core with configurable features - SDK enables what it needs
 antikythera-core = { path = "../antikythera-core", version = "0.9.0", default-features = false, features = ["full"] }
 
+# Logging
+antikythera-log = { path = "../antikythera-log", version = "0.9.0", features = ["subscriber"] }
+
 # Core async runtime (wasm-compatible)
 tokio = { version = "1.39", default-features = false, features = ["macros", "rt"] }
 futures = "0.3.32"
