@@ -5,6 +5,7 @@ members = [
     "antikythera-sdk",
     "antikythera-cli",
     "antikythera-log",
+    "antikythera-session",
     "scripts",
 ]
 default-members = ["antikythera-cli"]

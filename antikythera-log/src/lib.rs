@@ -53,8 +53,12 @@ pub mod logger;
 #[cfg(feature = "subscriber")]
 pub mod subscriber;
 
+pub mod session_logs;
+
 pub use entries::*;
 pub use logger::*;
 
 #[cfg(feature = "subscriber")]
 pub use subscriber::{LogSender, LogSubscriber};
+
+pub use session_logs::{SessionLogExport, BatchLogExport};

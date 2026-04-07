@@ -37,7 +37,7 @@ pub use types::{
     AgentAction,
     AgentState,
     AgentConfig as WasmAgentConfig,
-    Message,
+    AgentMessage,
     ToolCall,
     ToolResult,
     PromptVariables,

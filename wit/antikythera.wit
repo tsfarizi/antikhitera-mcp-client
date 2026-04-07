@@ -202,6 +202,57 @@ interface prompt-manager {
     render-prompt(template: string, variables-json: string) -> result<string, string>;
 }
 
+/// Session management
+interface session-manager {
+    /// Create a new session
+    create-session(user-id: string, model: string) -> result<string, string>;
+
+    /// Get session by ID
+    get-session(session-id: string) -> result<string, string>;
+
+    /// List all sessions
+    list-sessions() -> result<string, string>;
+
+    /// Add message to session
+    add-message(session-id: string, role: string, content: string) -> result<string, string>;
+
+    /// Get chat history
+    get-history(session-id: string) -> result<string, string>;
+
+    /// Export session to hex-encoded Postcard
+    export-session(session-id: string) -> result<string, string>;
+
+    /// Import session from hex-encoded Postcard
+    import-session(export-data: string) -> result<string, string>;
+
+    /// Delete session
+    delete-session(session-id: string) -> result<string, string>;
+
+    /// Clear session messages
+    clear-session(session-id: string) -> result<string, string>;
+
+    /// Export all sessions as batch
+    batch-export() -> result<string, string>;
+
+    /// Import batch of sessions
+    batch-import(export-data: string) -> result<string, string>;
+
+    /// Get logs for a session
+    get-session-logs(session-id: string) -> result<string, string>;
+
+    /// Export session logs to hex-encoded Postcard
+    export-session-logs(session-id: string) -> result<string, string>;
+
+    /// Import session logs from hex-encoded Postcard
+    import-session-logs(export-data: string) -> result<string, string>;
+
+    /// Export all session logs as batch
+    batch-export-logs() -> result<string, string>;
+
+    /// Import batch of session logs
+    batch-import-logs(export-data: string) -> result<string, string>;
+}
+
 // ============================================================================
 // World definition
 // ============================================================================
@@ -214,4 +265,5 @@ world antikythera-agent {
     export agent-runner;
     export json-schema-validator;
     export prompt-manager;
+    export session-manager;
 }

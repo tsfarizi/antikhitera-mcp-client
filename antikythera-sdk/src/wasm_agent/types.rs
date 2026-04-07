@@ -41,7 +41,7 @@ pub struct AgentState {
     /// Current step number
     pub current_step: u32,
     /// Message history (user + assistant + tool results)
-    pub message_history: Vec<Message>,
+    pub message_history: Vec<AgentMessage>,
     /// Tool call results
     pub tool_results: HashMap<String, serde_json::Value>,
     /// Agent configuration
@@ -61,7 +61,7 @@ impl AgentState {
     }
 
     /// Add message to history
-    pub fn add_message(&mut self, message: Message) {
+    pub fn add_message(&mut self, message: AgentMessage) {
         self.message_history.push(message);
     }
 
@@ -91,9 +91,9 @@ impl AgentState {
 // Messages
 // ============================================================================
 
-/// Message in conversation
+/// Message in conversation (for WASM agent)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
+pub struct AgentMessage {
     /// Role (user, assistant, system, tool)
     pub role: String,
     /// Message content

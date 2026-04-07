@@ -160,6 +160,28 @@ pub use json_schema::{
     ffi::mcp_json_retry_is_exhausted,
 };
 
+/// Session Management module
+pub mod session;
+
+pub use session::{
+    // Types
+    Message, MessageRole, Session, SessionSummary,
+    SessionExport, BatchExport,
+    SessionLogExport, BatchLogExport,
+    // Manager
+    SdkSessionManager,
+    // FFI - Session management
+    mcp_session_create, mcp_session_get, mcp_session_list,
+    mcp_session_add_message, mcp_session_get_history,
+    mcp_session_export, mcp_session_import,
+    mcp_session_delete, mcp_session_clear,
+    mcp_batch_export, mcp_batch_import,
+    // FFI - Session log integration
+    mcp_session_export_logs, mcp_session_import_logs,
+    mcp_session_get_logs, mcp_session_batch_export_logs,
+    mcp_session_batch_import_logs,
+};
+
 /// SDK Logging module
 pub mod sdk_logging;
 
@@ -178,7 +200,7 @@ pub mod wasm_agent;
 pub use wasm_agent::{
     // Types
     AgentAction, AgentState, WasmAgentConfig,
-    Message, ToolCall, ToolResult, PromptVariables,
+    AgentMessage, ToolCall, ToolResult, PromptVariables,
     // Processor
     process_llm_response,
     process_tool_result,

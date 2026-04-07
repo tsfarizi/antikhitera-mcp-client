@@ -176,6 +176,7 @@ version = "0.9.4"
 dependencies = [
  "chrono",
  "crossbeam-channel",
+ "postcard",
  "serde",
  "serde_json",
  "tokio",
@@ -188,6 +189,7 @@ version = "0.9.4"
 dependencies = [
  "antikythera-core",
  "antikythera-log",
+ "antikythera-session",
  "async-trait",
  "chrono",
  "console_error_panic_hook",
@@ -207,6 +209,19 @@ dependencies = [
  "wit-bindgen 0.37.0",
  "wit-bindgen-rt",
  "witgen",
+]
+
+[[package]]
+name = "antikythera-session"
+version = "0.9.4"
+dependencies = [
+ "antikythera-log",
+ "chrono",
+ "postcard",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "uuid",
 ]
 
 [[package]]

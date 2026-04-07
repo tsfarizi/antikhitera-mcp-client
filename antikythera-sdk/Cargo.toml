@@ -48,6 +48,9 @@ antikythera-core = { path = "../antikythera-core", version = "0.9.0", default-fe
 # Logging
 antikythera-log = { path = "../antikythera-log", version = "0.9.0", features = ["subscriber"] }
 
+# Session management
+antikythera-session = { path = "../antikythera-session", version = "0.9.0" }
+
 # Core async runtime (wasm-compatible)
 tokio = { version = "1.39", default-features = false, features = ["macros", "rt"] }
 futures = "0.3.32"

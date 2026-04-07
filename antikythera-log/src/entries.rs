@@ -61,7 +61,7 @@ pub struct LogEntry {
     pub message: String,
     /// Timestamp (ISO 8601)
     pub timestamp: String,
-    /// Session ID for grouping
+    /// Session ID for grouping (ties log to specific session)
     pub session_id: Option<String>,
     /// Source module/component
     pub source: Option<String>,

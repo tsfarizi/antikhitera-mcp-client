@@ -101,7 +101,7 @@ pub fn process_tool_result(
     };
 
     // Add to message history
-    state.add_message(Message {
+    state.add_message(AgentMessage {
         role: "tool".to_string(),
         content: message.clone(),
         tool_call: None,

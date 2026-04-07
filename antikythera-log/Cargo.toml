@@ -14,7 +14,8 @@ subscriber = ["dep:tokio", "dep:crossbeam-channel"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
+serde_json = { workspace = true }
+postcard = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 
 # WASM support
