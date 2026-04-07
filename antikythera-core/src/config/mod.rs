@@ -29,6 +29,9 @@ pub mod wizard;
 /// Unified Postcard-based configuration
 pub mod postcard_config;
 
+/// WASM Agent Configuration (minimal, no provider info)
+pub mod wasm_config;
+
 /// Migration stubs (TOML → Postcard no longer supported)
 pub mod migration;
 

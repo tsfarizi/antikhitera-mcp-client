@@ -1,600 +1,217 @@
-package antikythera:mcp-framework@1.0.0;
+/// Antikythera MCP Framework - WASM Component Interface
+///
+/// WASM hanya menerima response LLM dari host, TIDAK memanggil API langsung.
+/// Host bertanggung jawab untuk:
+/// - LLM API calls (OpenAI, Anthropic, Gemini, Ollama, dll)
+/// - API key management
+/// - Rate limiting & retry logic
+/// - MCP tool execution
 
-/// LLM request from agent to host
+// ============================================================================
+// Host Imports (disediakan oleh host runtime)
+// ============================================================================
+
+/// LLM request dari WASM ke host
 record llm-request {
-    prompt: string,
+    /// Prompt messages (JSON encoded)
+    messages-json: string,
+    /// System prompt
     system-prompt: string,
-    temperature: option<float32>,
+    /// Temperature (0.0 - 2.0)
+    temperature: option<f32>,
+    /// Max tokens
     max-tokens: option<u32>,
-    response-format: option<string>,
+    /// Expected response schema name (optional)
+    schema-name: option<string>,
 }
 
-/// LLM response from host to agent
+/// LLM response dari host ke WASM
 record llm-response {
+    /// Response content
     content: string,
+    /// Model yang digunakan
     model: string,
+    /// Tokens used
     tokens-used: option<u32>,
+    /// Finish reason
     finish-reason: option<string>,
 }
 
-/// Tool call event from agent to host
+/// Tool call event dari WASM ke host
 record tool-call-event {
+    /// Tool name
     tool-name: string,
+    /// Tool arguments (JSON encoded)
     arguments-json: string,
+    /// Session ID for tracking
     session-id: option<string>,
+    /// Step ID for ordering
     step-id: u32,
 }
 
-/// Tool execution result from host to agent
+/// Tool execution result dari host ke WASM
 record tool-execution-result {
+    /// Tool name
     tool-name: string,
+    /// Success status
     success: bool,
+    /// Output (JSON encoded)
     output-json: string,
+    /// Error message if failed
     error-message: option<string>,
+    /// Step ID
     step-id: u32,
 }
 
-/// Logging event
+/// Log event dari WASM ke host
 record log-event {
+    /// Log level (debug, info, warn, error)
     level: string,
+    /// Message
     message: string,
+    /// Timestamp (ISO 8601)
     timestamp: option<string>,
 }
 
-// ============================================================================
-// MCP Server Management Types
-// ============================================================================
-
-/// MCP Server transport type
-variant server-transport {
-    stdio,
-    http,
-    sse,
-}
-
-/// MCP Server configuration with strict validation
-record mcp-server-config {
-    /// Unique server identifier
-    name: string,
-    /// Transport mechanism
-    transport: server-transport,
-    /// Command to execute (for stdio) or URL (for http/sse)
-    command: string,
-    /// Command arguments
-    args: list<string>,
-    /// Environment variables
-    env: list<tuple<string, string>>,
-    /// Connection timeout in milliseconds
-    timeout-ms: option<u32>,
-    /// Whether server is enabled
-    enabled: bool,
-    /// Optional server description
-    description: option<string>,
-}
-
-/// Server validation result
-record server-validation-result {
-    /// Whether configuration is valid
-    valid: bool,
-    /// List of validation errors (empty if valid)
-    errors: list<string>,
-    /// Server name that was validated
-    server-name: string,
-}
-
-/// Server status information
-record server-status {
-    /// Server name
-    name: string,
-    /// Whether server is currently running
-    running: bool,
-    /// Number of tools provided by this server
-    tool-count: u32,
-    /// Last error message (if any)
-    last-error: option<string>,
-    /// Uptime in seconds (if running)
-    uptime-secs: option<u32>,
-}
-
-/// Server operation result
-record server-operation-result {
-    /// Whether operation succeeded
-    success: bool,
-    /// Error message (if failed)
-    error-message: option<string>,
-    /// Affected server name
-    server-name: string,
-    /// Number of tools affected
-    tools-affected: u32,
-}
-
-// ============================================================================
-// Multi-Agent Management Types
-// ============================================================================
-
-/// Agent type/role
-variant agent-type {
-    general-assistant,
-    code-reviewer,
-    data-analyst,
-    researcher,
-    custom,
-}
-
-/// Agent skill level
-variant skill-level {
-    beginner,
-    intermediate,
-    expert,
-}
-
-/// Agent capability descriptor
-record agent-capability {
-    /// Capability name
-    name: string,
-    /// Skill level for this capability
-    level: skill-level,
-    /// Description of capability
-    description: string,
-}
-
-/// Agent configuration with strict validation
-record agent-config {
-    /// Unique agent identifier
-    id: string,
-    /// Agent type/role
-    agent-type: agent-type,
-    /// Display name
-    name: string,
-    /// Agent description
-    description: option<string>,
-    /// Model provider to use
-    model-provider: string,
-    /// Model name to use
-    model: string,
-    /// Maximum steps allowed
-    max-steps: u32,
-    /// Whether agent can call tools
-    can-call-tools: bool,
-    /// Agent capabilities
-    capabilities: list<agent-capability>,
-    /// Custom system prompt (overrides default)
-    custom-prompt: option<string>,
-    /// Temperature for LLM
-    temperature: option<f32>,
-    /// Whether agent is enabled
-    enabled: bool,
-}
-
-/// Agent validation result
-record agent-validation-result {
-    /// Whether configuration is valid
-    valid: bool,
-    /// List of validation errors
-    errors: list<string>,
-    /// Agent ID that was validated
-    agent-id: string,
-}
-
-/// Agent status information
-record agent-status {
-    /// Agent ID
-    id: string,
-    /// Agent name
-    name: string,
-    /// Whether agent is currently active
-    active: bool,
-    /// Current session ID (if active)
-    session-id: option<string>,
-    /// Number of tasks completed
-    tasks-completed: u32,
-    /// Number of tasks failed
-    tasks-failed: u32,
-}
-
-/// Agent task request
-record agent-task-request {
-    /// Task description/prompt
-    task: string,
-    /// Optional session ID for continuity
-    session-id: option<string>,
-    /// Maximum steps for this task
-    max-steps: option<u32>,
-    /// Whether to allow tool calls
-    allow-tools: option<bool>,
-}
-
-/// Agent task result
-record agent-task-result {
-    /// Task output
-    response: string,
-    /// Whether task succeeded
-    success: bool,
-    /// Error message (if failed)
-    error-message: option<string>,
-    /// Number of steps executed
-    steps-executed: u32,
-    /// Tools called during task
-    tools-called: list<string>,
-    /// Session ID (if any)
-    session-id: option<string>,
-}
-
-/// Multi-agent orchestration result
-record orchestration-result {
-    /// Final synthesized response
-    response: string,
-    /// Whether orchestration succeeded
-    success: bool,
-    /// Agent contributions
-    contributions: list<tuple<string, string>>,
-    /// Total steps across all agents
-    total-steps: u32,
-    /// Error message (if failed)
-    error-message: option<string>,
-}
-
-/// Prompt configuration for AI agent behavior
-record prompt-config {
-    template: string,
-    tool-guidance: string,
-    fallback-guidance: string,
-    json-retry-message: string,
-    tool-result-instruction: string,
-    agent-instructions: string,
-    ui-instructions: string,
-    language-instructions: string,
-    agent-max-steps-error: string,
-    no-tools-guidance: string,
-}
-
-/// Model provider configuration
-record model-provider {
-    id: string,
-    provider-type: string,
-    base-url: string,
-    api-key: option<string>,
-}
-
-/// MCP server configuration
-record server-config {
-    name: string,
-    command: string,
-    args: list<string>,
-    env: list<tuple<string, string>>,
-}
-
-/// Chat request parameters
-record chat-request {
-    prompt: string,
-    system-prompt: option<string>,
-    session-id: option<string>,
-    raw-mode: bool,
-    bypass-template: bool,
-    force-json: bool,
-}
-
-/// Chat response
-record chat-response {
-    content: string,
-    session-id: option<string>,
-    tokens-used: option<u32>,
-}
-
-/// Agent execution options
-record agent-options {
-    max-steps: u32,
-    verbose: bool,
-    session-id: option<string>,
-}
-
-/// Agent execution outcome
-record agent-outcome {
-    response: string,
-    logs: list<string>,
-    session-id: option<string>,
-    steps-executed: u32,
-}
-
-/// Tool descriptor
-record tool-descriptor {
-    name: string,
-    description: string,
-}
-
-/// Tool inventory response
-record tool-inventory {
-    tools: list<tool-descriptor>,
-}
-
-/// Configuration reload response
-record reload-response {
-    success: bool,
-    message: string,
-}
-
-/// Host imports - functions that WASM calls in the host language
-/// This enables the agent to delegate I/O operations to the host
+/// State persistence
 interface host-imports {
-    /// Call LLM API (host implements actual API call)
+    /// Call LLM API (host responsibility)
     call-llm(request: llm-request) -> result<llm-response, string>;
 
-    /// Emit tool call event to host for execution
+    /// Execute tool call via MCP (host responsibility)
     emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
 
     /// Log message to host
     log-message(event: log-event);
 
-    /// Save agent state to host storage
-    save-state(context-id: string, state-json: string) -> result<_, string>;
+    /// Save agent state (host decides storage backend)
+    save-state(session-id: string, state-json: string) -> result<_, string>;
 
-    /// Load agent state from host storage
-    load-state(context-id: string) -> result<option<string>, string>;
+    /// Load agent state (host decides storage backend)
+    load-state(session-id: string) -> result<option<string>, string>;
 }
 
-/// Prompt template management interface
-interface prompt-manager {
-    get-template() -> result<string, string>;
-    update-template(template: string) -> result<_, string>;
-    reset-template() -> result<_, string>;
-    get-tool-guidance() -> result<string, string>;
-    update-tool-guidance(guidance: string) -> result<_, string>;
-    reset-tool-guidance() -> result<_, string>;
-    get-fallback-guidance() -> result<string, string>;
-    update-fallback-guidance(guidance: string) -> result<_, string>;
-    reset-fallback-guidance() -> result<_, string>;
-    get-json-retry-message() -> result<string, string>;
-    update-json-retry-message(message: string) -> result<_, string>;
-    reset-json-retry-message() -> result<_, string>;
-    get-tool-result-instruction() -> result<string, string>;
-    update-tool-result-instruction(instruction: string) -> result<_, string>;
-    reset-tool-result-instruction() -> result<_, string>;
-    get-agent-instructions() -> result<string, string>;
-    update-agent-instructions(instructions: string) -> result<_, string>;
-    reset-agent-instructions() -> result<_, string>;
-    get-ui-instructions() -> result<string, string>;
-    update-ui-instructions(instructions: string) -> result<_, string>;
-    reset-ui-instructions() -> result<_, string>;
-    get-language-instructions() -> result<string, string>;
-    update-language-instructions(instructions: string) -> result<_, string>;
-    reset-language-instructions() -> result<_, string>;
-    get-agent-max-steps-error() -> result<string, string>;
-    update-agent-max-steps-error(message: string) -> result<_, string>;
-    reset-agent-max-steps-error() -> result<_, string>;
-    get-no-tools-guidance() -> result<string, string>;
-    update-no-tools-guidance(guidance: string) -> result<_, string>;
-    reset-no-tools-guidance() -> result<_, string>;
-    get-all-prompts() -> result<string, string>;
-    reset-all-prompts() -> result<_, string>;
-    get-raw-config() -> result<string, string>;
+// ============================================================================
+// WASM Exports (disediakan oleh WASM component)
+// ============================================================================
+
+/// Agent action result dari WASM
+variant agent-action {
+    /// Call a tool
+    call-tool(tool-call-event),
+    /// Final response to user
+    final-response(string),
+    /// Need retry with error feedback
+    retry-with-error(string),
 }
 
-/// MCP client interface for chat and agent operations
-interface mcp-client {
-    init(config-json: string) -> result<_, string>;
-    chat(request: chat-request) -> result<chat-response, string>;
-    chat-simple(prompt: string) -> result<string, string>;
-    run-agent(prompt: string, options: agent-options) -> result<agent-outcome, string>;
-    list-tools() -> result<tool-inventory, string>;
-    get-prompt-template() -> result<string, string>;
-    reload-config() -> result<reload-response, string>;
+/// Agent processing result
+record agent-outcome {
+    /// Action to take
+    action: agent-action,
+    /// Current step number
+    step: u32,
+    /// Session ID
+    session-id: string,
 }
 
-/// JSON Schema type for validation
-variant schema-type {
-    string,
-    integer,
-    float,
-    boolean,
-    /// Array with nested type
-    array-item(string),
-    /// Object with fields (represented as JSON string)
-    object-fields(string),
+/// Agent configuration (minimal, tanpa provider info)
+record agent-config {
+    /// Maximum steps
+    max-steps: u32,
+    /// Verbose logging
+    verbose: bool,
+    /// Auto-execute tools
+    auto-execute-tools: bool,
+    /// Session timeout (seconds)
+    session-timeout-secs: u32,
 }
 
-/// JSON Schema field definition
-record schema-field {
-    type: schema-type,
-    required: bool,
-    description: option<string>,
-}
-
-/// JSON Schema definition
-record json-schema {
+/// JSON Schema for validation (WASM enforce consistency)
+record json-schema-def {
+    /// Schema name
     name: string,
-    root-type: schema-type,
-    description: option<string>,
-    allow-additional: bool,
+    /// Schema definition (JSON encoded)
+    schema-json: string,
+    /// Whether to enforce
+    enforced: bool,
 }
 
-/// Validation result
-record validation-result {
-    valid: bool,
-    error: option<string>,
-    retry-count: u32,
-    json: option<string>,
+/// Agent session state
+record agent-state {
+    /// Session ID
+    session-id: string,
+    /// Current step
+    current-step: u32,
+    /// Message history (JSON encoded)
+    message-history: string,
+    /// Tool call results (JSON encoded)
+    tool-results: string,
+    /// Metadata (JSON encoded)
+    metadata: string,
 }
 
-/// JSON Schema Management Interface
-interface json-schema-manager {
-    /// Register a new JSON schema
-    register-schema(schema-name: string, schema-json: string) -> result<string, string>;
+/// Agent interface
+interface agent-runner {
+    /// Initialize agent with config
+    init(config-json: string) -> result<string, string>;
 
-    /// Get registered schema
-    get-schema(schema-name: string) -> result<string, string>;
+    /// Process LLM response and determine next action
+    process-llm-response(
+        session-id: string,
+        llm-response-json: string,
+    ) -> result<string, string>;
 
-    /// List all registered schemas
-    list-schemas() -> result<string, string>;
+    /// Process tool execution result
+    process-tool-result(
+        session-id: string,
+        tool-result-json: string,
+    ) -> result<string, string>;
 
-    /// Remove a schema
-    remove-schema(schema-name: string) -> result<string, string>;
+    /// Get current agent state
+    get-state(session-id: string) -> result<string, string>;
+
+    /// Reset agent session
+    reset-session(session-id: string) -> result<bool, string>;
+}
+
+/// JSON Schema validation
+interface json-schema-validator {
+    /// Register a schema
+    register-schema(schema-json: string) -> result<string, string>;
+
+    /// Validate JSON against registered schema
+    validate-json(schema-name: string, json-string: string) -> result<string, string>;
 
     /// Generate example JSON from schema
     generate-example(schema-name: string) -> result<string, string>;
 
-    /// Validate JSON against schema
-    validate(schema-name: string, json-response: string, max-retries: u32) -> result<string, string>;
-
     /// Get schema prompt instruction
     get-schema-prompt(schema-name: string) -> result<string, string>;
-
-    /// Initialize retry manager
-    init-retry(session-id: string, max-retries: u32) -> result<string, string>;
-
-    /// Record validation error
-    record-error(session-id: string, error-message: string) -> result<string, string>;
-
-    /// Generate retry prompt
-    get-retry-prompt(session-id: string, schema-name: string, last-response: string) -> result<string, string>;
-
-    /// Check if retries exhausted
-    is-retry-exhausted(session-id: string) -> result<string, string>;
 }
 
-/// FFI interface for external language bindings
-interface ffi-server {
-    mcp-server-create(addr: string) -> u32;
-    mcp-server-create-with-cors(addr: string, cors-origins: string) -> u32;
-    mcp-server-is-running(server-id: u32) -> s32;
-    mcp-server-stop(server-id: u32) -> s32;
-    mcp-server-stop-all() -> u32;
-    mcp-server-chat(server-id: u32, request-json: string, request-len: u32) -> string;
-    mcp-server-get-tools(server-id: u32) -> string;
-    mcp-server-get-config(server-id: u32) -> string;
-    mcp-server-reload(server-id: u32) -> string;
-    mcp-server-update-config(server-id: u32, config-json: string) -> string;
-    mcp-response-add-field(server-id: u32, field-name: string, field-value-json: string) -> s32;
-    mcp-response-remove-field(server-id: u32, field-name: string) -> s32;
-    mcp-response-get-fields(server-id: u32) -> string;
-    mcp-response-clear-fields(server-id: u32) -> u32;
-    mcp-response-apply-fields(server-id: u32, response-json: string) -> string;
-    mcp-response-field-count(server-id: u32) -> u32;
-    mcp-set-output-format(server-id: u32, format-is-json: bool);
-    mcp-get-output-format(server-id: u32) -> bool;
-    mcp-format-response(server-id: u32, content: string, data-json: option<string>) -> string;
-    mcp-format-final-message(raw-response: string, response-len: u32) -> string;
-    mcp-extract-final-content(final-message-json: string) -> string;
-    mcp-extract-final-data(final-message-json: string) -> string;
-    mcp-extract-final-metadata(final-message-json: string) -> string;
-    mcp-is-final-message(response-json: string) -> s32;
-    mcp-last-error() -> string;
-    mcp-clear-error();
-    mcp-string-free(ptr: string);
-    mcp-version() -> string;
-    mcp-server-count() -> u32;
-    mcp-server-list(buffer: list<u32>, buffer-len: u32) -> u32;
+/// Prompt template management
+interface prompt-manager {
+    /// Get prompt template by name
+    get-prompt(name: string) -> result<string, string>;
+
+    /// Set prompt template
+    set-prompt(name: string, value: string) -> result<bool, string>;
+
+    /// Render prompt with variables
+    render-prompt(template: string, variables-json: string) -> result<string, string>;
 }
 
-/// MCP Server Management Interface
-/// Allows host language to manage MCP servers dynamically
-interface server-manager {
-    /// Add a new MCP server configuration
-    /// Validates configuration before adding
-    add-server(config: mcp-server-config) -> result<server-validation-result, string>;
+// ============================================================================
+// World definition
+// ============================================================================
 
-    /// Remove an MCP server by name
-    remove-server(name: string) -> result<server-operation-result, string>;
-
-    /// Update an existing server configuration
-    update-server(config: mcp-server-config) -> result<server-operation-result, string>;
-
-    /// Get configuration for a specific server
-    get-server(name: string) -> result<mcp-server-config, string>;
-
-    /// List all configured MCP servers
-    list-servers() -> result<list<mcp-server-config>, string>;
-
-    /// Get runtime status of all servers
-    get-server-status() -> result<list<server-status>, string>;
-
-    /// Get status of a specific server
-    get-server-status-by-name(name: string) -> result<server-status, string>;
-
-    /// Start a server
-    start-server(name: string) -> result<server-operation-result, string>;
-
-    /// Stop a server
-    stop-server(name: string) -> result<server-operation-result, string>;
-
-    /// Restart a server
-    restart-server(name: string) -> result<server-operation-result, string>;
-
-    /// Validate server configuration without adding
-    validate-server(config: mcp-server-config) -> result<server-validation-result, string>;
-
-    /// Get tools provided by a specific server
-    get-server-tools(name: string) -> result<list<tool-descriptor>, string>;
-
-    /// Export all servers configuration as JSON
-    export-servers-config() -> result<string, string>;
-
-    /// Import servers configuration from JSON
-    import-servers-config(config-json: string) -> result<server-operation-result, string>;
-}
-
-/// Multi-Agent Management Interface
-/// Allows host language to manage multiple agents with different roles
-interface agent-manager {
-    /// Register a new agent configuration
-    /// Validates configuration before registering
-    register-agent(config: agent-config) -> result<agent-validation-result, string>;
-
-    /// Unregister an agent by ID
-    unregister-agent(id: string) -> result<_, string>;
-
-    /// Update an existing agent configuration
-    update-agent(config: agent-config) -> result<_, string>;
-
-    /// Get configuration for a specific agent
-    get-agent(id: string) -> result<agent-config, string>;
-
-    /// List all registered agents
-    list-agents() -> result<list<agent-config>, string>;
-
-    /// Get runtime status of all agents
-    get-agent-status() -> result<list<agent-status>, string>;
-
-    /// Get status of a specific agent
-    get-agent-status-by-id(id: string) -> result<agent-status, string>;
-
-    /// Execute a task with a specific agent
-    execute-task(agent-id: string, task: agent-task-request) -> result<agent-task-result, string>;
-
-    /// Execute a task with multiple agents in sequence
-    execute-task-sequential(agent-ids: list<string>, task: agent-task-request) -> result<agent-task-result, string>;
-
-    /// Execute a task with multiple agents in parallel
-    execute-task-parallel(agent-ids: list<string>, task: agent-task-request) -> result<orchestration-result, string>;
-
-    /// Execute a task with agents in a supervisor pattern (one agent coordinates others)
-    execute-task-supervisor(supervisor-id: string, worker-ids: list<string>, task: agent-task-request) -> result<orchestration-result, string>;
-
-    /// Validate agent configuration without registering
-    validate-agent(config: agent-config) -> result<agent-validation-result, string>;
-
-    /// Get available capabilities for an agent
-    get-agent-capabilities(id: string) -> result<list<agent-capability>, string>;
-
-    /// Enable or disable an agent
-    set-agent-enabled(id: string, enabled: bool) -> result<_, string>;
-
-    /// Export all agents configuration as JSON
-    export-agents-config() -> result<string, string>;
-
-    /// Import agents configuration from JSON
-    import-agents-config(config-json: string) -> result<_, string>;
-}
-
-/// Combined world with host imports and exports
-world antikythera-mcp {
-    /// Import from host (I/O operations)
+world antikythera-agent {
+    /// Import dari host (I/O operations - host responsibility)
     import host-imports;
 
-    /// Export to host (agent functionality)
+    /// Export ke host (agent logic - WASM responsibility)
+    export agent-runner;
+    export json-schema-validator;
     export prompt-manager;
-    export mcp-client;
-    export json-schema-manager;
-    export ffi-server;
-    export server-manager;
-    export agent-manager;
 }

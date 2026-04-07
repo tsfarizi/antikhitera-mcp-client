@@ -160,6 +160,21 @@ pub use json_schema::{
     ffi::mcp_json_retry_is_exhausted,
 };
 
+/// WASM Agent Module (processes LLM responses from host)
+pub mod wasm_agent;
+
+pub use wasm_agent::{
+    // Types
+    AgentAction, AgentState, WasmAgentConfig,
+    Message, ToolCall, ToolResult, PromptVariables,
+    // Processor
+    process_llm_response,
+    process_tool_result,
+    build_system_prompt,
+    build_llm_messages,
+    validate_json_schema,
+};
+
 /// WASM Component feature slice (Host Imports)
 pub mod component;
 
