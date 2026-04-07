@@ -46,13 +46,13 @@ WASM memanggil host melalui **imports** yang didefinisikan di WIT:
 interface host-imports {
     /// Call LLM API
     call-llm(request: llm-request) -> result<llm-response, string>;
-    
+
     /// Execute tool call
     emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
-    
+
     /// Logging
     log-message(event: log-event);
-    
+
     /// State persistence
     save-state(context-id: string, state-json: string) -> result<_, string>;
     load-state(context-id: string) -> result<option<string>, string>;
@@ -133,11 +133,11 @@ const instance = await instantiate(wasmBytes, {
         ],
         temperature: request.temperature ?? 0.7,
         max_tokens: request.maxTokens ?? 4096,
-        response_format: request.responseFormat 
+        response_format: request.responseFormat
           ? { type: request.responseFormat }
           : undefined
       });
-      
+
       return {
         content: response.choices[0].message.content,
         model: response.model,
@@ -145,13 +145,12 @@ const instance = await instantiate(wasmBytes, {
         finishReason: response.choices[0].finish_reason
       };
     },
-    
+
     'emit-tool-call': async (event) => {
       // Execute MCP tool
       const args = JSON.parse(event.argumentsJson);
-      
       const result = await mcptools.execute(event.toolName, args);
-      
+
       return {
         toolName: event.toolName,
         success: result.success,
@@ -160,17 +159,17 @@ const instance = await instantiate(wasmBytes, {
         stepId: event.stepId
       };
     },
-    
+
     'log-message': (event) => {
       const timestamp = event.timestamp || new Date().toISOString();
       console.log(`[${timestamp}] [${event.level}] ${event.message}`);
     },
-    
+
     'save-state': async (contextId, stateJson) => {
       await redis.set(`agent:${contextId}`, stateJson);
       return undefined;
     },
-    
+
     'load-state': async (contextId) => {
       const state = await redis.get(`agent:${contextId}`);
       return state || undefined;
@@ -183,7 +182,7 @@ const instance = await instantiate(wasmBytes, {
 
 ```typescript
 // Get exported functions from WASM
-const { runAgent, getPromptTemplate } = instance.exports;
+const { exports } = instance;
 
 // Initialize
 const config = JSON.stringify({
@@ -192,10 +191,8 @@ const config = JSON.stringify({
   model: 'gpt-4'
 });
 
-instance.exports.init(config);
-
 // Run agent
-const result = await instance.exports.runAgent({
+const result = await exports.runAgent({
   prompt: "What's the weather in NYC?",
   options: { maxSteps: 10, verbose: true }
 });
@@ -251,7 +248,7 @@ store = Store()
 linker = Linker(store.engine)
 
 # Define host imports
-linker.define("antikythera:mcp-framework/host-imports", "call-llm", 
+linker.define("antikythera:mcp-framework/host-imports", "call-llm",
     lambda req: call_llm_impl(req))
 linker.define("antikythera:mcp-framework/host-imports", "emit-tool-call",
     lambda event: emit_tool_call_impl(event))
@@ -278,7 +275,7 @@ print(result.response)
 world antikythera-mcp {
     /// Import dari host (I/O)
     import host-imports;
-    
+
     /// Export ke host (agent functionality)
     export prompt-manager;
     export mcp-client;
@@ -312,7 +309,7 @@ world antikythera-mcp {
 
 ```bash
 # Generate WIT (jika ada changes)
-cargo run --release -p build-scripts -- wit
+cargo run -p build-scripts --release -- wit
 
 # Build WASM component
 cargo component build --release --target wasm32-wasip1

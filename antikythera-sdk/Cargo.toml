@@ -25,7 +25,7 @@ wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic
 component = ["dep:wit-bindgen-rt"]
 
 # WASM configuration binary format (postcard serialization)
-wasm-config = ["dep:postcard"]
+wasm-config = []
 
 # FFI support for C bindings
 ffi = ["dep:ffi-support"]
@@ -42,9 +42,8 @@ wasm-sandbox = ["antikythera-core/wasm-runtime"]
 full = ["wasm", "multi-agent", "cloud", "antikythera-core/full"]
 
 [dependencies]
-# Core with configurable features - SDK doesn't force features on core
-# Features are controlled by SDK's own features
-antikythera-core = { path = "../antikythera-core", version = "0.8.0", default-features = false }
+# Core with configurable features - SDK enables what it needs
+antikythera-core = { path = "../antikythera-core", version = "0.8.0", default-features = false, features = ["full"] }
 
 # Core async runtime (wasm-compatible)
 tokio = { version = "1.39", default-features = false, features = ["macros", "rt"] }
@@ -53,12 +52,13 @@ futures = "0.3.32"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-postcard = { version = "1.0", features = ["alloc"], optional = true }
+postcard = { version = "1.0", features = ["alloc"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # Error handling and logging
 thiserror = "2.0.17"
 tracing = "0.1"
+async-trait = "0.1"
 
 # WASM support (optional)
 wasm-bindgen = { version = "0.2", optional = true }
@@ -77,3 +77,19 @@ ffi-support = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
+serial_test = "3.0"
+
+[[test]]
+name = "sdk_servers"
+path = "../tests/sdk/servers/server_tests.rs"
+harness = true
+
+[[test]]
+name = "sdk_agents"
+path = "../tests/sdk/agents/agent_tests.rs"
+harness = true
+
+[[test]]
+name = "sdk_config"
+path = "../tests/sdk/config/config_tests.rs"
+harness = true

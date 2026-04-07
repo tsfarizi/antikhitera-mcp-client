@@ -59,8 +59,6 @@ server_id = lib.mcp_server_create(b"127.0.0.1:8080")
 assert server_id != 0
 ```
 
----
-
 #### `mcp_server_create_with_cors`
 
 Create server with CORS configuration.
@@ -74,22 +72,6 @@ uint32_t mcp_server_create_with_cors(const char* addr, const char* cors_origins)
 - `addr` - Bind address
 - `cors_origins` - Comma-separated origins (e.g., "http://localhost:3000,https://example.com")
 
-**Example (Node.js):**
-```javascript
-const ffi = require('ffi-napi');
-
-const lib = ffi.Library('./libantikythera_sdk', {
-  'mcp_server_create_with_cors': ['uint32', ['string', 'string']]
-});
-
-const serverId = lib.mcp_server_create_with_cors(
-  '0.0.0.0:3000',
-  'http://localhost:3000,https://app.example.com'
-);
-```
-
----
-
 #### `mcp_server_is_running`
 
 Check if server is running.
@@ -101,8 +83,6 @@ int32_t mcp_server_is_running(uint32_t server_id);
 
 **Returns:**
 - 1 if running, 0 if not
-
----
 
 #### `mcp_server_stop`
 
@@ -116,8 +96,6 @@ int32_t mcp_server_stop(uint32_t server_id);
 **Returns:**
 - 1 on success, 0 on error
 
----
-
 #### `mcp_server_stop_all`
 
 Stop all servers.
@@ -129,8 +107,6 @@ uint32_t mcp_server_stop_all(void);
 
 **Returns:**
 - Number of servers stopped
-
----
 
 ### Chat Operations
 
@@ -151,71 +127,6 @@ char* mcp_server_chat(uint32_t server_id, const char* request_json, size_t reque
 **Returns:**
 - Pointer to response JSON (must free with `mcp_string_free()`)
 
-**Request Format:**
-```json
-{
-  "prompt": "Your message",
-  "agent": false,
-  "session_id": "optional-session-id",
-  "max_tool_steps": 10,
-  "system_prompt": "Optional system prompt",
-  "debug": false,
-  "attachments": [
-    {
-      "name": "image.png",
-      "mime_type": "image/png",
-      "data": "base64-encoded-data"
-    }
-  ]
-}
-```
-
-**Response Format:**
-```json
-{
-  "status": "ok",
-  "prompt": "Your message",
-  "agent": false,
-  "session_id": "optional-session-id",
-  "content": "AI response here",
-  "timestamp": "2024-01-01T00:00:00Z"
-}
-```
-
-**Example (Go):**
-```go
-package main
-
-/*
-#cgo LDFLAGS: -L../target/release -lantikythera_sdk
-#include <stdint.h>
-#include <stdlib.h>
-
-extern uint32_t mcp_server_create(const char*);
-extern char* mcp_server_chat(uint32_t, const char*, size_t);
-extern void mcp_string_free(char*);
-*/
-import "C"
-import "fmt"
-
-func main() {
-    addr := C.CString("127.0.0.1:8080")
-    defer C.free(unsafe.Pointer(addr))
-    
-    serverId := C.mcp_server_create(addr)
-    
-    request := C.CString(`{"prompt": "Hello", "agent": false}`)
-    defer C.free(unsafe.Pointer(request))
-    
-    response := C.mcp_server_chat(serverId, request, C.size_t(len(`{"prompt": "Hello", "agent": false}`)))
-    defer C.mcp_string_free(response)
-    
-    fmt.Println(C.GoString(response))
-}
-```
-
----
-
 ### Tools
 
 #### `mcp_server_get_tools`
@@ -230,8 +141,6 @@ char* mcp_server_get_tools(uint32_t server_id);
 **Returns:**
 - JSON string with tools list (must free)
 
----
-
 ### Configuration
 
 #### `mcp_server_get_config`
@@ -243,8 +152,6 @@ Get server configuration.
 char* mcp_server_get_config(uint32_t server_id);
 ```
 
----
-
 #### `mcp_server_reload`
 
 Reload configuration.
@@ -254,8 +161,6 @@ Reload configuration.
 char* mcp_server_reload(uint32_t server_id);
 ```
 
----
-
 #### `mcp_server_update_config`
 
 Update configuration.
@@ -264,8 +169,6 @@ Update configuration.
 ```c
 char* mcp_server_update_config(uint32_t server_id, const char* config_json);
 ```
-
----
 
 ### Error Handling
 
@@ -281,8 +184,6 @@ const char* mcp_last_error(void);
 **Returns:**
 - Error string (do NOT free)
 
----
-
 #### `mcp_clear_error`
 
 Clear last error.
@@ -291,8 +192,6 @@ Clear last error.
 ```c
 void mcp_clear_error(void);
 ```
-
----
 
 ### Memory Management
 
@@ -307,8 +206,6 @@ void mcp_string_free(char* ptr);
 
 **IMPORTANT:** Always call this on strings returned by FFI functions!
 
----
-
 ### Utility
 
 #### `mcp_version`
@@ -320,8 +217,6 @@ Get library version.
 const char* mcp_version(void);
 ```
 
----
-
 #### `mcp_server_count`
 
 Get active server count.
@@ -330,8 +225,6 @@ Get active server count.
 ```c
 uint32_t mcp_server_count(void);
 ```
-
----
 
 #### `mcp_server_list`
 
@@ -344,8 +237,6 @@ uint32_t mcp_server_list(uint32_t* buffer, size_t buffer_len);
 
 **Returns:**
 - Number of servers written to buffer
-
----
 
 ## Complete Examples
 
@@ -382,11 +273,11 @@ try:
         "prompt": "What is the capital of France?",
         "agent": False
     }).encode()
-    
+
     response_ptr = lib.mcp_server_chat(server_id, request, len(request))
     response = json.loads(response_ptr.decode())
     lib.mcp_string_free(response_ptr)
-    
+
     print(f"Response: {response['content']}")
 
 finally:
@@ -447,28 +338,28 @@ class Program
 {
     [DllImport("antikythera_sdk")]
     static extern uint mcp_server_create(string addr);
-    
+
     [DllImport("antikythera_sdk")]
     static extern IntPtr mcp_server_chat(uint serverId, string requestJson, nuint requestLen);
-    
+
     [DllImport("antikythera_sdk")]
     static extern void mcp_string_free(IntPtr ptr);
-    
+
     [DllImport("antikythera_sdk")]
     static extern int mcp_server_stop(uint serverId);
-    
+
     [DllImport("antikythera_sdk")]
     static extern IntPtr mcp_last_error();
-    
+
     [DllImport("antikythera_sdk")]
     static extern IntPtr mcp_version();
-    
+
     static void Main()
     {
         // Get version
         var version = Marshal.PtrToStringAnsi(mcp_version());
         Console.WriteLine($"Version: {version}");
-        
+
         // Create server
         uint serverId = mcp_server_create("127.0.0.1:8080");
         if (serverId == 0)
@@ -476,7 +367,7 @@ class Program
             var error = Marshal.PtrToStringAnsi(mcp_last_error());
             throw new Exception($"Failed: {error}");
         }
-        
+
         try
         {
             // Chat
@@ -484,7 +375,7 @@ class Program
             var responsePtr = mcp_server_chat(serverId, request, (nuint)request.Length);
             var response = Marshal.PtrToStringAnsi(responsePtr);
             mcp_string_free(responsePtr);
-            
+
             Console.WriteLine($"Response: {response}");
         }
         finally
@@ -505,27 +396,27 @@ import com.sun.jna.Pointer;
 public class Main {
     public interface AntikytheraLibrary extends Library {
         AntikytheraLibrary INSTANCE = Native.load("antikythera_sdk", AntikytheraLibrary.class);
-        
+
         int mcp_server_create(String addr);
         Pointer mcp_server_chat(int serverId, String requestJson, int requestLen);
         void mcp_string_free(Pointer ptr);
         int mcp_server_stop(int serverId);
         Pointer mcp_last_error();
     }
-    
+
     public static void main(String[] args) {
         int serverId = AntikytheraLibrary.INSTANCE.mcp_server_create("127.0.0.1:8080");
         if (serverId == 0) {
             Pointer error = AntikytheraLibrary.INSTANCE.mcp_last_error();
             throw new RuntimeException("Failed: " + error.getString(0));
         }
-        
+
         try {
             String request = "{\"prompt\": \"Hello\", \"agent\": false}";
             Pointer response = AntikytheraLibrary.INSTANCE.mcp_server_chat(serverId, request, request.length());
             String responseStr = response.getString(0);
             AntikytheraLibrary.INSTANCE.mcp_string_free(response);
-            
+
             System.out.println("Response: " + responseStr);
         } finally {
             AntikytheraLibrary.INSTANCE.mcp_server_stop(serverId);
@@ -533,55 +424,6 @@ public class Main {
     }
 }
 ```
-
----
-
-## Unit Tests
-
-The FFI module includes 30+ comprehensive unit tests covering:
-
-### Server Lifecycle Tests
-- ✅ Create and stop server
-- ✅ Create with CORS
-- ✅ Invalid address handling
-- ✅ Multiple servers
-- ✅ Server count tracking
-- ✅ Server list functionality
-
-### Chat Tests
-- ✅ Simple chat request
-- ✅ Agent mode chat
-- ✅ Chat with session ID
-- ✅ Chat with attachments
-- ✅ Chat with system prompt
-- ✅ Invalid server handling
-- ✅ Invalid JSON handling
-- ✅ Empty prompt handling
-- ✅ Concurrent operations
-
-### Configuration Tests
-- ✅ Get config
-- ✅ Reload config
-- ✅ Update config
-- ✅ Partial config update
-- ✅ Invalid JSON handling
-
-### Error Handling Tests
-- ✅ Error message retrieval
-- ✅ Error clearing
-- ✅ Null pointer handling
-
-### Memory Management Tests
-- ✅ String allocation and freeing
-- ✅ Null pointer safety
-
-### Run Tests
-
-```bash
-cargo test -p antikythera-sdk --features ffi --lib ffi
-```
-
----
 
 ## Error Codes
 
@@ -593,16 +435,12 @@ cargo test -p antikythera-sdk --features ffi --lib ffi
 
 Always check `mcp_last_error()` after failures!
 
----
-
 ## Thread Safety
 
 - ✅ Multiple servers can run concurrently
 - ✅ Chat requests are thread-safe
 - ⚠️ `mcp_last_error()` is thread-local
 - ✅ Server registry is mutex-protected
-
----
 
 ## Performance
 
@@ -612,8 +450,6 @@ Always check `mcp_last_error()` after failures!
 | Chat request | ~50-200ms | Depends on LLM |
 | Get config | <1ms | 10000+/sec |
 | Memory alloc | <1μs | 1M+/sec |
-
----
 
 ## Best Practices
 

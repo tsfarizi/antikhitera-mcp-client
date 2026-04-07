@@ -89,14 +89,18 @@ cargo build --release
 
 ## 📚 Documentation
 
-### Main Documentation
+All documentation is consolidated in the [`documentation/`](documentation/) folder.
+
+### Quick Links
 
 | Document | Description |
 |:---------|:------------|
-| **[📖 CLI Guide](documentation/CLI_DOCUMENTATION.md)** | Complete CLI usage, commands, TUI interface, keyboard shortcuts |
-| **[🔌 FFI Reference](documentation/FFI_DOCUMENTATION.md)** | C/C++ API reference, usage examples (C, C++, Python, Node.js) |
-| **[🛠️ Build Guide](documentation/BUILD.md)** | Build instructions, feature flags, WASM compilation |
-| **[🃏 Postcard Cache](documentation/POSTCARD_CACHE.md)** | Binary configuration cache, performance benefits |
+| [📖 Documentation Index](documentation/README.md) | Complete documentation overview |
+| [🌐 WASM Component](documentation/wasm-component-host-imports.md) | WASM Component Model with host imports |
+| [🔧 Server & Agent Management](documentation/server-agent-management.md) | Managing servers and agents via FFI |
+| [🔌 FFI Reference](documentation/ffi.md) | Complete FFI API reference |
+| [🛠️ Build Guide](documentation/BUILD.md) | Build instructions and feature flags |
+| [🧪 Testing Guide](documentation/TESTING_GUIDE.md) | Running tests and verification |
 
 ### Quick Reference
 
@@ -146,7 +150,7 @@ cargo build -p antikythera-sdk --release --features ffi
 | `/agent on\|off` | Toggle agent mode |
 | `/setup` | Open configuration wizard |
 
-**Full list:** [CLI Documentation →](CLI_DOCUMENTATION.md#keyboard-shortcuts)
+**Full list:** [CLI Documentation →](documentation/BUILD.md#keyboard-shortcuts)
 
 ---
 
@@ -408,7 +412,7 @@ Antikythera MCP Framework is licensed under the [MIT License](LICENSE).
 ## 🔗 Links
 
 - **GitHub:** [https://github.com/antikythera/mcp-framework](https://github.com/antikythera/mcp-framework)
-- **Documentation:** [CLI Guide](documentation/CLI_DOCUMENTATION.md) | [FFI Reference](documentation/FFI_DOCUMENTATION.md) | [Build Guide](documentation/BUILD.md)
+- **Documentation:** [CLI Guide](documentation/CLI_DOCUMENTATION.md) | [FFI Reference](documentation/ffi.md) | [Build Guide](documentation/BUILD.md)
 - **Issues:** [https://github.com/antikythera/mcp-framework/issues](https://github.com/antikythera/mcp-framework/issues)
 
 ---

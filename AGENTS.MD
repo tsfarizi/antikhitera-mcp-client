@@ -231,10 +231,8 @@ cargo clippy                 # Lint
 cargo fmt                    # Format
 
 # WASM Component (Automatic WIT Generation)
-cargo run --release -p build-scripts -- wit       # Generate WIT from Rust → wit/antikythera.wit
-cargo run --release -p build-scripts -- component # Build WASM component
-cargo run --release -p build-scripts -- all       # Generate + Build
-wasm-tools component wit *.wasm                   # View generated WIT
+cargo run -p build-scripts --release -- wit  # Generate WIT from Rust → wit/antikythera.wit
+cargo component build --target wasm32-wasip1 --release  # Build WASM component
 ```
 
 ---

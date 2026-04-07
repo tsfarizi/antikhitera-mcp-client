@@ -1,7 +1,6 @@
-//! WASM bindings for web/browser deployments
+//! MCP Client Feature Slice
 //!
-//! This module provides JavaScript/TypeScript compatible bindings
-//! for the Antikythera MCP client.
+//! Provides WASM bindings for MCP client operations.
 
 use wasm_bindgen::prelude::*;
 use antikythera_core::application::agent::{Agent, AgentOptions};
@@ -19,23 +18,19 @@ pub struct WasmClient {
 
 #[wasm_bindgen]
 impl WasmClient {
-    /// Create a new WASM client from JSON config
     #[wasm_bindgen(constructor)]
     pub fn new(config_json: &str) -> Result<WasmClient, JsValue> {
-        // Set up panic hook for better error messages
         console_error_panic_hook::set_once();
 
-        // Parse config
         let config: serde_json::Value = serde_json::from_str(config_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid JSON config: {}", e)))?;
 
-        // Extract providers
         let providers_value = config.get("providers")
             .ok_or_else(|| JsValue::from_str("Missing 'providers' in config"))?;
 
         let providers: Vec<antikythera_core::config::ModelProviderConfig> =
             serde_json::from_value(providers_value.clone())
-                .map_err(|e| JsValue::from_str(&format!("Invalid providers config: {}", e)))?;
+                .map_err(|e| JsValue::from_str(&format!("Invalid providers: {}", e)))?;
 
         let provider = DynamicModelProvider::from_configs(&providers)
             .map_err(|e| JsValue::from_str(&format!("Failed to create provider: {}", e)))?;
@@ -52,11 +47,10 @@ impl WasmClient {
 
         let client_config = ClientConfig::new(default_provider, model);
         let core_client = Arc::new(McpClient::new(provider, client_config));
-        
+
         Ok(Self { core_client })
     }
 
-    /// Send a chat message (async, returns Promise)
     #[wasm_bindgen]
     pub fn chat(&self, prompt: String) -> js_sys::Promise {
         let client = self.core_client.clone();
@@ -80,12 +74,10 @@ impl WasmClient {
         })
     }
 
-    /// Run agent with autonomous tool execution (async, returns Promise)
     #[wasm_bindgen]
     pub fn run_agent(&self, prompt: String, options_json: &str) -> js_sys::Promise {
         let client = self.core_client.clone();
-        let options: AgentOptions = serde_json::from_str(options_json)
-            .unwrap_or_default();
+        let options: AgentOptions = serde_json::from_str(options_json).unwrap_or_default();
 
         future_to_promise(async move {
             let agent = Agent::new(client);
@@ -103,7 +95,6 @@ impl WasmClient {
         })
     }
 
-    /// List available tools
     #[wasm_bindgen]
     pub fn list_tools(&self) -> js_sys::Promise {
         let tools = self.core_client.tools().to_vec();
@@ -120,21 +111,20 @@ impl WasmClient {
         })
     }
 
-    /// Get the current system prompt template
     #[wasm_bindgen(js_name = getPromptTemplate)]
     pub fn get_prompt_template(&self) -> Result<String, JsValue> {
         use antikythera_core::config::app::AppConfig;
         use std::path::Path;
-        
+
         let config_path = Path::new(antikythera_core::constants::CONFIG_PATH);
         let config = AppConfig::load(Some(config_path))
             .map_err(|e| JsValue::from_str(&format!("Failed to load config: {}", e)))?;
-        
+
         Ok(config.prompt_template().to_string())
     }
 }
 
-/// Initialize WASM client (call once on page load)
+/// Initialize WASM client
 #[wasm_bindgen(start)]
 pub fn init() {
     console_error_panic_hook::set_once();
