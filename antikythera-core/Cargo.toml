@@ -18,7 +18,7 @@ wasm-runtime = ["dep:wasmtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 # OS-level process management (Stdio transport)
 native-transport = ["tokio/process", "dep:sysinfo"]
 
-# Configuration cache (Postcard binary format)
+# Configuration cache (Postcard binary format) - now always enabled
 cache = ["dep:postcard"]
 
 # Wizard features (interactive setup)

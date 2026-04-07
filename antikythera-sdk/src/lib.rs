@@ -104,14 +104,35 @@ pub use response::{
     mcp_set_output_format, mcp_get_output_format, mcp_format_response,
 };
 
-/// Binary Configuration feature slice
+/// Binary Configuration feature slice (Postcard)
 pub mod config;
 
 pub use config::{
-    WasmConfig, ClientSection, ModelSection, PromptSection, AgentSection,
-    ProviderConfig, ServerConfig, RestServerConfig, ToolConfig,
-    config_to_binary, config_from_binary,
-    config_size_breakdown, config_summary,
+    // Postcard operations
+    config_to_postcard, config_from_postcard,
+    load_config as load_postcard_config, save_config as save_postcard_config,
+    init_default_config as init_default_postcard_config,
+    config_size as postcard_config_size, config_exists as postcard_config_exists,
+    CONFIG_PATH as POSTCARD_CONFIG_PATH,
+};
+
+/// Configuration FFI (Postcard-based)
+pub mod config_ffi;
+
+pub use config_ffi::{
+    // Core config FFI
+    mcp_config_init, mcp_config_exists, mcp_config_size,
+    mcp_config_get_all, mcp_config_set_all,
+    mcp_config_export, mcp_config_import, mcp_config_reset,
+    // Field-level FFI
+    mcp_config_get, mcp_config_set,
+    // Provider FFI
+    mcp_config_add_provider, mcp_config_remove_provider, mcp_config_list_providers,
+    // Prompt FFI
+    mcp_config_get_prompt, mcp_config_set_prompt, mcp_config_list_prompts,
+    // Agent FFI
+    mcp_config_get_agent, mcp_config_set_agent_max_steps,
+    mcp_config_set_agent_verbose, mcp_config_set_agent_auto_execute,
 };
 
 /// WASM Component feature slice (Host Imports)
