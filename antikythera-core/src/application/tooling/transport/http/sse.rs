@@ -3,16 +3,20 @@
 //! Handles SSE connection establishment and session endpoint resolution.
 
 use reqwest::Client;
+#[cfg(not(target_arch = "wasm32"))]
 use reqwest_eventsource::{Event, RequestBuilderExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
+#[cfg(not(target_arch = "wasm32"))]
 use tokio_stream::StreamExt;
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::{debug, info, warn};
 
 use crate::application::tooling::error::ToolInvokeError;
 
 /// Timeout in seconds for SSE endpoint event
+#[cfg(not(target_arch = "wasm32"))]
 pub const SSE_TIMEOUT_SECS: u64 = 5;
 
 /// Start SSE listener in background task.

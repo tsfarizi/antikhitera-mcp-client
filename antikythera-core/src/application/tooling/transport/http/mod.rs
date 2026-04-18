@@ -71,6 +71,7 @@ impl HttpTransport {
     }
 
     /// Start SSE listener in background.
+    #[cfg(not(target_arch = "wasm32"))]
     fn start_sse_listener(&self) {
         // Clone the Arc to the inner, then we need to clone the session_endpoint field
         let inner = self.inner.clone();

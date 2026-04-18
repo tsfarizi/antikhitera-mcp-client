@@ -19,7 +19,7 @@ package = "antikythera:mcp-framework"
 default = ["wasm", "single-agent"]
 
 # WASM support (optional)
-wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:console_error_panic_hook", "dep:tracing-wasm"]
 
 # WASM Component Model support
 component = ["dep:wit-bindgen-rt"]
@@ -69,7 +69,7 @@ async-trait = "0.1"
 # WASM support (optional)
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
-js-sys = "0.3"
+js-sys = { version = "0.3", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 tracing-wasm = { version = "0.2", optional = true }
 
