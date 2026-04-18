@@ -24,6 +24,7 @@ pub mod provider;
 pub mod serializer;
 pub mod server;
 pub mod tool;
+#[cfg(feature = "wizard")]
 pub mod wizard;
 
 /// Unified Postcard-based configuration

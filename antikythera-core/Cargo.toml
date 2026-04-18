@@ -32,7 +32,7 @@ full = ["gcp", "wasm-runtime", "native-transport", "cache", "wizard", "multi-age
 
 [dependencies]
 # Core async runtime
-tokio = { version = "1.51.0", default-features = false, features = ["macros", "rt", "io-std", "io-util"] }
+tokio = { version = "1.51.0", default-features = false, features = ["macros", "rt", "sync", "time", "io-util"] }
 tokio-stream.workspace = true
 futures.workspace = true
 async-trait.workspace = true

@@ -15,6 +15,7 @@ pub mod agent;
 pub mod client;
 pub mod discovery;
 pub mod services;
+#[cfg(feature = "native-transport")]
 pub mod stdio;
 pub mod tooling;
 pub mod ui;

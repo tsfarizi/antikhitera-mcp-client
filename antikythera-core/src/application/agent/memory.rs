@@ -15,8 +15,8 @@ use async_trait::async_trait;
 use postcard::{from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
-use tokio::fs;
 use tracing::{debug, error, info, warn};
 
 /// Current schema version for state serialization
@@ -219,7 +219,6 @@ impl MemoryProvider for FilesystemMemory {
     async fn initialize(&mut self) -> Result<(), MemoryError> {
         // Create base directory if it doesn't exist
         fs::create_dir_all(&self.base_path)
-            .await
             .map_err(|e| MemoryError::Configuration(format!(
                 "Failed to create base directory {:?}: {}",
                 self.base_path, e
@@ -246,7 +245,7 @@ impl MemoryProvider for FilesystemMemory {
         
         // Ensure parent directory exists
         if let Some(parent) = state_path.parent() {
-            fs::create_dir_all(parent).await?;
+            fs::create_dir_all(parent)?;
         }
 
         // Serialize to Postcard
@@ -254,8 +253,8 @@ impl MemoryProvider for FilesystemMemory {
         
         // Write atomically (write to temp file, then rename)
         let temp_path = state_path.with_extension(".tmp");
-        fs::write(&temp_path, &bytes).await?;
-        fs::rename(&temp_path, &state_path).await?;
+        fs::write(&temp_path, &bytes)?;
+        fs::rename(&temp_path, &state_path)?;
 
         debug!(
             context_id = %state.context_id,
@@ -278,7 +277,7 @@ impl MemoryProvider for FilesystemMemory {
             return Ok(None);
         }
 
-        let bytes = fs::read(&state_path).await?;
+        let bytes = fs::read(&state_path)?;
         let state = AgentStateSnapshot::from_postcard(&bytes)?;
 
         // Validate schema version
@@ -317,7 +316,7 @@ impl MemoryProvider for FilesystemMemory {
         let state_path = self.get_state_path(context_id);
         
         if state_path.exists() {
-            fs::remove_file(&state_path).await?;
+            fs::remove_file(&state_path)?;
             debug!(
                 context_id = %context_id,
                 path = %state_path.display(),
@@ -345,14 +344,12 @@ impl MemoryProvider for FilesystemMemory {
         let mut contexts = Vec::new();
         
         // Iterate through all subdirectories
-        let mut entries = fs::read_dir(&self.base_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
+        for entry in fs::read_dir(&self.base_path)? {
+            let path = entry?.path();
             if path.is_dir() {
                 // Iterate through files in subdirectory
-                let mut sub_entries = fs::read_dir(&path).await?;
-                while let Some(sub_entry) = sub_entries.next_entry().await? {
-                    let file_path = sub_entry.path();
+                for sub_entry in fs::read_dir(&path)? {
+                    let file_path = sub_entry?.path();
                     if file_path.extension().and_then(|s| s.to_str()) == Some("postcard") {
                         if let Some(stem) = file_path.file_stem().and_then(|s| s.to_str()) {
                             contexts.push(stem.to_string());

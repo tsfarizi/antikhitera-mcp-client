@@ -3,6 +3,7 @@
 //! Core MCP protocol implementation, transport layers, and agent runtime.
 
 pub mod application;
+#[cfg(feature = "wizard")]
 pub mod cli;
 pub mod config;
 pub mod constants;
