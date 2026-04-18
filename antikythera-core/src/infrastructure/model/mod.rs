@@ -39,4 +39,7 @@ pub mod factory;
 // ── Re-exports ───────────────────────────────────────────────────────────────
 pub use provider::DynamicModelProvider;
 pub use traits::ModelProvider;
-pub use types::{ModelError, ModelRequest, ModelResponse};
+pub use types::{
+	ModelError, ModelRequest, ModelResponse, ModelStreamEvent, ModelToolCall,
+	ModelToolChoice, ModelToolDefinition,
+};

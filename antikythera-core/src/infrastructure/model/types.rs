@@ -7,7 +7,61 @@
 //! constructing this error.
 
 use crate::domain::types::{ChatMessage, MessageRole};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
+
+/// Tool definition exposed to a model provider.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModelToolDefinition {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub input_schema: Value,
+}
+
+/// Tool-selection mode for providers that support native tool calling.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelToolChoice {
+    Auto,
+    None,
+    Required,
+    Tool(String),
+}
+
+/// Native tool call returned by a provider.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModelToolCall {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub name: String,
+    pub arguments: Value,
+}
+
+/// Event emitted while a model response is streaming.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ModelStreamEvent {
+    Started {
+        provider: String,
+        model: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        session_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        correlation_id: Option<String>,
+    },
+    TextDelta {
+        delta: String,
+    },
+    ToolCall {
+        tool_call: ModelToolCall,
+    },
+    Finished {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        finish_reason: Option<String>,
+    },
+}
 
 /// Model request for LLM chat
 #[derive(Debug, Clone)]
@@ -16,7 +70,10 @@ pub struct ModelRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
     pub session_id: Option<String>,
+    pub correlation_id: Option<String>,
     pub force_json: bool,
+    pub tools: Vec<ModelToolDefinition>,
+    pub tool_choice: Option<ModelToolChoice>,
 }
 
 /// Model response from LLM
@@ -24,6 +81,9 @@ pub struct ModelRequest {
 pub struct ModelResponse {
     pub message: ChatMessage,
     pub session_id: Option<String>,
+    pub correlation_id: Option<String>,
+    pub tool_calls: Vec<ModelToolCall>,
+    pub finish_reason: Option<String>,
 }
 
 impl ModelResponse {
@@ -31,7 +91,30 @@ impl ModelResponse {
         Self {
             message: ChatMessage::new(MessageRole::Assistant, content),
             session_id,
+            correlation_id: None,
+            tool_calls: Vec::new(),
+            finish_reason: None,
         }
+    }
+
+    pub fn with_details(
+        content: String,
+        session_id: Option<String>,
+        correlation_id: Option<String>,
+        tool_calls: Vec<ModelToolCall>,
+        finish_reason: Option<String>,
+    ) -> Self {
+        Self {
+            message: ChatMessage::new(MessageRole::Assistant, content),
+            session_id,
+            correlation_id,
+            tool_calls,
+            finish_reason,
+        }
+    }
+
+    pub fn has_tool_calls(&self) -> bool {
+        !self.tool_calls.is_empty()
     }
 }
 

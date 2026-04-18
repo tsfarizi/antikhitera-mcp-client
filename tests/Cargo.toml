@@ -36,6 +36,10 @@ path = "sdk/config/config_tests.rs"
 name = "resilience_tests"
 path = "resilience/resilience_tests.rs"
 
+[[test]]
+name = "runtime_features_tests"
+path = "runtime_features_tests.rs"
+
 # ============================================================================
 # Dependencies
 # ============================================================================
@@ -49,4 +53,5 @@ serde_json.workspace = true
 chrono.workspace = true
 tempfile = "3.10"
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
+async-trait.workspace = true
 serial_test = "3.0"

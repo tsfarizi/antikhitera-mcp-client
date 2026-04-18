@@ -103,6 +103,71 @@ impl ContextWindowPolicy {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextPolicyOverride {
+    pub provider: String,
+    pub model_contains: Option<String>,
+    pub policy: ContextWindowPolicy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextWindowManager {
+    pub default_policy: ContextWindowPolicy,
+    pub overrides: Vec<ContextPolicyOverride>,
+}
+
+impl Default for ContextWindowManager {
+    fn default() -> Self {
+        Self {
+            default_policy: ContextWindowPolicy::default(),
+            overrides: vec![
+                ContextPolicyOverride {
+                    provider: "gemini".to_string(),
+                    model_contains: Some("pro".to_string()),
+                    policy: ContextWindowPolicy {
+                        max_tokens: 32_768,
+                        reserve_for_response: 2_048,
+                        min_history_messages: 4,
+                    },
+                },
+                ContextPolicyOverride {
+                    provider: "openai".to_string(),
+                    model_contains: Some("4o".to_string()),
+                    policy: ContextWindowPolicy {
+                        max_tokens: 16_384,
+                        reserve_for_response: 2_048,
+                        min_history_messages: 4,
+                    },
+                },
+                ContextPolicyOverride {
+                    provider: "ollama".to_string(),
+                    model_contains: None,
+                    policy: ContextWindowPolicy {
+                        max_tokens: 8_192,
+                        reserve_for_response: 1_024,
+                        min_history_messages: 3,
+                    },
+                },
+            ],
+        }
+    }
+}
+
+impl ContextWindowManager {
+    pub fn policy_for(&self, provider: &str, model: &str) -> ContextWindowPolicy {
+        self.overrides
+            .iter()
+            .find(|entry| {
+                entry.provider.eq_ignore_ascii_case(provider)
+                    && entry.model_contains.as_ref().map_or(true, |needle| {
+                        model.to_lowercase().contains(&needle.to_lowercase())
+                    })
+            })
+            .map(|entry| entry.policy.clone())
+            .unwrap_or_else(|| self.default_policy.clone())
+    }
+}
+
 // ── Pruning ───────────────────────────────────────────────────────────────────
 
 /// Prune `messages` to fit within `policy.message_budget()` tokens.
@@ -154,6 +219,86 @@ pub fn prune_messages(messages: &[ChatMessage], policy: &ContextWindowPolicy) ->
     let mut result: Vec<ChatMessage> = system_msgs.into_iter().cloned().collect();
     result.extend(selected.into_iter().cloned());
     result
+}
+
+pub fn summarize_messages(messages: &[ChatMessage], max_chars: usize) -> String {
+    let mut summary = String::new();
+
+    for message in messages {
+        let role = match message.role {
+            MessageRole::System => "System",
+            MessageRole::User => "User",
+            MessageRole::Assistant => "Assistant",
+        };
+        let content = message.content().split_whitespace().collect::<Vec<_>>().join(" ");
+        if content.is_empty() {
+            continue;
+        }
+
+        let line = format!("- {role}: {content}\n");
+        if summary.len() + line.len() > max_chars {
+            break;
+        }
+        summary.push_str(&line);
+    }
+
+    if summary.is_empty() {
+        "- No prior conversation details preserved.".to_string()
+    } else {
+        summary.trim_end().to_string()
+    }
+}
+
+pub fn summarize_and_prune_messages(
+    messages: &[ChatMessage],
+    policy: &ContextWindowPolicy,
+) -> Vec<ChatMessage> {
+    let pruned = prune_messages(messages, policy);
+    if pruned.len() == messages.len() {
+        return pruned;
+    }
+
+    let original_non_system: Vec<&ChatMessage> = messages
+        .iter()
+        .filter(|message| message.role != MessageRole::System)
+        .collect();
+    let retained_non_system: Vec<&ChatMessage> = pruned
+        .iter()
+        .filter(|message| message.role != MessageRole::System)
+        .collect();
+    let dropped_count = original_non_system
+        .len()
+        .saturating_sub(retained_non_system.len());
+
+    if dropped_count == 0 {
+        return pruned;
+    }
+
+    let dropped_messages: Vec<ChatMessage> = original_non_system[..dropped_count]
+        .iter()
+        .map(|message| (*message).clone())
+        .collect();
+    let summary = summarize_messages(&dropped_messages, 480);
+
+    let mut rebuilt = Vec::new();
+    rebuilt.extend(
+        pruned
+            .iter()
+            .filter(|message| message.role == MessageRole::System)
+            .cloned(),
+    );
+    rebuilt.push(ChatMessage::new(
+        MessageRole::System,
+        format!("Conversation summary:\n{summary}"),
+    ));
+    rebuilt.extend(
+        pruned
+            .iter()
+            .filter(|message| message.role != MessageRole::System)
+            .cloned(),
+    );
+
+    prune_messages(&rebuilt, policy)
 }
 
 // ── Unit tests ───────────────────────────────────────────────────────────────
@@ -307,5 +452,33 @@ mod tests {
         let pruned = prune_messages(&msgs, &policy);
         let non_system_count = pruned.iter().filter(|m| m.role != MessageRole::System).count();
         assert!(non_system_count >= policy.min_history_messages);
+    }
+
+    #[test]
+    fn manager_selects_provider_specific_policy() {
+        let manager = ContextWindowManager::default();
+        let policy = manager.policy_for("openai", "gpt-4o-mini");
+        assert_eq!(policy.max_tokens, 16_384);
+    }
+
+    #[test]
+    fn summarize_and_prune_injects_summary_message_when_history_drops() {
+        let messages = vec![
+            make_msg(MessageRole::System, "Stay helpful."),
+            make_msg(MessageRole::User, &"hello ".repeat(200)),
+            make_msg(MessageRole::Assistant, &"reply ".repeat(200)),
+            make_msg(MessageRole::User, "latest question"),
+        ];
+        let policy = ContextWindowPolicy {
+            max_tokens: 120,
+            reserve_for_response: 20,
+            min_history_messages: 1,
+        };
+
+        let prepared = summarize_and_prune_messages(&messages, &policy);
+        assert!(prepared.iter().any(|message| {
+            message.role == MessageRole::System
+                && message.content().contains("Conversation summary")
+        }));
     }
 }

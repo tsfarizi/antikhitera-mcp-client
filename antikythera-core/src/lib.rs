@@ -20,13 +20,18 @@ pub use application::agent::{Agent, AgentOptions, AgentOutcome, ToolDescriptor};
 pub use application::resilience;
 pub use application::resilience::{
     ResilienceConfig, ResilienceManager, RetryPolicy, TimeoutPolicy,
-    ContextWindowPolicy, TokenEstimator, prune_messages,
+    ContextPolicyOverride, ContextWindowManager, ContextWindowPolicy,
+    TokenEstimator, prune_messages, summarize_and_prune_messages, summarize_messages,
     HealthStatus, ComponentHealth, HealthTracker,
+    ComponentMetrics, CorrelationContext, MetricsTracker,
     with_retry, with_retry_if,
 };
 pub use application::client::{ChatRequest, ClientConfig, McpClient};
 pub use config::AppConfig;
-pub use infrastructure::model::{DynamicModelProvider, ModelProvider};
+pub use infrastructure::model::{
+    DynamicModelProvider, ModelProvider, ModelStreamEvent, ModelToolCall,
+    ModelToolChoice, ModelToolDefinition,
+};
 
 // Re-export CLI argument types so binary crates don't need a direct `cli` dep.
 #[cfg(feature = "wizard")]

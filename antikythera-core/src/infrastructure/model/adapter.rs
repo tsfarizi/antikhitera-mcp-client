@@ -1,6 +1,7 @@
 //! Message adapters - convert between different API formats
 
 use crate::domain::types::{ChatMessage, MessagePart};
+use crate::infrastructure::model::{ModelToolChoice, ModelToolDefinition};
 use serde_json::{Value, json};
 
 /// Adapter for converting messages to different API formats
@@ -134,5 +135,57 @@ impl MessageAdapter {
         };
 
         (system_instruction, contents)
+    }
+
+    pub fn to_openai_tools(tools: &[ModelToolDefinition]) -> Vec<Value> {
+        tools
+            .iter()
+            .map(|tool| {
+                json!({
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.input_schema,
+                    }
+                })
+            })
+            .collect()
+    }
+
+    pub fn to_openai_tool_choice(choice: &ModelToolChoice) -> Value {
+        match choice {
+            ModelToolChoice::Auto => json!("auto"),
+            ModelToolChoice::None => json!("none"),
+            ModelToolChoice::Required => json!("required"),
+            ModelToolChoice::Tool(name) => json!({
+                "type": "function",
+                "function": { "name": name }
+            }),
+        }
+    }
+
+    pub fn to_gemini_tools(tools: &[ModelToolDefinition]) -> Value {
+        Value::Array(vec![json!({
+            "functionDeclarations": tools.iter().map(|tool| json!({
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.input_schema,
+            })).collect::<Vec<_>>()
+        })])
+    }
+
+    pub fn to_gemini_tool_choice(choice: &ModelToolChoice) -> Value {
+        match choice {
+            ModelToolChoice::Auto => json!({ "functionCallingConfig": { "mode": "AUTO" } }),
+            ModelToolChoice::None => json!({ "functionCallingConfig": { "mode": "NONE" } }),
+            ModelToolChoice::Required => json!({ "functionCallingConfig": { "mode": "ANY" } }),
+            ModelToolChoice::Tool(name) => json!({
+                "functionCallingConfig": {
+                    "mode": "ANY",
+                    "allowedFunctionNames": [name]
+                }
+            }),
+        }
     }
 }
