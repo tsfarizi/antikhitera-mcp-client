@@ -52,15 +52,30 @@ fn main() {
 fn generate_wit() {
     println!("{}[1/2] Generating WIT from Rust code...{}{}", YELLOW, RESET, BLUE);
 
-    let component_rs = project_root()
+    let sdk_src = project_root()
         .join("antikythera-sdk")
-        .join("src")
-        .join("component.rs");
+        .join("src");
 
-    if !component_rs.exists() {
-        eprintln!("{}✗ component.rs not found: {}{}", RED, component_rs.display(), RESET);
-        exit(1);
-    }
+    let component_rs = {
+        let flat_file = sdk_src.join("component.rs");
+        if flat_file.exists() {
+            flat_file
+        } else {
+            let module_file = sdk_src.join("component").join("mod.rs");
+            if module_file.exists() {
+                module_file
+            } else {
+                eprintln!(
+                    "{}✗ component source not found. Checked: {} and {}{}",
+                    RED,
+                    flat_file.display(),
+                    module_file.display(),
+                    RESET
+                );
+                exit(1);
+            }
+        }
+    };
 
     // Parse and generate WIT
     match wit_from_rust::generate(&component_rs) {
