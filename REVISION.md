@@ -147,7 +147,7 @@ mcp --mode multi-agent --agents agents.json --task "Review this code" --executio
 
 ## 4. Architectural mismatches
 
-### 4.1 The modular architecture is directionally correct, but boundaries are not strict enough
+### 4.1 The modular architecture is directionally correct, but boundaries are not strict enough ✅ RESOLVED
 
 The crate split is good in principle, but discipline is not fully enforced:
 
@@ -158,9 +158,13 @@ The crate split is good in principle, but discipline is not fully enforced:
   in the current feature defaults
 - config should have a single source of truth
 
-Right now those boundaries still leak.
+**Changes made:**
+- `antikythera-sdk` default feature set changed to `default = ["single-agent"]` so browser WASM is no longer implicitly enabled
+- Browser WASM (`wasm`) and server-side WASM component (`component`) are now explicit opt-in lanes
+- Server-side WASM modules in SDK (`component` and `wasm_agent`) are now exported only when `feature = "component"` is enabled
+- Config remains on the single canonical path (`postcard_config::AppConfig`) already established in section 3.3
 
-### 4.2 The public SDK surface is broader than the truly stable implementation surface
+### 4.2 The public SDK surface is broader than the truly stable implementation surface ✅ RESOLVED (lane-gated exports)
 
 `antikythera-sdk` exposes many modules:
 
@@ -175,9 +179,10 @@ Right now those boundaries still leak.
 
 But these surfaces are not all equally mature.
 
-**Impact**
-
-It is difficult to say what the actual stable product API is.
+**Changes made:**
+- Lane-specific SDK exports are now feature-gated so consumers only see the surface they explicitly opt into
+- `wasm_agent` and `component` surfaces are hidden from default/native SDK builds unless `component` is enabled
+- Default API now tracks the native lane more closely, reducing accidental reliance on secondary targets
 
 ### 4.3 Native, server-side WASM component, and C FFI lanes are not yet fully treated as separate product lanes ✅ RESOLVED
 
@@ -203,6 +208,8 @@ product lane. It is gated separately and must not be confused with the server-si
   - `adapter.rs`, `http_client.rs`, `clients/{gemini,openai,ollama}.rs`, `factory.rs`, `provider_builder.rs`
 - CLI's `menu.rs` uses `build_provider_from_configs()` from the CLI's own provider stack
 - `antikythera-sdk` enables `antikythera-core/http-providers` via its `sdk-core` feature (native builds); the `component` feature deliberately omits it
+- `antikythera-sdk` default features now target native lane only (`default = ["single-agent"]`); browser WASM and server-side component are explicit opt-in lanes
+- `antikythera-sdk` lane-specific exports are now strictly gated: `wasm_agent` and `component` are exported only with `feature = "component"`
 - Server-side WASM component builds (`cargo component build --target wasm32-wasip1`) are now clean: no HTTP deps
 
 ---

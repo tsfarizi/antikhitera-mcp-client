@@ -222,8 +222,10 @@ pub use sdk_logging::{
 };
 
 /// WASM Agent Module (processes LLM responses from host)
+#[cfg(feature = "component")]
 pub mod wasm_agent;
 
+#[cfg(feature = "component")]
 pub use wasm_agent::{
     // Types
     AgentAction, AgentState, WasmAgentConfig,
@@ -237,8 +239,10 @@ pub use wasm_agent::{
 };
 
 /// WASM Component feature slice (Host Imports)
+#[cfg(feature = "component")]
 pub mod component;
 
+#[cfg(feature = "component")]
 pub use component::{
     // Host Import Types
     LlmRequest, LlmResponse, ToolCallEvent, ToolExecutionResult, LogEvent,

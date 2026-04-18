@@ -16,7 +16,7 @@ default = ["native-transport"]
 wasm-runtime = ["dep:wasmtime", "dep:anyhow"]
 
 # OS-level process management (Stdio transport)
-native-transport = ["tokio/process", "dep:sysinfo"]
+native-transport = ["tokio/process", "tokio/io-std", "dep:sysinfo"]
 
 # Configuration cache (Postcard binary format) - now always enabled
 cache = []

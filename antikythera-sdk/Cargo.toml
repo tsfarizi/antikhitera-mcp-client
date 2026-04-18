@@ -19,10 +19,9 @@ package = "antikythera:mcp-framework"
 
 [features]
 # Default build: native Rust with single-agent support.
-# NOTE: the `wasm` feature below targets browser WASM (wasm-bindgen / JS interop)
-# which is a DIFFERENT use case from the primary server-side WASM target.
-# The primary WASM path is `component` (wasm32-wasip1 WASI), not `wasm`.
-default = ["wasm", "single-agent"]
+# Browser WASM (`wasm`) and server-side WASM component (`component`) are
+# explicit opt-in lanes and must not be enabled implicitly by default.
+default = ["single-agent"]
 
 # Shared runtime surface for SDK features that depend on core/session crates.
 # Also enables `http-providers` in core: sdk-core is only active for native
