@@ -19,7 +19,7 @@ use super::super::state::ServerState;
         (status = 500, description = "Gagal memuat konfigurasi", body = ErrorResponse)
     )
 )]
-pub async fn config_get_handler<P: ModelProvider>(
+pub async fn config_get_handler<P: ModelProvider + Send + Sync + 'static>(
     State(_state): State<Arc<ServerState<P>>>,
 ) -> Result<Json<ConfigResponse>, (StatusCode, Json<ErrorResponse>)> {
     let path = Path::new(CONFIG_PATH);
@@ -59,7 +59,7 @@ pub async fn config_get_handler<P: ModelProvider>(
         (status = 500, description = "Gagal menyimpan konfigurasi", body = ErrorResponse)
     )
 )]
-pub async fn config_put_handler<P: ModelProvider>(
+pub async fn config_put_handler<P: ModelProvider + Send + Sync + 'static>(
     State(_state): State<Arc<ServerState<P>>>,
     Json(payload): Json<ConfigUpdateRequest>,
 ) -> Result<Json<ConfigResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -125,7 +125,7 @@ pub async fn config_put_handler<P: ModelProvider>(
         (status = 500, description = "Gagal memuat konfigurasi", body = ErrorResponse)
     )
 )]
-pub async fn config_reload_handler<P: ModelProvider>(
+pub async fn config_reload_handler<P: ModelProvider + Send + Sync + 'static>(
     State(_state): State<Arc<ServerState<P>>>,
 ) -> Result<Json<ReloadResponse>, (StatusCode, Json<ErrorResponse>)> {
     let path = Path::new(CONFIG_PATH);

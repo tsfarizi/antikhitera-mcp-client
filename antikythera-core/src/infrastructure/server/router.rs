@@ -23,7 +23,7 @@ pub(super) async fn serve<P>(
     doc_servers: &[DocServerConfig],
 ) -> Result<(), ServerError>
 where
-    P: ModelProvider + 'static,
+    P: ModelProvider + Send + Sync + 'static,
 {
     let api = ApiDoc::with_servers(doc_servers);
     info!(%addr, "Binding REST server");

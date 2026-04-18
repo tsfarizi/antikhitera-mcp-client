@@ -15,7 +15,7 @@ use tracing::debug;
         (status = 200, description = "Daftar tools tersedia", body = ToolInventoryResponse)
     )
 )]
-pub async fn tools_handler<P: ModelProvider>(
+pub async fn tools_handler<P: ModelProvider + Send + Sync + 'static>(
     State(state): State<Arc<ServerState<P>>>,
 ) -> Json<ToolInventoryResponse> {
     let client = state.client();

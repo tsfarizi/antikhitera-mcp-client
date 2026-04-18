@@ -118,7 +118,8 @@ impl HttpTransport {
     }
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl McpTransport for HttpTransport {
     async fn connect(&self) -> Result<(), ToolInvokeError> {
         if self.inner.connected.load(Ordering::SeqCst) {

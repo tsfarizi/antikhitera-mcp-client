@@ -18,8 +18,11 @@ package = "antikythera:mcp-framework"
 # Default build: WASM bindings with single-agent support
 default = ["wasm", "single-agent"]
 
+# Shared runtime surface for SDK features that depend on core/session crates
+sdk-core = ["dep:antikythera-core", "dep:antikythera-session"]
+
 # WASM support (optional)
-wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:console_error_panic_hook", "dep:tracing-wasm"]
+wasm = ["sdk-core", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:console_error_panic_hook", "dep:tracing-wasm"]
 
 # WASM Component Model support
 component = ["dep:wit-bindgen-rt"]
@@ -28,28 +31,28 @@ component = ["dep:wit-bindgen-rt"]
 wasm-config = []
 
 # FFI support for C bindings
-ffi = ["dep:ffi-support"]
+ffi = ["sdk-core", "dep:ffi-support"]
 
 # Agent modes - these control what antikythera-core includes
-single-agent = ["antikythera-core/native-transport"]
-multi-agent = ["antikythera-core/multi-agent"]
+single-agent = ["sdk-core", "antikythera-core/native-transport"]
+multi-agent = ["sdk-core", "antikythera-core/multi-agent"]
 
 # Optional capabilities
-cloud = ["antikythera-core/gcp"]
-wasm-sandbox = ["antikythera-core/wasm-runtime"]
+cloud = ["sdk-core", "antikythera-core/gcp"]
+wasm-sandbox = ["sdk-core", "antikythera-core/wasm-runtime"]
 
 # Full-featured build (not recommended for WASM - large binary)
 full = ["wasm", "multi-agent", "cloud", "antikythera-core/full"]
 
 [dependencies]
 # Core with configurable features - SDK enables what it needs through feature wiring
-antikythera-core = { path = "../antikythera-core", version = "0.9.0", default-features = false }
+antikythera-core = { path = "../antikythera-core", version = "0.9.0", default-features = false, optional = true }
 
 # Logging
 antikythera-log = { path = "../antikythera-log", version = "0.9.0", features = ["subscriber"] }
 
 # Session management
-antikythera-session = { path = "../antikythera-session", version = "0.9.0" }
+antikythera-session = { path = "../antikythera-session", version = "0.9.0", optional = true }
 
 # Core async runtime (wasm-compatible)
 tokio = { version = "1.39", default-features = false, features = ["macros", "rt"] }

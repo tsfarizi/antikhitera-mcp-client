@@ -38,13 +38,16 @@
 //! cargo build -p antikythera-sdk --release --features ffi
 //! ```
 
-// Re-export core types (always available)
+// Re-export core types
+#[cfg(feature = "sdk-core")]
 pub use antikythera_core::application::agent::{Agent, AgentOptions, AgentOutcome};
+#[cfg(feature = "sdk-core")]
 pub use antikythera_core::application::client::{ClientConfig, McpClient};
+#[cfg(feature = "sdk-core")]
 pub use antikythera_core::config::AppConfig;
 
 // Conditional exports based on features
-#[cfg(feature = "multi-agent")]
+#[cfg(all(feature = "sdk-core", feature = "multi-agent"))]
 pub use antikythera_core::application::agent::multi_agent::{
     AgentRegistry, AgentProfile, AgentRole, MemoryProvider, MemoryConfig, ContextId,
 };
@@ -54,15 +57,17 @@ pub use antikythera_core::application::agent::multi_agent::{
 // ============================================================================
 
 /// MCP Client feature slice (WASM bindings)
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "sdk-core"))]
 pub mod client;
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "sdk-core"))]
 pub use client::{WasmClient, init as wasm_init};
 
 /// Prompt Management feature slice
+#[cfg(feature = "sdk-core")]
 pub mod prompts;
 
+#[cfg(feature = "sdk-core")]
 pub use prompts::{
     mcp_get_template, mcp_update_template, mcp_reset_template,
     mcp_get_tool_guidance, mcp_update_tool_guidance,
@@ -104,8 +109,10 @@ pub use response::{
 };
 
 /// Binary Configuration feature slice (Postcard)
+#[cfg(feature = "sdk-core")]
 pub mod config;
 
+#[cfg(feature = "sdk-core")]
 pub use config::{
     // Postcard operations
     config_to_postcard, config_from_postcard,
@@ -116,8 +123,10 @@ pub use config::{
 };
 
 /// Configuration FFI (Postcard-based)
+#[cfg(feature = "sdk-core")]
 pub mod config_ffi;
 
+#[cfg(feature = "sdk-core")]
 pub use config_ffi::{
     // Core config FFI
     mcp_config_init, mcp_config_exists, mcp_config_size,
@@ -161,8 +170,10 @@ pub use json_schema::{
 };
 
 /// Session Management module
+#[cfg(feature = "sdk-core")]
 pub mod session;
 
+#[cfg(feature = "sdk-core")]
 pub use session::{
     // Types
     Message, MessageRole, Session, SessionSummary,
@@ -225,6 +236,7 @@ pub use component::{
 // ============================================================================
 
 /// Native high-level API wrapper
+#[cfg(feature = "sdk-core")]
 pub mod high_level_api;
 
 /// SDK version
@@ -232,10 +244,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Initialize the SDK
 pub fn init() {
-    #[cfg(feature = "wasm")]
+    #[cfg(all(feature = "wasm", feature = "sdk-core"))]
     wasm_init();
 
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(not(all(feature = "wasm", feature = "sdk-core")))]
     {
         use std::io::Write;
         let _ = writeln!(std::io::stdout(), "Antikythera SDK v{} initialized", VERSION);

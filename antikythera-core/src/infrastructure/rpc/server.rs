@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
-pub(crate) async fn handle_rpc<P: ModelProvider>(
+pub(crate) async fn handle_rpc<P: ModelProvider + Send + Sync + 'static>(
     State(state): State<Arc<ServerState<P>>>,
     Json(request): Json<RpcRequest>,
 ) -> Json<RpcResponse> {
@@ -34,7 +34,7 @@ pub(crate) async fn handle_rpc<P: ModelProvider>(
     Json(response)
 }
 
-async fn handle_session_create<P: ModelProvider>(
+async fn handle_session_create<P: ModelProvider + Send + Sync + 'static>(
     _state: &Arc<ServerState<P>>,
     id: Option<Value>,
 ) -> RpcResponse {
@@ -47,7 +47,7 @@ async fn handle_session_create<P: ModelProvider>(
     )
 }
 
-async fn handle_session_list<P: ModelProvider>(
+async fn handle_session_list<P: ModelProvider + Send + Sync + 'static>(
     _state: &Arc<ServerState<P>>,
     id: Option<Value>,
 ) -> RpcResponse {
@@ -59,7 +59,7 @@ async fn handle_session_list<P: ModelProvider>(
     )
 }
 
-async fn handle_tool_list<P: ModelProvider>(
+async fn handle_tool_list<P: ModelProvider + Send + Sync + 'static>(
     state: &Arc<ServerState<P>>,
     id: Option<Value>,
 ) -> RpcResponse {
@@ -76,7 +76,7 @@ async fn handle_tool_list<P: ModelProvider>(
     )
 }
 
-async fn handle_chat_message<P: ModelProvider>(
+async fn handle_chat_message<P: ModelProvider + Send + Sync + 'static>(
     state: &Arc<ServerState<P>>,
     request: &RpcRequest,
 ) -> RpcResponse {

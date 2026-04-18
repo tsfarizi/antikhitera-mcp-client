@@ -10,7 +10,8 @@ pub struct ServerToolInfo {
     pub input_schema: Option<Value>,
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait ToolServerInterface: Send + Sync {
     async fn invoke_tool(
         &self,

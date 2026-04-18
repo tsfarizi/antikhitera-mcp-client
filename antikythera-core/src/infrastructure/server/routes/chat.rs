@@ -34,7 +34,7 @@ fn attachments_to_parts(attachments: Vec<Attachment>) -> Vec<MessagePart> {
         (status = 502, description = "Model atau agen tidak dapat dihubungi", body = ErrorResponse)
     )
 )]
-pub async fn chat_handler<P: ModelProvider>(
+pub async fn chat_handler<P: ModelProvider + Send + Sync + 'static>(
     State(state): State<Arc<ServerState<P>>>,
     Json(payload): Json<RestChatRequest>,
 ) -> Result<Json<RestChatResponse>, (StatusCode, Json<ErrorResponse>)> {

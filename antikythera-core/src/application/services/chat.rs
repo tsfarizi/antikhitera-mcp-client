@@ -199,7 +199,8 @@ mod tests {
         response_content: String,
     }
 
-    #[async_trait]
+    #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+    #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
     impl ModelProvider for MockModelProvider {
         async fn chat(&self, _request: ModelRequest) -> Result<ModelResponse, ModelError> {
             Ok(ModelResponse {
