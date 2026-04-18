@@ -1,6 +1,18 @@
 //! MCP Client Feature Slice
 //!
-//! Provides WASM bindings for MCP client operations.
+//! Provides **browser WASM** bindings for MCP client operations via `wasm-bindgen`.
+//!
+//! ## Target clarification
+//!
+//! This module is compiled ONLY when the `wasm` feature is active
+//! (target `wasm32-unknown-unknown` / browser environment).
+//!
+//! It is NOT part of the primary WASM path. The primary WASM target for this
+//! framework is the server-side WASM component (`component` feature,
+//! `wasm32-wasip1`), which communicates with its host through WIT-defined
+//! imports (`antikythera::call_llm_sync`, etc.) declared in `wit/antikythera.wit`.
+//!
+//! This browser-facing client exists for optional web embedding only.
 
 use wasm_bindgen::prelude::*;
 use antikythera_core::application::agent::{Agent, AgentOptions};

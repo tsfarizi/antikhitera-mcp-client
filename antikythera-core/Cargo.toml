@@ -46,12 +46,13 @@ multi-agent-gcs = ["multi-agent", "dep:google-cloud-storage"]
 # `infrastructure::model::{adapter, clients, factory}` as well as the
 # `DynamicModelProvider::from_configs` convenience constructor.
 #
-# **Enable only for native (non-WASM-component) builds.**
+# **Enable only for native (non-WASM) builds.**
 # - ✅ CLI (`antikythera-cli`) always enables this via the `full` feature.
-# - ✅ SDK browser-WASM (`wasm` / `single-agent` features) enables this via `full`.
-# - ❌ WASM component (`wasm32-wasip1`) must NOT enable this — the host
-#      runtime is responsible for LLM calls; the WASM module only exchanges
-#      structured messages through the WIT interface.
+# - ✅ SDK native builds enable this via `sdk-core`.
+# - ❌ Server-side WASM component builds (`wasm32-wasip1`) must NOT enable this —
+#      the host process that embeds the .wasm module is responsible for LLM calls;
+#      the WASM component only exchanges structured messages through the WIT interface
+#      (`antikythera::call_llm_sync` host import).
 http-providers = []
 
 # Full-featured build (all capabilities)

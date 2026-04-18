@@ -2,6 +2,21 @@
 //!
 //! High-level API wrapper with FFI and WASM bindings for the MCP client.
 //!
+//! ## WASM Target Clarification
+//!
+//! This framework targets **server-side WASM** (WASI component model), NOT browser WASM.
+//! The compiled `.wasm` binary is hosted by a native process (Rust, Python, Go, etc.)
+//! that embeds `wasmtime` and calls exports via FFI. The host process handles all
+//! external I/O (LLM calls, tool execution, persistence) through host imports
+//! declared in `wit/antikythera.wit`.
+//!
+//! Build targets:
+//! - **Server-side WASM component** (primary): `cargo component build --target wasm32-wasip1`
+//! - **Native Rust** (CLI, tests, embedding): `cargo build`
+//! - **Native FFI** (C/C++/Python via cdylib): `cargo build --release --features ffi`
+//! - **Browser WASM** (secondary, optional): `cargo build --target wasm32-unknown-unknown`
+//!   — this path exists but is NOT the primary integration target.
+//!
 //! ## Architecture
 //!
 //! This SDK follows **Vertical Slice Architecture (VSA)** where each feature
@@ -9,31 +24,32 @@
 //!
 //! ```text
 //! src/
-//! ├── client/        - MCP Client (WASM bindings)
+//! ├── client/        - MCP Client (browser WASM bindings — secondary target)
 //! ├── prompts/       - Prompt Template Management
 //! ├── servers/       - MCP Server Management
 //! ├── agents/        - Multi-Agent Management
 //! ├── response/      - Response Formatting (JSON/Markdown/Text)
 //! ├── config/        - Binary Configuration (Postcard)
-//! ├── component/     - WASM Component (Host Imports)
+//! ├── component/     - Server-side WASM Component (Host Imports via WIT)
 //! └── high_level_api.rs - Native Rust API
 //! ```
 //!
 //! ## Feature Flags
 //!
-//! - `wasm` - Enable WASM bindings (enabled by default)
-//! - `ffi` - Enable FFI support for C bindings
+//! - `component` - Server-side WASM component model (primary WASM target)
+//! - `wasm` - Browser WASM bindings via wasm-bindgen (secondary, optional)
+//! - `ffi` - FFI support for C bindings (native cdylib)
 //! - `single-agent` - Single agent support (default)
 //! - `multi-agent` - Multi-agent orchestration support
 //!
 //! ## Examples
 //!
-//! ### WASM build
+//! ### Server-side WASM component build (primary target)
 //! ```bash
-//! cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release
+//! cargo component build --target wasm32-wasip1 --release
 //! ```
 //!
-//! ### FFI build
+//! ### Native FFI build
 //! ```bash
 //! cargo build -p antikythera-sdk --release --features ffi
 //! ```

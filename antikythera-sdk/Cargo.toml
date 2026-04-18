@@ -7,6 +7,9 @@ license.workspace = true
 description = "High-level API wrapper with FFI and WASM bindings"
 
 [lib]
+# cdylib: required for server-side WASM component builds (wasm32-wasip1)
+#         and native C FFI (--features ffi).
+# rlib:   required for native Rust builds and tests.
 crate-type = ["cdylib", "rlib"]
 
 [package.metadata.component]
@@ -15,19 +18,30 @@ package = "antikythera:mcp-framework"
 [package.metadata.component.dependencies]
 
 [features]
-# Default build: WASM bindings with single-agent support
+# Default build: native Rust with single-agent support.
+# NOTE: the `wasm` feature below targets browser WASM (wasm-bindgen / JS interop)
+# which is a DIFFERENT use case from the primary server-side WASM target.
+# The primary WASM path is `component` (wasm32-wasip1 WASI), not `wasm`.
 default = ["wasm", "single-agent"]
 
 # Shared runtime surface for SDK features that depend on core/session crates.
-# Also enables `http-providers` in core: sdk-core is only active for native /
-# browser-WASM builds, never for `wasm32-wasip1` component builds, so it is
-# safe to include HTTP client code here.
+# Also enables `http-providers` in core: sdk-core is only active for native
+# builds, never for server-side WASM component builds, so it is safe to
+# include HTTP client code here.
 sdk-core = ["dep:antikythera-core", "dep:antikythera-session", "antikythera-core/http-providers"]
 
-# WASM support (optional)
+# Browser WASM bindings (wasm-bindgen / JS interop).
+# Target: wasm32-unknown-unknown.
+# NOTE: This is NOT the primary WASM target. The framework is designed for
+# server-side WASM (wasm32-wasip1 component model). This feature exists for
+# optional browser embedding only and is NOT aligned with the WIT/wasmtime
+# integration path.
 wasm = ["sdk-core", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:console_error_panic_hook", "dep:tracing-wasm"]
 
-# WASM Component Model support
+# Server-side WASM Component Model support (wasm32-wasip1 WASI).
+# This is the primary WASM target: the .wasm binary is hosted by a native
+# process (Rust/Python/Go/etc.) that embeds wasmtime and calls exports via FFI.
+# Host imports (call_llm_sync, etc.) are declared in wit/antikythera.wit.
 component = ["dep:wit-bindgen-rt"]
 
 # WASM configuration binary format (postcard serialization)

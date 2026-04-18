@@ -15,11 +15,11 @@ It is designed to:
 | Crate | Role | Current condition |
 |---|---|---|
 | `antikythera-core` | Core runtime: transports, providers, agents, config, REST server | Most mature and most important crate |
-| `antikythera-sdk` | Public SDK surface: WASM bindings, component path, config/session/server/agent helpers | Broad surface, but not equally mature everywhere |
+| `antikythera-sdk` | Public SDK surface: server-side WASM component bindings, C FFI, config/session/server/agent helpers | Broad surface, but not equally mature everywhere |
 | `antikythera-cli` | User-facing binaries | Not fully connected to the real runtime yet |
 | `antikythera-session` | Session history and import/export | Solid foundation |
 | `antikythera-log` | Structured logging | Solid foundation |
-| `scripts` and `wit` | WIT generation and WASM component support | Present, but component integration is not fully mature |
+| `scripts` and `wit` | WIT definition for server-side WASM component model (host imports/exports) | Present, but component integration is not fully mature |
 
 ---
 
@@ -29,7 +29,7 @@ The repository already has several strong foundations:
 
 - crate boundaries exist and are mostly understandable
 - `antikythera-core` already contains the correct architectural center of gravity
-- there is clear investment in WASM and component model support
+- there is clear investment in server-side WASM (WASI component model) and FFI hosting support
 - documentation and build/release workflows are much better organized than before
 - logging, config, and session capabilities are reusable and meaningful
 
@@ -55,7 +55,7 @@ Important examples:
 - ~~the FSM-based agent path is not fully complete~~ **FIXED**: `transition()` fully implemented with all valid state transitions; `is_terminal()` fixed to include `FinalMessage`; 22 unit tests added
 - ~~multi-agent is closer to a stub than a production orchestration runtime~~ **FULLY IMPLEMENTED (v0.9.6)**: Complete orchestration runtime with `ExecutionMode` (Auto/Sequential/Concurrent/Parallel), `TaskScheduler`, four `AgentRouter` implementations (`DirectRouter`, `RoundRobinRouter`, `FirstAvailableRouter`, `RoleRouter`), `MultiAgentOrchestrator`, pipeline execution, and CLI integration via `--mode multi-agent`
 - JSON-RPC session flows are not fully wired into real session handling *(deferred — out of 3.x scope)*
-- the WASM/component path exposes structure, but not all of it is production-complete *(deferred — out of 3.x scope)*
+- the server-side WASM component path (wasm32-wasip1) exposes structure, but the WIT-to-implementation wiring is not production-complete *(deferred — out of 3.x scope)*
 
 **Impact**
 
@@ -148,7 +148,10 @@ mcp --mode multi-agent --agents agents.json --task "Review this code" --executio
 The crate split is good in principle, but discipline is not fully enforced:
 
 - CLI should be a thin adapter over the core runtime
-- SDK should clearly separate browser, component, and native lanes
+- SDK should clearly separate server-side WASM component, native C FFI, and native Rust lanes
+- The `wasm` SDK feature (browser WASM via `wasm-bindgen`) is a different target from the primary
+  server-side WASM component (`component` feature, `wasm32-wasip1`); these two are conflated
+  in the current feature defaults
 - config should have a single source of truth
 
 Right now those boundaries still leak.
@@ -162,8 +165,9 @@ Right now those boundaries still leak.
 - agents
 - servers
 - JSON schema
-- browser WASM client
-- component support
+- server-side WASM component interface (WIT)
+- browser WASM client (secondary target, wasm-bindgen)
+- native C FFI
 
 But these surfaces are not all equally mature.
 
@@ -171,13 +175,18 @@ But these surfaces are not all equally mature.
 
 It is difficult to say what the actual stable product API is.
 
-### 4.3 Native, browser WASM, and component lanes are not yet fully treated as separate product lanes ✅ RESOLVED
+### 4.3 Native, server-side WASM component, and C FFI lanes are not yet fully treated as separate product lanes ✅ RESOLVED
 
-Technically a lot of progress has already been made in gating and dependency cleanup, but architecturally these need to become explicit product lanes:
+The three actual deployment lanes are:
 
-- **native runtime**
-- **browser WASM**
-- **WASM component**
+- **native runtime** — compiled natively, full tokio async, HTTP providers
+- **server-side WASM component** — compiled to `wasm32-wasip1`, hosted by an embedding process
+  (Rust/Python/Go/etc.) via wasmtime; host handles LLM calls through WIT imports; this is the
+  primary WASM target for flexibility and portability without per-language runtime setup
+- **native C FFI** — compiled as `cdylib`, called from C/C++/Python via `extern "C"` exports
+
+The browser WASM (`wasm` feature, `wasm-bindgen`) is a **secondary optional** path, not a core
+product lane. It is gated separately and must not be confused with the server-side component path.
 
 **Changes made:**
 - Introduced `http-providers` feature flag in `antikythera-core` that gates all HTTP LLM client code
@@ -189,9 +198,8 @@ Technically a lot of progress has already been made in gating and dependency cle
 - All concrete HTTP LLM implementations physically moved to **`antikythera-cli`**:
   - `adapter.rs`, `http_client.rs`, `clients/{gemini,openai,ollama}.rs`, `factory.rs`, `provider_builder.rs`
 - CLI's `menu.rs` uses `build_provider_from_configs()` from the CLI's own provider stack
-- `antikythera-sdk` enables `antikythera-core/http-providers` via its `sdk-core` feature (native &
-  browser-WASM builds); the `component` feature deliberately omits it
-- WASM component builds (`cargo component build --target wasm32-wasip1`) are now clean: no HTTP deps
+- `antikythera-sdk` enables `antikythera-core/http-providers` via its `sdk-core` feature (native builds); the `component` feature deliberately omits it
+- Server-side WASM component builds (`cargo component build --target wasm32-wasip1`) are now clean: no HTTP deps
 
 ---
 
@@ -222,9 +230,17 @@ Before 1.0, it must be made clear which surfaces are truly supported:
 
 - REST
 - JSON-RPC
-- Rust SDK
-- browser WASM
-- component host interface
+- Rust SDK (native)
+- Server-side WASM component (wasm32-wasip1, primary WASM target)
+- Native C FFI (cdylib)
+- Browser WASM (wasm-bindgen, secondary / optional)
+
+The gap is not that the list is unclear, but that the **server-side WASM component** lane specifically
+is missing:
+- A complete set of WIT-defined exports that map to all real agent operations (not just stubs)
+- A verified build pipeline that produces a `.wasm` binary embeddable by a non-Rust host
+- An example host implementation (e.g. Python or Go) calling the component through wasmtime FFI
+- Integration tests that validate the full WIT import/export contract end-to-end
 
 None of these should remain half-final if the project wants to ship 1.0 confidently.
 
@@ -343,9 +359,11 @@ If the biggest mismatches are ranked:
 
 Separate explicitly:
 
-- **native**
-- **browser WASM**
-- **component**
+- **native** — full tokio async, HTTP providers, CLI binary
+- **server-side WASM component** — `wasm32-wasip1` WASI, WIT imports/exports, hosted via wasmtime;
+  host language calls the `.wasm` binary via FFI without needing a Rust runtime
+- **native C FFI** — `cdylib` with `extern "C"` exports for embedding in Python/Go/C
+- **browser WASM** — `wasm-bindgen`, `wasm32-unknown-unknown`, optional secondary target
 
 Each lane should have:
 
@@ -384,7 +402,7 @@ Before 1.0, decide clearly:
 2. Add full native CI
 3. Finalize one config system
 4. Remove duplicate architecture in the CLI
-5. Finalize native/browser/component product lanes
+5. Finalize native / server-side WASM component / C FFI product lanes
 
 ### High priorities
 
@@ -409,7 +427,7 @@ The main issues are not lack of ideas. The main issues are:
 If the project is cleaned up with discipline, it is well-positioned to become:
 
 - a strong MCP client runtime
-- a clean Rust/WASM/component SDK family
+- a clean Rust / server-side WASM component / C FFI SDK family
 - a production-ready agentic tool-using client framework
 
 The right path forward is not to add many random features, but to:
