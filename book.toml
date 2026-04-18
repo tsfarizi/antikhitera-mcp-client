@@ -2,7 +2,6 @@
 title = "Antikythera MCP Framework"
 authors = ["tsfarizi"]
 language = "en"
-multilingual = false
 src = "."
 
 [build]
