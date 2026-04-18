@@ -3,7 +3,6 @@
 //! Main implementation that coordinates SSE, RPC, and tool caching modules.
 
 mod rpc;
-#[cfg(feature = "gcp")]
 mod sse;
 mod tools;
 

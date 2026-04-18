@@ -4,6 +4,7 @@
 
 use super::error::ToolInvokeError;
 use super::interface::{ServerToolInfo, ToolServerInterface};
+#[cfg(feature = "native-transport")]
 use super::process::McpProcess;
 use super::transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};
 use crate::config::{ServerConfig, TransportType};
@@ -15,6 +16,7 @@ use tracing::warn;
 
 /// Unified server instance that wraps either STDIO or HTTP transport.
 enum ServerInstance {
+    #[cfg(feature = "native-transport")]
     Stdio(Arc<McpProcess>),
     Http(Arc<HttpTransport>),
 }
@@ -22,6 +24,7 @@ enum ServerInstance {
 impl ServerInstance {
     async fn call_tool(&self, tool: &str, arguments: Value) -> Result<Value, ToolInvokeError> {
         match self {
+            #[cfg(feature = "native-transport")]
             ServerInstance::Stdio(process) => process.call_tool(tool, arguments).await,
             ServerInstance::Http(transport) => transport.call_tool(tool, arguments).await,
         }
@@ -29,6 +32,7 @@ impl ServerInstance {
 
     async fn instructions(&self) -> Option<String> {
         match self {
+            #[cfg(feature = "native-transport")]
             ServerInstance::Stdio(process) => process.instructions().await,
             ServerInstance::Http(transport) => transport.instructions().await,
         }
@@ -36,6 +40,7 @@ impl ServerInstance {
 
     async fn tool_metadata(&self, tool: &str) -> Option<ServerToolInfo> {
         match self {
+            #[cfg(feature = "native-transport")]
             ServerInstance::Stdio(process) => process.tool_metadata(tool).await,
             ServerInstance::Http(transport) => transport.tool_metadata(tool).await,
         }
@@ -85,9 +90,19 @@ impl ServerManager {
 
         let instance = match config.transport {
             TransportType::Stdio => {
+                #[cfg(feature = "native-transport")]
+                {
                 let process = Arc::new(McpProcess::new(config));
                 process.ensure_running().await?;
                 ServerInstance::Stdio(process)
+                }
+                #[cfg(not(feature = "native-transport"))]
+                {
+                    return Err(ToolInvokeError::Transport {
+                        server: server.to_string(),
+                        message: "STDIO transport requires the native-transport feature".to_string(),
+                    });
+                }
             }
             TransportType::Http => {
                 let url = config
@@ -116,6 +131,7 @@ impl ServerManager {
     fn get_instance(&self, server: &str) -> Option<ServerInstance> {
         let instances = self.instances.lock().expect("server registry lock");
         match instances.get(server) {
+            #[cfg(feature = "native-transport")]
             Some(ServerInstance::Stdio(p)) => Some(ServerInstance::Stdio(p.clone())),
             Some(ServerInstance::Http(t)) => Some(ServerInstance::Http(t.clone())),
             None => None,

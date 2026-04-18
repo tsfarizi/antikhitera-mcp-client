@@ -164,7 +164,7 @@ fn is_executable(path: &Path) -> bool {
     matches!(ext.as_deref(), Some("exe") | Some("cmd") | Some("bat"))
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(unix, not(target_os = "windows")))]
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
@@ -175,6 +175,11 @@ fn is_executable(path: &Path) -> bool {
     } else {
         false
     }
+}
+
+#[cfg(not(any(target_os = "windows", unix)))]
+fn is_executable(_path: &Path) -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -229,7 +234,7 @@ mod tests {
             File::create(dir.path().join("readme.txt")).unwrap();
         }
 
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(all(unix, not(target_os = "windows")))]
         {
             use std::os::unix::fs::PermissionsExt;
             let path = dir.path().join("server1");
@@ -240,6 +245,13 @@ mod tests {
             File::create(&path2).unwrap();
             std::fs::set_permissions(&path2, std::fs::Permissions::from_mode(0o755)).unwrap();
 
+            File::create(dir.path().join("readme.txt")).unwrap();
+        }
+
+        #[cfg(not(any(target_os = "windows", unix)))]
+        {
+            File::create(dir.path().join("server1")).unwrap();
+            File::create(dir.path().join("server2")).unwrap();
             File::create(dir.path().join("readme.txt")).unwrap();
         }
 

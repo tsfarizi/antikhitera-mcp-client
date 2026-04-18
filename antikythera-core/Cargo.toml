@@ -10,7 +10,7 @@ description = "Core MCP protocol, transport layers, and agent runtime"
 default = ["native-transport"]
 
 # Cloud integrations (Google Cloud Storage, Secret Manager)
-gcp = ["dep:reqwest", "dep:reqwest-eventsource"]
+gcp = []
 
 # Sandboxed tool execution (WASM runtime)
 wasm-runtime = ["dep:wasmtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
@@ -19,7 +19,7 @@ wasm-runtime = ["dep:wasmtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 native-transport = ["tokio/process", "dep:sysinfo"]
 
 # Configuration cache (Postcard binary format) - now always enabled
-cache = ["dep:postcard"]
+cache = []
 
 # Wizard features (interactive setup)
 wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
@@ -28,7 +28,7 @@ wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
 multi-agent = ["dep:redis", "dep:google-cloud-storage"]
 
 # Full-featured build (all capabilities)
-full = ["gcp", "wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "dep:axum", "dep:tower-http", "dep:utoipa", "dep:utoipa-swagger-ui"]
+full = ["gcp", "wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "dep:axum", "dep:tower-http", "dep:utoipa-swagger-ui"]
 
 [dependencies]
 # Core async runtime
@@ -41,20 +41,20 @@ async-trait.workspace = true
 antikythera-log = { path = "../antikythera-log", version = "0.9.0", features = ["subscriber"] }
 
 # HTTP and networking
-reqwest = { workspace = true, optional = true }
-reqwest-eventsource = { workspace = true, optional = true }
+reqwest.workspace = true
+reqwest-eventsource.workspace = true
 
 # REST API server (optional - for backward compatibility)
 axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
-utoipa = { workspace = true, optional = true }
+utoipa.workspace = true
 utoipa-swagger-ui = { workspace = true, optional = true }
 
 # Serialization
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
-postcard = { workspace = true, optional = true }
+postcard.workspace = true
 
 # Error handling and logging
 thiserror.workspace = true

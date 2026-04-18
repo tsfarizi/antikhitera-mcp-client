@@ -6,6 +6,7 @@ use crate::application::client::{ChatRequest, McpClient};
 use crate::infrastructure::model::ModelProvider;
 use serde_json::{Value, json};
 use std::sync::Arc;
+#[cfg(feature = "native-transport")]
 use sysinfo::System;
 use tracing::{debug, info, warn};
 
@@ -60,21 +61,25 @@ impl<P: ModelProvider> Agent<P> {
 
         let mut remaining_steps = options.max_steps;
         let mut system_prompt_to_send = Some(system_prompt);
+        #[cfg(feature = "native-transport")]
         let mut system = System::new();
         let mut first_call = true;
         let initial_attachments = std::mem::take(&mut options.attachments);
 
         loop {
-            system.refresh_cpu_all();
-            system.refresh_memory();
-            let rss_mb = system.used_memory() / 1024 / 1024;
-            let cpu = system.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>()
-                / system.cpus().len().max(1) as f32;
-            debug!(
-                rss_mb = rss_mb,
-                cpu_usage = cpu,
-                "Agent resource utilization"
-            );
+            #[cfg(feature = "native-transport")]
+            {
+                system.refresh_cpu_all();
+                system.refresh_memory();
+                let rss_mb = system.used_memory() / 1024 / 1024;
+                let cpu = system.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>()
+                    / system.cpus().len().max(1) as f32;
+                debug!(
+                    rss_mb = rss_mb,
+                    cpu_usage = cpu,
+                    "Agent resource utilization"
+                );
+            }
 
             debug!(
                 session = session_id.as_deref(),

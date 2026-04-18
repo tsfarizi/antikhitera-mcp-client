@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// Current schema version for state serialization
 pub const STATE_SCHEMA_VERSION: u32 = 1;
