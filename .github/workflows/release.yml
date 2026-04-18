@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,wasm32-wasip1
+
+      - name: Install cargo-component
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-component
+
+      - name: Generate WIT
+        run: cargo run -p build-scripts --release -- wit
+
+      - name: Build browser WASM
+        run: cargo build -p antikythera-sdk --release --target wasm32-unknown-unknown
+
+      - name: Build component WASM
+        run: cargo component build -p antikythera-sdk --release --target wasm32-wasip1
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          cp target/wasm32-unknown-unknown/release/antikythera_sdk.wasm dist/antikythera-sdk-browser.wasm
+
+          component_file=""
+          for candidate in \
+            target/wasm32-wasip1/release/antikythera_sdk.wasm \
+            target/wasm32-wasip1/release/antikythera-sdk.wasm \
+            target/wasm32-wasip1/release/antikythera_sdk_component.wasm
+          do
+            if [ -f "$candidate" ]; then
+              component_file="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$component_file" ]; then
+            echo "No component WASM output found" >&2
+            exit 1
+          fi
+
+          cp "$component_file" dist/antikythera-sdk-component.wasm
+          cp wit/antikythera.wit dist/antikythera.wit
+          cp LICENSE dist/LICENSE
+
+          sha256sum \
+            dist/antikythera-sdk-browser.wasm \
+            dist/antikythera-sdk-component.wasm \
+            dist/antikythera.wit \
+            dist/LICENSE \
+            > dist/sha256sums.txt
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/antikythera-sdk-browser.wasm
+            dist/antikythera-sdk-component.wasm
+            dist/antikythera.wit
+            dist/LICENSE
+            dist/sha256sums.txt
+          generate_release_notes: true
