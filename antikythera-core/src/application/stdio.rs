@@ -305,9 +305,6 @@ async fn handle_prompt<P: ModelProvider + 'static>(
                 raw_mode: false,
                 bypass_template: false, // Use normal template composition
                 force_json: false,
-                correlation_id: None,
-                tools: Vec::new(),
-                tool_choice: None,
             })
             .await
         {

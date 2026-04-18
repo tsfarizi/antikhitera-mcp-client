@@ -23,18 +23,13 @@
 
 use super::tooling::{ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
-use crate::infrastructure::model::{
-    ModelError, ModelProvider, ModelRequest, ModelStreamEvent, ModelToolCall,
-    ModelToolChoice, ModelToolDefinition,
-};
+use crate::infrastructure::model::{ModelError, ModelProvider, ModelRequest};
 use crate::domain::types::MessagePart;
 use crate::domain::types::{ChatMessage, MessageRole};
-use crate::resilience::{summarize_and_prune_messages, ContextWindowManager, TokenEstimator};
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, info};
 use uuid::Uuid;
 
@@ -157,12 +152,6 @@ pub struct ChatRequest {
     pub bypass_template: bool,
     /// Force JSON mode - requests the LLM to output valid JSON
     pub force_json: bool,
-    /// Correlation ID for tracing a single end-to-end request.
-    pub correlation_id: Option<String>,
-    /// Native tool definitions exposed to the provider.
-    pub tools: Vec<ModelToolDefinition>,
-    /// Native tool-selection mode.
-    pub tool_choice: Option<ModelToolChoice>,
 }
 
 /// Result from a chat interaction.
@@ -179,10 +168,6 @@ pub struct ChatResult {
     pub provider: String,
     /// Model used for this request
     pub model: String,
-    /// Correlation ID for this request.
-    pub correlation_id: String,
-    /// Native tool calls returned by the provider.
-    pub tool_calls: Vec<ModelToolCall>,
     /// Debug/execution logs
     pub logs: Vec<String>,
 }
@@ -277,34 +262,13 @@ impl<P: ModelProvider> McpClient<P> {
     }
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
-        self.chat_internal(request, None).await
-    }
-
-    pub async fn chat_stream(
-        &self,
-        request: ChatRequest,
-        sender: UnboundedSender<ModelStreamEvent>,
-    ) -> Result<ChatResult, McpError> {
-        self.chat_internal(request, Some(sender)).await
-    }
-
-    async fn chat_internal(
-        &self,
-        request: ChatRequest,
-        stream_sender: Option<UnboundedSender<ModelStreamEvent>>,
-    ) -> Result<ChatResult, McpError> {
         let provider = self.config.default_provider.clone();
         let model = self.config.default_model.clone();
         let session_id = request.session_id.clone().unwrap_or_else(new_session_id);
-        let correlation_id = request
-            .correlation_id
-            .clone()
-            .unwrap_or_else(new_correlation_id);
         let raw_mode = request.raw_mode;
 
         let mut logs = Vec::new();
         logs.push(format!("Provider '{provider}' with model '{model}'"));
-        logs.push(format!("Correlation ID: {correlation_id}"));
 
         let mut messages = Vec::new();
 
@@ -373,21 +337,6 @@ impl<P: ModelProvider> McpClient<P> {
             logs.push(format!("User: {prompt_preview}"));
         }
 
-        if !raw_mode {
-            let manager = ContextWindowManager::default();
-            let policy = manager.policy_for(&provider, &model);
-            let before_tokens = TokenEstimator::estimate_messages(&messages);
-            let prepared_messages = summarize_and_prune_messages(&messages, &policy);
-            let after_tokens = TokenEstimator::estimate_messages(&prepared_messages);
-            if after_tokens < before_tokens {
-                logs.push(format!(
-                    "Context window prepared: {} -> {} estimated tokens",
-                    before_tokens, after_tokens
-                ));
-            }
-            messages = prepared_messages;
-        }
-
         info!(
             session_id = session_id.as_str(),
             provider = provider.as_str(),
@@ -395,20 +344,16 @@ impl<P: ModelProvider> McpClient<P> {
             "Sending request to model provider"
         );
 
-        let model_request = ModelRequest {
-            provider: provider.clone(),
-            model: model.clone(),
-            messages,
-            session_id: Some(session_id.clone()),
-            correlation_id: Some(correlation_id.clone()),
-            force_json: request.force_json,
-            tools: request.tools,
-            tool_choice: request.tool_choice,
-        };
-        let response = match stream_sender {
-            Some(sender) => self.provider.chat_stream(model_request, sender).await?,
-            None => self.provider.chat(model_request).await?,
-        };
+        let response = self
+            .provider
+            .chat(ModelRequest {
+                provider: provider.clone(),
+                model: model.clone(),
+                messages,
+                session_id: Some(session_id.clone()),
+                force_json: request.force_json,
+            })
+            .await?;
 
         let final_session = response
             .session_id
@@ -420,13 +365,12 @@ impl<P: ModelProvider> McpClient<P> {
 
         info!(
             session_id = final_session.as_str(),
-            correlation_id = correlation_id.as_str(),
             provider = provider.as_str(),
             model = model.as_str(),
             "Response received from model provider"
         );
         for entry in &logs {
-            info!(session_id = final_session.as_str(), correlation_id = correlation_id.as_str(), %entry, "Interaction log");
+            info!(session_id = final_session.as_str(), %entry, "Interaction log");
         }
 
         self.persist_exchange(&final_session, request.prompt, assistant_message)
@@ -437,8 +381,6 @@ impl<P: ModelProvider> McpClient<P> {
             session_id: final_session,
             provider,
             model,
-            correlation_id,
-            tool_calls: response.tool_calls,
             logs,
         })
     }
@@ -539,9 +481,5 @@ impl<P: ModelProvider> McpClient<P> {
 }
 
 fn new_session_id() -> String {
-    Uuid::new_v4().to_string()
-}
-
-fn new_correlation_id() -> String {
     Uuid::new_v4().to_string()
 }

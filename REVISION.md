@@ -297,70 +297,77 @@ With scope simplified, resilience patterns have been added cleanly.
 
 ## 6. Missing features that are strongly needed and fit this MCP client
 
-### ✅ 6.1 Streaming responses — COMPLETED
+### 6.1 Streaming responses
 
-Streaming is now available through the model/provider contract and `McpClient::chat_stream`.
+This is essential.
 
-**Implemented:**
-- ✅ `ModelStreamEvent` (`started`, `text-delta`, `tool-call`, `finished`)
-- ✅ `ModelProvider::chat_stream` / `ModelClient::chat_stream`
-- ✅ `McpClient::chat_stream` with correlation ID propagation
-- ✅ OpenAI-compatible client SSE streaming implementation
-- ✅ Fallback streaming path for providers that only expose non-stream `chat`
+The project still needs:
 
-**Scope note:** REST/SSE output is no longer relevant after the REST lane removal, so that sub-item has been deleted.
+- token streaming from providers
+- SSE or similar streaming output for REST clients
+- intermediate agent event streaming
 
-### ✅ 6.2 Context window management — COMPLETED
+Without this, UX for TUI, web, and agent consumers will feel behind modern expectations.
 
-The runtime now has a full context-window preparation path.
+### 6.2 Context window management
 
-**Implemented:**
-- ✅ token estimation (`TokenEstimator`)
-- ✅ history pruning (`prune_messages`)
-- ✅ rolling summarization (`summarize_and_prune_messages`)
-- ✅ per-provider / per-model policy selection (`ContextWindowManager`)
-- ✅ automatic preparation inside `McpClient` before provider dispatch
+This is critical for a real client framework.
 
-### ✅ 6.3 Native provider-specific tool calling — COMPLETED
+The project needs:
 
-The runtime now supports native tool-call plumbing while preserving JSON fallback.
+- token estimation
+- history pruning
+- rolling summarization
+- per-provider or per-model policy
 
-**Implemented:**
-- ✅ shared tool contract: `ModelToolDefinition`, `ModelToolChoice`, `ModelToolCall`
-- ✅ OpenAI-compatible native tool request/response mapping
-- ✅ Gemini function declaration / function call mapping
-- ✅ Anthropic compatibility via the OpenAI-compatible lane when hosted behind that API shape
-- ✅ `Agent` and `FsmAgent` now prefer native provider tool calls, then fall back to JSON action parsing when needed
+Without it, long conversations will eventually fail at runtime.
 
-### ✅ 6.5 Health, metrics, and observability surface — COMPLETED
+### 6.3 Native provider-specific tool calling
 
-The REST-specific `/health` and `/metrics` endpoint wording has been removed. In the current product scope, the equivalent surface is exposed through runtime APIs and WIT/FFI.
+The current agent flow still leans heavily on internal JSON conventions.
 
-**Implemented:**
-- ✅ `CorrelationContext` with correlation ID and session ID propagation
-- ✅ `MetricsTracker` / `ComponentMetrics`
-- ✅ `ResilienceManager::record_call`, `get_metrics_json`, `reset_metrics`, `set_context_from_json`
-- ✅ WIT `resilience` exports for metrics and context operations
-- ✅ health + metrics snapshots available to any host embedding the component
+For a strong 1.0 client framework, it should support:
 
-### ✅ 6.6 Transport plugin architecture — COMPLETED
+- OpenAI native tool calling
+- Gemini tools
+- Anthropic tools
+- generic JSON fallback only where native support is unavailable
 
-Transport resolution is now factory-driven instead of being hardcoded inside `ServerManager`.
+This would significantly improve reliability.
 
-**Implemented:**
-- ✅ internal `ServerInstanceFactory` abstraction
-- ✅ built-in HTTP and STDIO transport factories
-- ✅ `ServerManager` registry-based instance creation path
-- ✅ extension point for future transport additions without rewriting manager logic
+### 6.4 REST authentication and policy layer
 
-### ✅ 6.7 Real multi-agent orchestration — COMPLETED
+If the REST server exposes `/chat` and `/tools`, it should have:
 
-Multi-agent orchestration remains public because it is now treated as a real supported feature surface.
+- bearer authentication
+- per-route access policy
+- rate limiting
+- auditability
 
-**Implemented / validated:**
-- ✅ orchestrator remains feature-gated but active (`dispatch`, `dispatch_many`, `pipeline`)
-- ✅ integration coverage added for single dispatch and pipeline execution
-- ✅ README / docs / revision status aligned with the actual supported surface
+Without that, production deployment is risky.
+
+### 6.5 Health, metrics, and observability endpoints
+
+At minimum:
+
+- `/health`
+- `/metrics`
+- correlation ID and session ID propagation
+- structured telemetry
+
+### 6.6 Transport plugin architecture
+
+The current transport layer is still fairly fixed.
+A strong framework would allow extension for:
+
+- WebSocket transport
+- custom internal bridges
+- enterprise-specific transports
+
+### 6.7 Real multi-agent orchestration, or remove it for now
+
+If multi-agent remains public, it should become real.
+If it is not ready, it is healthier to remove or hide it temporarily instead of presenting it as a supported feature.
 
 ---
 

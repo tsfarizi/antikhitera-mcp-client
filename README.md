@@ -12,7 +12,7 @@ This repository has a strong library and SDK surface, while the main end-user CL
 | `antikythera-sdk` | Richest public API: Rust wrapper, WASM bindings, FFI helpers, config, session, server, and agent utilities |
 | `antikythera-session` | Session and history management with export/import support |
 | `antikythera-log` | Structured logging and subscription utilities |
-| `antikythera` binary | Native CLI surface for stdio chat, setup, and multi-agent orchestration |
+| `antikythera` binary | Builds, but `tui` and `rest` modes still return placeholder output |
 | `antikythera-config` binary | Usable CLI flow for lightweight Postcard-based config management |
 
 ## Quick start
@@ -37,7 +37,7 @@ cargo run -p antikythera-cli --bin antikythera
 
 # Explicit mode selection
 cargo run -p antikythera-cli --bin antikythera -- --mode tui
-cargo run -p antikythera-cli --bin antikythera -- --mode multi-agent --task "Review this module"
+cargo run -p antikythera-cli --bin antikythera -- --mode rest
 
 # Config CLI
 cargo run -p antikythera-cli --bin antikythera-config -- --help
@@ -101,7 +101,6 @@ The static docs site is generated from this `README.md`, `SUMMARY.md`, and the m
 | [`documentation/IMPORT_EXPORT.md`](documentation/IMPORT_EXPORT.md) | Config import/export workflow |
 | [`documentation/JSON_SCHEMA.md`](documentation/JSON_SCHEMA.md) | JSON schema validation and retry flow |
 | [`documentation/LOGGING.md`](documentation/LOGGING.md) | Logging model and usage |
-| [`documentation/RESILIENCE.md`](documentation/RESILIENCE.md) | Streaming, context-window, health, metrics, and FFI resilience surface |
 | [`documentation/SERVERS_AND_AGENTS.md`](documentation/SERVERS_AND_AGENTS.md) | Server and agent management surface |
 | [`documentation/WASM_AGENT.md`](documentation/WASM_AGENT.md) | WASM-side agent behavior |
 | [`documentation/TESTING.md`](documentation/TESTING.md) | Test commands and test categories |
@@ -129,4 +128,4 @@ If you use Task, the repository also exposes helpers such as `task build`, `task
 
 - Workspace version is `0.9.5`.
 - The current documentation names under `documentation/` use uppercase direct filenames for consistency.
-- Runtime resilience now includes retry/timeout policy, rolling context-window summarization, native provider tool-call plumbing, correlation-aware metrics, and host-facing WIT exports.
+- The main CLI binary is still partial, so the docs now distinguish clearly between implemented behavior and planned/runtime placeholder behavior.

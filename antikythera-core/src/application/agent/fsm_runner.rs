@@ -17,7 +17,7 @@ use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use super::state::{AgentState, Event, TerminationReason};
 use crate::application::client::{ChatRequest, McpClient};
-use crate::infrastructure::model::{ModelProvider, ModelToolChoice};
+use crate::infrastructure::model::ModelProvider;
 use serde_json::{Value, json};
 use std::sync::Arc;
 #[cfg(feature = "native-transport")]
@@ -193,7 +193,6 @@ impl<P: ModelProvider> FsmAgent<P> {
 
         // Prepare initial context
         let context = self.runtime.build_context(Some(&prompt)).await;
-        let native_tools = self.runtime.native_tool_definitions(&context);
         let instructions = self.runtime.compose_system_instructions(&context, self.client.prompts());
         let system_prompt = match options.system_prompt.take() {
             Some(existing) if !existing.trim().is_empty() => {
@@ -252,13 +251,6 @@ impl<P: ModelProvider> FsmAgent<P> {
                         raw_mode: false,
                         bypass_template: true,
                         force_json: true,
-                        correlation_id: None,
-                        tools: native_tools.clone(),
-                        tool_choice: if native_tools.is_empty() {
-                            None
-                        } else {
-                            Some(ModelToolChoice::Auto)
-                        },
                     };
 
                     match self.client.chat(request).await {
@@ -267,29 +259,8 @@ impl<P: ModelProvider> FsmAgent<P> {
                             session_id = Some(result.session_id.clone());
                             first_call = false;
 
-                            let directive = if !result.tool_calls.is_empty() {
-                                if result.tool_calls.len() == 1 {
-                                    let tool_call = &result.tool_calls[0];
-                                    Ok(AgentDirective::CallTool {
-                                        tool: tool_call.name.clone(),
-                                        input: tool_call.arguments.clone(),
-                                    })
-                                } else {
-                                    Ok(AgentDirective::CallTools(
-                                        result
-                                            .tool_calls
-                                            .iter()
-                                            .map(|tool_call| {
-                                                (tool_call.name.clone(), tool_call.arguments.clone())
-                                            })
-                                            .collect(),
-                                    ))
-                                }
-                            } else {
-                                self.parse_with_retry(&result.content, &mut logs, &session_id).await
-                            };
-
-                            match directive {
+                            // Parse directive with retry logic
+                            match self.parse_with_retry(&result.content, &mut logs, &session_id).await {
                                 Ok(directive) => {
                                     state = self.handle_directive(directive, &mut remaining_steps, &mut logs, &mut steps).await?;
                                 }
@@ -678,9 +649,6 @@ impl<P: ModelProvider> FsmAgent<P> {
                         raw_mode: false,
                         bypass_template: true,
                         force_json: true,
-                        correlation_id: None,
-                        tools: Vec::new(),
-                        tool_choice: None,
                     };
 
                     match self.client.chat(retry_request).await {

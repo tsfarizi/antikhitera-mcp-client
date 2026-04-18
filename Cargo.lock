@@ -213,7 +213,6 @@ dependencies = [
  "antikythera-log",
  "antikythera-sdk",
  "antikythera-session",
- "async-trait",
  "chrono",
  "serde_json",
  "serial_test",

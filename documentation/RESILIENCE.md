@@ -10,9 +10,8 @@ This document describes the runtime resilience system added in `antikythera-core
 |-------------------|-------------------------------------------------------------------------|
 | `policy`          | `RetryPolicy`, `TimeoutPolicy`, `ResilienceConfig`                      |
 | `retry`           | `with_retry` / `with_retry_if` — async retry executor with back-off     |
-| `context_window`  | `TokenEstimator`, `ContextWindowPolicy`, `ContextWindowManager`, `prune_messages`, `summarize_and_prune_messages` |
+| `context_window`  | `TokenEstimator`, `ContextWindowPolicy`, `prune_messages`               |
 | `health`          | `HealthStatus`, `ComponentHealth`, `HealthTracker`                      |
-| `observability`   | `CorrelationContext`, `ComponentMetrics`, `MetricsTracker`              |
 | `mod` (root)      | `ResilienceManager` — unified facade mirroring the WIT interface        |
 
 ---
@@ -134,25 +133,21 @@ pub struct ContextWindowPolicy {
 
 $$\text{budget} = \text{max\_tokens} - \text{reserve\_for\_response}$$
 
-### `ContextWindowManager` and rolling summarization
+### `prune_messages`
 
 ```rust
-use antikythera_core::resilience::{
-    ContextWindowManager,
-    summarize_and_prune_messages,
-};
+use antikythera_core::resilience::{ContextWindowPolicy, prune_messages};
 
-let manager = ContextWindowManager::default();
-let policy = manager.policy_for("openai", "gpt-4o-mini");
-let prepared = summarize_and_prune_messages(&history, &policy);
+let policy = ContextWindowPolicy::default();
+let pruned = prune_messages(&history, &policy);
 ```
 
-**Preparation strategy:**
+**Pruning strategy:**
 
-1. System messages are always retained.
-2. The newest non-system messages are kept inside the token budget.
-3. If older history must be dropped, the dropped slice is folded into a synthetic system summary.
-4. Provider/model overrides allow larger or smaller windows without changing host code.
+1. System messages are always retained (never pruned).
+2. Non-system messages are accumulated newest → oldest.
+3. The oldest messages are dropped once the budget is exceeded.
+4. At least `min_history_messages` non-system messages are always kept, even if they push the total above budget.
 
 ---
 
@@ -207,7 +202,7 @@ let json = tracker.snapshot_json();
 
 ## ResilienceManager
 
-`ResilienceManager` bundles a `ResilienceConfig`, `HealthTracker`, `MetricsTracker`, and active `CorrelationContext` into a single object and provides JSON-in / JSON-out methods that map 1-to-1 onto the WIT `resilience` interface:
+`ResilienceManager` bundles a `ResilienceConfig` and a `HealthTracker` into a single object and provides JSON-in / JSON-out methods that map 1-to-1 onto the WIT `resilience` interface:
 
 | Rust method                      | WIT export             |
 |----------------------------------|------------------------|
@@ -215,10 +210,6 @@ let json = tracker.snapshot_json();
 | `set_config_from_json(json)`     | `set-config`           |
 | `get_health_json()`              | `get-health`           |
 | `reset_health()`                 | `reset-health`         |
-| `get_metrics_json()`             | `get-metrics`          |
-| `reset_metrics()`                | `reset-metrics`        |
-| `set_context_from_json(json)`    | `set-context`          |
-| `record_call(..)`                | `record-call`          |
 | `estimate_tokens(text)`          | `estimate-tokens`      |
 | `prune_messages_json(…)`         | `prune-messages`       |
 
@@ -252,10 +243,6 @@ interface resilience {
     set-config(config-json: string) -> result<bool, string>;
     get-health()  -> string;
     reset-health();
-    get-metrics() -> string;
-    reset-metrics();
-    set-context(context-json: string) -> result<bool, string>;
-    record-call(component-id: string, latency-ms: u32, success: bool, error-message: option<string>);
     estimate-tokens(text: string) -> u32;
     prune-messages(messages-json: string, max-tokens: u32, reserve-tokens: u32)
         -> result<string, string>;
@@ -294,13 +281,11 @@ for component in health:
 |----------------------------------------------|-------|
 | `resilience/policy.rs` (unit)                | 7     |
 | `resilience/retry.rs` (unit, async)          | 5     |
-| `resilience/context_window.rs` (unit)        | 12    |
+| `resilience/context_window.rs` (unit)        | 10    |
 | `resilience/health.rs` (unit)                | 8     |
-| `resilience/observability.rs` (unit)         | 2     |
-| `resilience/mod.rs` (unit, ResilienceManager)| 10    |
+| `resilience/mod.rs` (unit, ResilienceManager)| 8     |
 | `tests/resilience/resilience_tests.rs` (integration) | 11    |
-| `tests/runtime_features_tests.rs` (integration) | 2     |
-| **Total**                                    | **57** |
+| **Total**                                    | **49** |
 
 Run all resilience tests:
 

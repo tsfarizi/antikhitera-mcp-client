@@ -76,9 +76,6 @@ impl WasmClient {
                 raw_mode: false,
                 bypass_template: false,
                 force_json: false,
-                correlation_id: None,
-                tools: Vec::new(),
-                tool_choice: None,
             };
 
             let response = client.chat(request)

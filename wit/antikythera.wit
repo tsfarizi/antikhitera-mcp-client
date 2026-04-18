@@ -380,25 +380,6 @@ interface resilience {
     /// Reset all accumulated health statistics for all tracked components.
     reset-health();
 
-    /// Return a JSON array of `ComponentMetrics` objects for every observed
-    /// component. Each entry includes call counts, latency, last error, and the
-    /// latest correlation/session identifiers.
-    get-metrics() -> string;
-
-    /// Reset all accumulated metric samples.
-    reset-metrics();
-
-    /// Set the current observability context from JSON.
-    ///
-    /// Example payload:
-    /// ```json
-    /// {"correlation_id":"corr-123","session_id":"sess-456"}
-    /// ```
-    set-context(context-json: string) -> result<bool, string>;
-
-    /// Record one runtime call result for the given component.
-    record-call(component-id: string, latency-ms: u32, success: bool, error-message: option<string>);
-
     /// Estimate the token count for `text` using the built-in heuristic
     /// (1 token ≈ 4 characters).
     estimate-tokens(text: string) -> u32;

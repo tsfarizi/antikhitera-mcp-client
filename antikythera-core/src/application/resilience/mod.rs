@@ -9,9 +9,8 @@
 //! |--------------------|-------------------------------------------------|
 //! | [`policy`]         | [`RetryPolicy`], [`TimeoutPolicy`], [`ResilienceConfig`] |
 //! | [`retry`]          | [`with_retry`], [`with_retry_if`]               |
-//! | [`context_window`] | [`TokenEstimator`], [`ContextWindowPolicy`], [`ContextWindowManager`], [`prune_messages`] |
+//! | [`context_window`] | [`TokenEstimator`], [`ContextWindowPolicy`], [`prune_messages`] |
 //! | [`health`]         | [`HealthStatus`], [`ComponentHealth`], [`HealthTracker`] |
-//! | [`observability`]  | [`CorrelationContext`], [`ComponentMetrics`], [`MetricsTracker`] |
 //!
 //! ## WIT / FFI surface
 //!
@@ -40,16 +39,11 @@
 
 pub mod context_window;
 pub mod health;
-pub mod observability;
 pub mod policy;
 pub mod retry;
 
-pub use context_window::{
-    prune_messages, summarize_and_prune_messages, summarize_messages,
-    ContextPolicyOverride, ContextWindowManager, ContextWindowPolicy, TokenEstimator,
-};
+pub use context_window::{prune_messages, ContextWindowPolicy, TokenEstimator};
 pub use health::{ComponentHealth, HealthStatus, HealthTracker};
-pub use observability::{ComponentMetrics, CorrelationContext, MetricsTracker};
 pub use policy::{ResilienceConfig, RetryPolicy, TimeoutPolicy};
 pub use retry::{with_retry, with_retry_if};
 
@@ -66,8 +60,6 @@ use serde_json;
 pub struct ResilienceManager {
     config: ResilienceConfig,
     health: HealthTracker,
-    metrics: MetricsTracker,
-    context: CorrelationContext,
 }
 
 impl ResilienceManager {
@@ -81,8 +73,6 @@ impl ResilienceManager {
         Self {
             config,
             health: HealthTracker::new(),
-            metrics: MetricsTracker::new(),
-            context: CorrelationContext::default(),
         }
     }
 
@@ -104,22 +94,6 @@ impl ResilienceManager {
 
     pub fn health_mut(&mut self) -> &mut HealthTracker {
         &mut self.health
-    }
-
-    pub fn metrics(&self) -> &MetricsTracker {
-        &self.metrics
-    }
-
-    pub fn metrics_mut(&mut self) -> &mut MetricsTracker {
-        &mut self.metrics
-    }
-
-    pub fn context(&self) -> &CorrelationContext {
-        &self.context
-    }
-
-    pub fn set_context(&mut self, context: CorrelationContext) {
-        self.context = context;
     }
 
     // ── WIT-compatible JSON methods ───────────────────────────────────────
@@ -170,47 +144,6 @@ impl ResilienceManager {
     /// `resilience.reset-health` — clear all accumulated health statistics.
     pub fn reset_health(&mut self) {
         self.health.reset();
-    }
-
-    /// `resilience.get-metrics` — return a JSON array of component metrics.
-    pub fn get_metrics_json(&self) -> String {
-        self.metrics.snapshot_json()
-    }
-
-    /// `resilience.reset-metrics` — clear all accumulated metric samples.
-    pub fn reset_metrics(&mut self) {
-        self.metrics.reset();
-    }
-
-    /// `resilience.set-context` — update the active correlation/session context.
-    pub fn set_context_from_json(&mut self, context_json: &str) -> Result<bool, String> {
-        let context: CorrelationContext =
-            serde_json::from_str(context_json).map_err(|e| e.to_string())?;
-        self.context = context;
-        Ok(true)
-    }
-
-    /// `resilience.record-call` — add an observability sample for a component.
-    pub fn record_call(
-        &mut self,
-        component_id: &str,
-        latency_ms: u32,
-        success: bool,
-        error_message: Option<&str>,
-    ) {
-        self.metrics.record_call(
-            component_id,
-            latency_ms as u64,
-            success,
-            error_message.map(str::to_string),
-            &self.context,
-        );
-        if success {
-            self.health.record_success(component_id, latency_ms as u64);
-        } else {
-            self.health
-                .record_failure(component_id, error_message.unwrap_or("unknown error"));
-        }
     }
 
     /// `resilience.estimate-tokens` — estimate the token count for `text`.
@@ -324,32 +257,5 @@ mod tests {
     fn prune_messages_json_returns_error_for_invalid_input() {
         let result = ResilienceManager::prune_messages_json("[invalid", 1000, 100);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn record_call_updates_metrics_and_health() {
-        let mut mgr = ResilienceManager::new();
-        mgr.set_context(CorrelationContext {
-            correlation_id: Some("corr-1".to_string()),
-            session_id: Some("sess-1".to_string()),
-        });
-        mgr.record_call("llm", 180, false, Some("timeout"));
-
-        let metrics: serde_json::Value = serde_json::from_str(&mgr.get_metrics_json()).unwrap();
-        assert_eq!(metrics.as_array().unwrap().len(), 1);
-        assert_eq!(metrics[0]["component_id"], "llm");
-        assert_eq!(metrics[0]["correlation_id"], "corr-1");
-
-        let health: serde_json::Value = serde_json::from_str(&mgr.get_health_json()).unwrap();
-        assert_eq!(health.as_array().unwrap().len(), 1);
-        assert_eq!(health[0]["component_id"], "llm");
-    }
-
-    #[test]
-    fn set_context_from_json_accepts_valid_payload() {
-        let mut mgr = ResilienceManager::new();
-        let payload = r#"{"correlation_id":"corr-2","session_id":"sess-2"}"#;
-        assert!(mgr.set_context_from_json(payload).unwrap());
-        assert_eq!(mgr.context().correlation_id.as_deref(), Some("corr-2"));
     }
 }

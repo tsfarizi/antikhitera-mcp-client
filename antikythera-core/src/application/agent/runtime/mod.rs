@@ -8,7 +8,6 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 use crate::config::ToolConfig;
-use crate::infrastructure::model::ModelToolDefinition;
 
 pub(super) use super::context::{ServerGuidance, ToolContext, ToolDescriptor};
 pub(super) use super::directive::AgentDirective;
@@ -37,20 +36,5 @@ impl ToolRuntime {
             bridge,
             execution_semaphore: Arc::new(Semaphore::new(10)), // Default limit to 10 concurrent tools
         }
-    }
-
-    pub fn native_tool_definitions(&self, context: &ToolContext) -> Vec<ModelToolDefinition> {
-        context
-            .tools
-            .iter()
-            .map(|tool| ModelToolDefinition {
-                name: tool.name.clone(),
-                description: tool.description.clone(),
-                input_schema: tool
-                    .input_schema
-                    .clone()
-                    .unwrap_or_else(|| json!({ "type": "object", "properties": {} })),
-            })
-            .collect()
     }
 }

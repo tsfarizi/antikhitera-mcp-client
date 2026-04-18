@@ -3,7 +3,7 @@ use super::errors::AgentError;
 use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use crate::application::client::{ChatRequest, McpClient};
-use crate::infrastructure::model::{ModelProvider, ModelToolChoice};
+use crate::infrastructure::model::ModelProvider;
 use serde_json::{Value, json};
 use std::sync::Arc;
 #[cfg(feature = "native-transport")]
@@ -39,7 +39,6 @@ impl<P: ModelProvider> Agent<P> {
         let mut logs = Vec::new();
 
         let context = self.runtime.build_context(Some(&prompt)).await;
-        let native_tools = self.runtime.native_tool_definitions(&context);
         let instructions = self
             .runtime
             .compose_system_instructions(&context, self.client.prompts());
@@ -102,13 +101,6 @@ impl<P: ModelProvider> Agent<P> {
                 raw_mode: false,
                 bypass_template: true, // Agent composes its own complete system prompt
                 force_json: true,
-                correlation_id: None,
-                tools: native_tools.clone(),
-                tool_choice: if native_tools.is_empty() {
-                    None
-                } else {
-                    Some(ModelToolChoice::Auto)
-                },
             };
 
             let result = self.client.chat(request).await?;
@@ -116,32 +108,10 @@ impl<P: ModelProvider> Agent<P> {
             session_id = Some(result.session_id.clone());
             first_call = false;
 
-            let directive = if !result.tool_calls.is_empty() {
-                logs.push(format!(
-                    "Provider returned {} native tool call(s)",
-                    result.tool_calls.len()
-                ));
-                if result.tool_calls.len() == 1 {
-                    let tool_call = &result.tool_calls[0];
-                    AgentDirective::CallTool {
-                        tool: tool_call.name.clone(),
-                        input: tool_call.arguments.clone(),
-                    }
-                } else {
-                    AgentDirective::CallTools(
-                        result
-                            .tool_calls
-                            .iter()
-                            .map(|tool_call| {
-                                (tool_call.name.clone(), tool_call.arguments.clone())
-                            })
-                            .collect(),
-                    )
-                }
-            } else {
-                self.parse_with_retry(&result.content, &mut logs, &session_id)
-                    .await?
-            };
+            // Parse agent action with retry logic for malformed JSON
+            let directive = self
+                .parse_with_retry(&result.content, &mut logs, &session_id)
+                .await?;
 
             match directive {
                 AgentDirective::Final { response } => {
@@ -472,9 +442,6 @@ impl<P: ModelProvider> Agent<P> {
                         raw_mode: false,
                         bypass_template: true, // Agent composes its own complete system prompt
                         force_json: true,
-                        correlation_id: None,
-                        tools: Vec::new(),
-                        tool_choice: None,
                     };
 
                     match self.client.chat(retry_request).await {

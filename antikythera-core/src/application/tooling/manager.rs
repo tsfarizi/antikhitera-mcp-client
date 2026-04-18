@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use tracing::warn;
 
 /// Unified server instance that wraps either STDIO or HTTP transport.
-pub(crate) enum ServerInstance {
+enum ServerInstance {
     #[cfg(feature = "native-transport")]
     Stdio(Arc<McpProcess>),
     Http(Arc<HttpTransport>),
@@ -47,82 +47,13 @@ impl ServerInstance {
     }
 }
 
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub(crate) trait ServerInstanceFactory: Send + Sync {
-    fn supports(&self, transport: &TransportType) -> bool;
-    async fn create(&self, config: ServerConfig) -> Result<ServerInstance, ToolInvokeError>;
-}
-
-#[cfg(feature = "native-transport")]
-struct StdioServerFactory;
-
-#[cfg(feature = "native-transport")]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-impl ServerInstanceFactory for StdioServerFactory {
-    fn supports(&self, transport: &TransportType) -> bool {
-        matches!(transport, TransportType::Stdio)
-    }
-
-    async fn create(&self, config: ServerConfig) -> Result<ServerInstance, ToolInvokeError> {
-        let process = Arc::new(McpProcess::new(config));
-        process.ensure_running().await?;
-        Ok(ServerInstance::Stdio(process))
-    }
-}
-
-struct HttpServerFactory;
-
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-impl ServerInstanceFactory for HttpServerFactory {
-    fn supports(&self, transport: &TransportType) -> bool {
-        matches!(transport, TransportType::Http)
-    }
-
-    async fn create(&self, config: ServerConfig) -> Result<ServerInstance, ToolInvokeError> {
-        let url = config
-            .url
-            .clone()
-            .ok_or_else(|| ToolInvokeError::NotConfigured {
-                server: format!("{}: missing URL for HTTP transport", config.name),
-            })?;
-        let transport_config = HttpTransportConfig {
-            name: config.name.clone(),
-            url,
-            headers: config.headers.clone(),
-            mode: TransportMode::Auto,
-        };
-        let transport = Arc::new(HttpTransport::new(transport_config));
-        transport.connect().await?;
-        Ok(ServerInstance::Http(transport))
-    }
-}
-
-fn builtin_factories() -> Vec<Arc<dyn ServerInstanceFactory>> {
-    let mut factories: Vec<Arc<dyn ServerInstanceFactory>> = Vec::new();
-    #[cfg(feature = "native-transport")]
-    factories.push(Arc::new(StdioServerFactory));
-    factories.push(Arc::new(HttpServerFactory));
-    factories
-}
-
 pub struct ServerManager {
     configs: HashMap<String, ServerConfig>,
     instances: Mutex<HashMap<String, ServerInstance>>,
-    factories: Vec<Arc<dyn ServerInstanceFactory>>,
 }
 
 impl ServerManager {
     pub fn new(configs: Vec<ServerConfig>) -> Self {
-        Self::with_factories(configs, builtin_factories())
-    }
-
-    pub(crate) fn with_factories(
-        configs: Vec<ServerConfig>,
-        factories: Vec<Arc<dyn ServerInstanceFactory>>,
-    ) -> Self {
         let configs = configs
             .into_iter()
             .map(|cfg| (cfg.name.clone(), cfg))
@@ -130,7 +61,6 @@ impl ServerManager {
         Self {
             configs,
             instances: Mutex::new(HashMap::new()),
-            factories,
         }
     }
 
@@ -158,16 +88,40 @@ impl ServerManager {
                     server: server.to_string(),
                 })?;
 
-        let instance = self
-            .factories
-            .iter()
-            .find(|factory| factory.supports(&config.transport))
-            .ok_or_else(|| ToolInvokeError::Transport {
-                server: server.to_string(),
-                message: format!("No transport factory registered for {:?}", config.transport),
-            })?
-            .create(config)
-            .await?;
+        let instance = match config.transport {
+            TransportType::Stdio => {
+                #[cfg(feature = "native-transport")]
+                {
+                let process = Arc::new(McpProcess::new(config));
+                process.ensure_running().await?;
+                ServerInstance::Stdio(process)
+                }
+                #[cfg(not(feature = "native-transport"))]
+                {
+                    return Err(ToolInvokeError::Transport {
+                        server: server.to_string(),
+                        message: "STDIO transport requires the native-transport feature".to_string(),
+                    });
+                }
+            }
+            TransportType::Http => {
+                let url = config
+                    .url
+                    .clone()
+                    .ok_or_else(|| ToolInvokeError::NotConfigured {
+                        server: format!("{}: missing URL for HTTP transport", server),
+                    })?;
+                let transport_config = HttpTransportConfig {
+                    name: config.name.clone(),
+                    url,
+                    headers: config.headers.clone(),
+                    mode: TransportMode::Auto,
+                };
+                let transport = Arc::new(HttpTransport::new(transport_config));
+                transport.connect().await?;
+                ServerInstance::Http(transport)
+            }
+        };
 
         let mut instances = self.instances.lock().expect("server registry lock");
         instances.insert(server.to_string(), instance);

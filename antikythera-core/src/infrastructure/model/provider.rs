@@ -26,8 +26,7 @@ use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 
 use super::traits::{ModelClient, ModelProvider};
-use super::types::{ModelError, ModelRequest, ModelResponse, ModelStreamEvent};
-use tokio::sync::mpsc::UnboundedSender;
+use super::types::{ModelError, ModelRequest, ModelResponse};
 
 #[cfg(feature = "http-providers")]
 use super::factory::ProviderFactory;
@@ -130,24 +129,5 @@ impl ModelProvider for DynamicModelProvider {
         }
 
         runtime.client.chat(request).await
-    }
-
-    async fn chat_stream(
-        &self,
-        request: ModelRequest,
-        sender: UnboundedSender<ModelStreamEvent>,
-    ) -> Result<ModelResponse, ModelError> {
-        let provider_id = &request.provider;
-
-        let runtime = self
-            .backends
-            .get(provider_id)
-            .ok_or_else(|| ModelError::provider_not_found(provider_id))?;
-
-        if !runtime.supports(&request.model) {
-            return Err(ModelError::model_not_found(provider_id, &request.model));
-        }
-
-        runtime.client.chat_stream(request, sender).await
     }
 }

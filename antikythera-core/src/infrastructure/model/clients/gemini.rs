@@ -11,7 +11,7 @@ use crate::constants::DEFAULT_GEMINI_API_PATH;
 use crate::infrastructure::model::adapter::MessageAdapter;
 use crate::infrastructure::model::factory::resolve_api_key;
 use crate::infrastructure::model::traits::ModelClient;
-use crate::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse, ModelToolCall};
+use crate::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
 
 /// Gemini client for Google AI
 #[derive(Clone)]
@@ -65,13 +65,6 @@ impl ModelClient for GeminiClient {
             });
         }
 
-        if !request.tools.is_empty() {
-            payload["tools"] = MessageAdapter::to_gemini_tools(&request.tools);
-            if let Some(choice) = request.tool_choice.as_ref() {
-                payload["toolConfig"] = MessageAdapter::to_gemini_tool_choice(choice);
-            }
-        }
-
         info!(
             provider = self.base.id.as_str(),
             model = request.model.as_str(),
@@ -82,37 +75,16 @@ impl ModelClient for GeminiClient {
         let response: GeminiResponse = self.base.post_with_query_key(&url, &payload).await?;
         debug!("Received response from Gemini");
 
-        let mut text_parts = Vec::new();
-        let mut tool_calls = Vec::new();
+        let content = response
+            .candidates
+            .unwrap_or_default()
+            .into_iter()
+            .flat_map(|c| c.content)
+            .flat_map(|c| c.parts)
+            .find_map(|p| p.text)
+            .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing text"))?;
 
-        for candidate in response.candidates.unwrap_or_default() {
-            if let Some(content) = candidate.content {
-                for part in content.parts {
-                    if let Some(text) = part.text {
-                        text_parts.push(text);
-                    }
-                    if let Some(function_call) = part.function_call {
-                        tool_calls.push(ModelToolCall {
-                            id: None,
-                            name: function_call.name,
-                            arguments: function_call.args.unwrap_or(serde_json::Value::Null),
-                        });
-                    }
-                }
-            }
-        }
-
-        if text_parts.is_empty() && tool_calls.is_empty() {
-            return Err(ModelError::invalid_response(&self.base.id, "missing text or tool call"));
-        }
-
-        Ok(ModelResponse::with_details(
-            text_parts.join(""),
-            request.session_id,
-            request.correlation_id,
-            tool_calls,
-            None,
-        ))
+        Ok(ModelResponse::new(content, request.session_id))
     }
 }
 
@@ -134,12 +106,4 @@ struct GeminiContent {
 #[derive(Deserialize)]
 struct GeminiPart {
     text: Option<String>,
-    #[serde(rename = "functionCall")]
-    function_call: Option<GeminiFunctionCall>,
-}
-
-#[derive(Deserialize)]
-struct GeminiFunctionCall {
-    name: String,
-    args: Option<serde_json::Value>,
 }

@@ -93,10 +93,7 @@ impl LlmProvider for OllamaProvider {
             model: self.model.clone(),
             messages: core_messages,
             session_id: None,
-            correlation_id: None,
             force_json: false,
-            tools: Vec::new(),
-            tool_choice: None,
         };
 
         let response = self.client.chat(request).await?;

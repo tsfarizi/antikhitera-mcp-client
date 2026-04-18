@@ -124,9 +124,6 @@ impl<P: ModelProvider> ChatService<P> {
                 raw_mode: true,
                 bypass_template: false, // Not relevant when raw_mode is true
                 force_json: false,
-                correlation_id: None,
-                tools: Vec::new(),
-                tool_choice: None,
             })
             .await;
 
@@ -195,6 +192,7 @@ mod tests {
     use super::*;
     use crate::application::client::ClientConfig;
     use crate::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
+    use crate::domain::types::ChatMessage;
     use async_trait::async_trait;
 
     struct MockModelProvider {
@@ -205,10 +203,10 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
     impl ModelProvider for MockModelProvider {
         async fn chat(&self, _request: ModelRequest) -> Result<ModelResponse, ModelError> {
-            Ok(ModelResponse::new(
-                self.response_content.clone(),
-                None,
-            ))
+            Ok(ModelResponse {
+                message: ChatMessage::new(crate::domain::types::MessageRole::Assistant, self.response_content.clone()),
+                session_id: None,
+            })
         }
     }
 
