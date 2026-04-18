@@ -40,8 +40,14 @@ struct HttpTransportInner {
 impl HttpTransport {
     /// Create a new HTTP transport.
     pub fn new(config: HttpTransportConfig) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("Failed to create HTTP client");
+
+        #[cfg(target_arch = "wasm32")]
+        let client = Client::builder()
             .build()
             .expect("Failed to create HTTP client");
 
@@ -111,7 +117,7 @@ impl HttpTransport {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl McpTransport for HttpTransport {
     async fn connect(&self) -> Result<(), ToolInvokeError> {
         if self.inner.connected.load(Ordering::SeqCst) {
@@ -130,6 +136,15 @@ impl McpTransport for HttpTransport {
         // Determine transport mode
         let detected_mode = match configured_mode {
             TransportMode::Stateful => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    return Err(ToolInvokeError::Transport {
+                        server: self.inner.config.name.clone(),
+                        message: "Stateful SSE mode is not supported on wasm32 targets".to_string(),
+                    });
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
                 self.start_sse_listener();
                 match self.resolve_endpoint().await {
                     Ok(_) => TransportMode::Stateful,
@@ -138,6 +153,7 @@ impl McpTransport for HttpTransport {
                         return Err(e);
                     }
                 }
+                }
             }
             TransportMode::Stateless => {
                 info!(server = %self.inner.config.name, "Using stateless mode (direct HTTP POST)");
@@ -145,6 +161,14 @@ impl McpTransport for HttpTransport {
                 TransportMode::Stateless
             }
             TransportMode::Auto => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    info!(server = %self.inner.config.name, "Using stateless mode on wasm32 target");
+                    *self.inner.session_endpoint.lock().await = Some(self.inner.config.url.clone());
+                    TransportMode::Stateless
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
                 info!(server = %self.inner.config.name, "Auto-detecting transport mode...");
                 self.start_sse_listener();
 
@@ -159,6 +183,7 @@ impl McpTransport for HttpTransport {
                             Some(self.inner.config.url.clone());
                         TransportMode::Stateless
                     }
+                }
                 }
             }
         };

@@ -48,7 +48,7 @@ impl DynamicModelProvider {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ModelProvider for DynamicModelProvider {
     async fn chat(&self, request: ModelRequest) -> Result<ModelResponse, ModelError> {
         let provider_id = &request.provider;

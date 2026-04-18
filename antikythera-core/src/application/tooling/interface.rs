@@ -10,7 +10,7 @@ pub struct ServerToolInfo {
     pub input_schema: Option<Value>,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait ToolServerInterface: Send + Sync {
     async fn invoke_tool(
         &self,

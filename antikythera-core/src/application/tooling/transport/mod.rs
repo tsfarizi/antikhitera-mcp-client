@@ -28,7 +28,7 @@ pub use http::HttpTransport;
 ///
 /// Implementations handle the low-level communication with MCP servers,
 /// whether via STDIO (subprocess) or HTTP.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait McpTransport: Send + Sync {
     /// Connect to the server and perform initialization handshake.
     async fn connect(&self) -> Result<(), ToolInvokeError>;

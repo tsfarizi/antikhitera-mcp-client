@@ -31,7 +31,7 @@ impl OpenAIClient {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ModelClient for OpenAIClient {
     fn id(&self) -> &str {
         &self.base.id

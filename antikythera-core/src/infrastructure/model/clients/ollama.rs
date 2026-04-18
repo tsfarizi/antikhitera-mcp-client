@@ -25,7 +25,7 @@ impl OllamaClient {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ModelClient for OllamaClient {
     fn id(&self) -> &str {
         &self.base.id

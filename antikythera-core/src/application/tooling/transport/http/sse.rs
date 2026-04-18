@@ -19,6 +19,7 @@ pub const SSE_TIMEOUT_SECS: u64 = 5;
 ///
 /// Spawns a tokio task that listens for SSE events and updates
 /// the session endpoint when received.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn start_sse_listener(
     client: Client,
     name: String,
@@ -65,10 +66,21 @@ pub fn start_sse_listener(
     });
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn start_sse_listener(
+    _client: Client,
+    _name: String,
+    _url: String,
+    _headers: HashMap<String, String>,
+    _session_endpoint: Arc<AsyncMutex<Option<String>>>,
+) {
+}
+
 /// Resolve the session endpoint URL.
 ///
 /// Waits for the SSE endpoint event with timeout, then resolves
 /// relative URLs against the base URL.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn resolve_endpoint(
     name: &str,
     base_url: &str,
@@ -104,4 +116,16 @@ pub async fn resolve_endpoint(
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn resolve_endpoint(
+    name: &str,
+    _base_url: &str,
+    _session_endpoint: &AsyncMutex<Option<String>>,
+) -> Result<String, ToolInvokeError> {
+    Err(ToolInvokeError::Transport {
+        server: name.to_string(),
+        message: "SSE endpoint resolution is not supported on wasm32 targets".to_string(),
+    })
 }

@@ -139,7 +139,7 @@ impl ServerManager {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ToolServerInterface for ServerManager {
     async fn invoke_tool(
         &self,

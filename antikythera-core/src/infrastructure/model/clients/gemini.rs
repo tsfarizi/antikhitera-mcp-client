@@ -38,7 +38,7 @@ impl GeminiClient {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ModelClient for GeminiClient {
     fn id(&self) -> &str {
         &self.base.id

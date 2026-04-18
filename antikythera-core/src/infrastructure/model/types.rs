@@ -96,9 +96,24 @@ impl ModelError {
                 format!("Penyedia '{provider}' memerlukan API key.")
             }
             ModelError::Network { provider, source } => {
+                #[cfg(not(target_arch = "wasm32"))]
                 if source.is_connect() {
                     format!("Tidak dapat terhubung ke penyedia model '{provider}'.")
                 } else if source.is_timeout() {
+                    format!("Permintaan ke '{provider}' melebihi batas waktu.")
+                } else if let Some(status) = source.status() {
+                    match status {
+                        StatusCode::NOT_FOUND => format!("Endpoint '{provider}' tidak ditemukan."),
+                        StatusCode::SERVICE_UNAVAILABLE | StatusCode::BAD_GATEWAY => {
+                            format!("Penyedia '{provider}' sedang tidak tersedia.")
+                        }
+                        _ => format!("Request ke '{provider}' gagal: {}", status.as_u16()),
+                    }
+                } else {
+                    format!("Kesalahan jaringan pada '{provider}'.")
+                }
+                #[cfg(target_arch = "wasm32")]
+                if source.is_timeout() {
                     format!("Permintaan ke '{provider}' melebihi batas waktu.")
                 } else if let Some(status) = source.status() {
                     match status {
