@@ -114,7 +114,7 @@ But these surfaces are not all equally mature.
 
 It is difficult to say what the actual stable product API is.
 
-### 4.3 Native, browser WASM, and component lanes are not yet fully treated as separate product lanes
+### 4.3 Native, browser WASM, and component lanes are not yet fully treated as separate product lanes ✅ RESOLVED
 
 Technically a lot of progress has already been made in gating and dependency cleanup, but architecturally these need to become explicit product lanes:
 
@@ -122,7 +122,19 @@ Technically a lot of progress has already been made in gating and dependency cle
 - **browser WASM**
 - **WASM component**
 
-If those lanes are not separated clearly, target-specific dependency leaks will keep recurring.
+**Changes made:**
+- Introduced `http-providers` feature flag in `antikythera-core` that gates all HTTP LLM client code
+  (Gemini / OpenAI / Ollama clients, `ProviderFactory`, `DynamicModelProvider::from_configs`)
+- `ModelError::Network` variant changed to use a plain `String` message instead of `reqwest::Error`,
+  making the type fully WASM-safe
+- `DynamicModelProvider` gained a push-based `register()` / `new()` API that is always compiled
+  (usable in WASM with stub/mock clients)
+- All concrete HTTP LLM implementations physically moved to **`antikythera-cli`**:
+  - `adapter.rs`, `http_client.rs`, `clients/{gemini,openai,ollama}.rs`, `factory.rs`, `provider_builder.rs`
+- CLI's `menu.rs` uses `build_provider_from_configs()` from the CLI's own provider stack
+- `antikythera-sdk` enables `antikythera-core/http-providers` via its `sdk-core` feature (native &
+  browser-WASM builds); the `component` feature deliberately omits it
+- WASM component builds (`cargo component build --target wasm32-wasip1`) are now clean: no HTTP deps
 
 ---
 

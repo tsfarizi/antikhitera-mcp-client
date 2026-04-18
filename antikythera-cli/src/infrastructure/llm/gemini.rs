@@ -8,11 +8,8 @@ use crate::domain::entities::{Message, MessageRole};
 use crate::domain::use_cases::chat_use_case::LlmProvider;
 use antikythera_core::config::{ModelInfo, ModelProviderConfig};
 use antikythera_core::domain::types::{ChatMessage, MessageRole as CoreRole};
-use antikythera_core::infrastructure::model::{
-    factory::ProviderFactory,
-    traits::ModelClient,
-    types::ModelRequest,
-};
+use antikythera_core::infrastructure::model::{traits::ModelClient, types::ModelRequest};
+use crate::infrastructure::llm::factory::ProviderFactory;
 use async_trait::async_trait;
 use std::error::Error;
 

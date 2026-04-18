@@ -1,11 +1,36 @@
 //! Dynamic model provider with multiple backends
+//!
+//! `DynamicModelProvider` is the routing layer that dispatches chat requests
+//! to the correct `ModelClient` backend.  It is **always** available (no
+//! feature gate) because it only contains pure routing logic with no HTTP
+//! dependency.
+//!
+//! ## Building a provider
+//!
+//! ### Native / CLI builds (`http-providers` feature enabled)
+//! Use the convenience constructor:
+//! ```no_run,ignore
+//! let provider = DynamicModelProvider::from_configs(&config.providers)?;
+//! ```
+//!
+//! ### WASM component builds (`http-providers` feature disabled)
+//! Register pre-built `ModelClient` implementations directly:
+//! ```no_run,ignore
+//! let provider = DynamicModelProvider::new()
+//!     .register("ollama", vec!["llama3".into()], Box::new(my_client));
+//! ```
+//! In the WASM component lane the host is responsible for providing the
+//! `ModelClient` implementations — the WASM module only sees the trait.
 
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 
-use super::factory::ProviderFactory;
 use super::traits::{ModelClient, ModelProvider};
 use super::types::{ModelError, ModelRequest, ModelResponse};
+
+#[cfg(feature = "http-providers")]
+use super::factory::ProviderFactory;
+#[cfg(feature = "http-providers")]
 use crate::config::ModelProviderConfig;
 
 /// Runtime container for a provider backend
@@ -20,29 +45,69 @@ impl ProviderRuntime {
     }
 }
 
-/// Dynamic model provider that routes requests to appropriate backends
+/// Dynamic model provider that routes requests to appropriate backends.
+///
+/// This is a pure routing layer — it contains no HTTP client code.
+/// Use [`register`](Self::register) to add backends directly, or
+/// [`from_configs`](Self::from_configs) (requires `http-providers` feature)
+/// to build the provider from a config list.
 #[derive(Default)]
 pub struct DynamicModelProvider {
     backends: HashMap<String, ProviderRuntime>,
 }
 
 impl DynamicModelProvider {
-    /// Create provider from config list using factory
-    pub fn from_configs(configs: &[ModelProviderConfig]) -> Result<Self, ModelError> {
-        let mut backends = HashMap::new();
-
-        for config in configs {
-            let models: HashSet<String> = config.models.iter().map(|m| m.name.clone()).collect();
-
-            let client = ProviderFactory::create(config);
-
-            backends.insert(config.id.clone(), ProviderRuntime { models, client });
-        }
-
-        Ok(Self { backends })
+    /// Create an empty provider with no registered backends.
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    /// Check if provider exists
+    /// Register a backend client for a given provider ID.
+    ///
+    /// `models` is the allow-list of model names accepted by this backend.
+    /// Pass an empty `Vec` to accept any model name.
+    ///
+    /// # Example
+    /// ```no_run,ignore
+    /// let provider = DynamicModelProvider::new()
+    ///     .register("ollama", vec![], Box::new(ollama_client))
+    ///     .register("gemini", vec!["gemini-2.0-flash".into()], Box::new(gemini_client));
+    /// ```
+    pub fn register(
+        mut self,
+        id: impl Into<String>,
+        models: Vec<String>,
+        client: Box<dyn ModelClient>,
+    ) -> Self {
+        let runtime = ProviderRuntime {
+            models: models.into_iter().collect(),
+            client,
+        };
+        self.backends.insert(id.into(), runtime);
+        self
+    }
+
+    /// Convenience constructor — build a provider from a list of
+    /// [`ModelProviderConfig`] entries using the built-in
+    /// [`ProviderFactory`].
+    ///
+    /// **Requires the `http-providers` feature.**  This method is not
+    /// available in WASM component builds; use [`register`](Self::register)
+    /// with host-provided clients instead.
+    #[cfg(feature = "http-providers")]
+    pub fn from_configs(configs: &[ModelProviderConfig]) -> Result<Self, ModelError> {
+        let mut provider = Self::new();
+
+        for config in configs {
+            let models: Vec<String> = config.models.iter().map(|m| m.name.clone()).collect();
+            let client = ProviderFactory::create(config);
+            provider = provider.register(config.id.clone(), models, client);
+        }
+
+        Ok(provider)
+    }
+
+    /// Check if a backend for the given provider ID is registered.
     pub fn contains(&self, provider: &str) -> bool {
         self.backends.contains_key(provider)
     }

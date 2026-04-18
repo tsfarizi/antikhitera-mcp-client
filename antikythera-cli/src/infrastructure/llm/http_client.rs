@@ -1,11 +1,19 @@
-//! Base HTTP client with shared logic
+//! Base HTTP client — CLI's own copy for LLM provider calls
+//!
+//! This is the **CLI-side** HTTP transport layer for LLM providers.  It lives
+//! here rather than in `antikythera-core` so that the core crate can be
+//! compiled to WASM without any HTTP client code.
+//!
+//! The `reqwest` error type is converted to a plain `String` before being
+//! wrapped in `ModelError::network`, keeping `ModelError` free of
+//! `reqwest`-specific types.
 
-use crate::infrastructure::model::types::ModelError;
+use antikythera_core::infrastructure::model::types::ModelError;
 use reqwest::Client;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-/// Base HTTP client with shared functionality
+/// Base HTTP client with shared functionality for LLM provider calls.
 #[derive(Clone)]
 pub struct HttpClientBase {
     pub id: String,
@@ -24,14 +32,14 @@ impl HttpClientBase {
         }
     }
 
-    /// Build URL from endpoint and path
+    /// Build a URL from the base endpoint and a relative path.
     pub fn build_url(&self, path: &str) -> String {
         let base = self.endpoint.trim_end_matches('/');
         let path = path.trim_start_matches('/');
         format!("{base}/{path}")
     }
 
-    /// Post JSON with bearer auth
+    /// POST JSON with `Authorization: Bearer <key>` header.
     pub async fn post_with_bearer<Req, Res>(&self, url: &str, body: &Req) -> Result<Res, ModelError>
     where
         Req: Serialize,
@@ -54,7 +62,8 @@ impl HttpClientBase {
             .map_err(|e| ModelError::network(&self.id, e.to_string()))
     }
 
-    /// Post JSON with optional bearer auth - only sends Authorization header if api_key is configured
+    /// POST JSON with optional bearer auth (omits the header when no API key
+    /// is configured — used for local / unauthenticated endpoints).
     pub async fn post_with_optional_bearer<Req, Res>(
         &self,
         url: &str,
@@ -70,7 +79,6 @@ impl HttpClientBase {
             .header("Content-Type", "application/json")
             .json(body);
 
-        // Only add Authorization header if api_key is present and non-empty
         if let Some(api_key) = self.api_key.as_deref().filter(|k| !k.trim().is_empty()) {
             request = request.header("Authorization", format!("Bearer {}", api_key));
         }
@@ -86,7 +94,7 @@ impl HttpClientBase {
             .map_err(|e| ModelError::network(&self.id, e.to_string()))
     }
 
-    /// Post JSON with query param auth (for Gemini)
+    /// POST JSON with `?key=<api_key>` query parameter auth (Gemini style).
     pub async fn post_with_query_key<Req, Res>(
         &self,
         url: &str,
@@ -112,7 +120,7 @@ impl HttpClientBase {
             .map_err(|e| ModelError::network(&self.id, e.to_string()))
     }
 
-    /// Post JSON without auth (for local services like Ollama)
+    /// POST JSON without any authentication (Ollama / local services).
     pub async fn post_no_auth<Req, Res>(&self, url: &str, body: &Req) -> Result<Res, ModelError>
     where
         Req: Serialize,

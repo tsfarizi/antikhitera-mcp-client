@@ -32,8 +32,22 @@ wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
 # (multi-agent scheduling and inter-agent message routing) is not yet implemented.
 multi-agent = ["dep:redis", "dep:google-cloud-storage"]
 
+# LLM HTTP provider clients (Gemini, OpenAI-compatible, Ollama).
+#
+# This feature gates the HTTP-based model client implementations inside
+# `infrastructure::model::{adapter, clients, factory}` as well as the
+# `DynamicModelProvider::from_configs` convenience constructor.
+#
+# **Enable only for native (non-WASM-component) builds.**
+# - ✅ CLI (`antikythera-cli`) always enables this via the `full` feature.
+# - ✅ SDK browser-WASM (`wasm` / `single-agent` features) enables this via `full`.
+# - ❌ WASM component (`wasm32-wasip1`) must NOT enable this — the host
+#      runtime is responsible for LLM calls; the WASM module only exchanges
+#      structured messages through the WIT interface.
+http-providers = []
+
 # Full-featured build (all capabilities)
-full = ["gcp", "wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "dep:axum", "dep:tower-http", "dep:utoipa-swagger-ui"]
+full = ["gcp", "wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "http-providers", "dep:axum", "dep:tower-http", "dep:utoipa-swagger-ui"]
 
 [dependencies]
 # Core async runtime

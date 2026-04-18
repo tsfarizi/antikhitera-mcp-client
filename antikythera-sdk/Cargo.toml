@@ -18,8 +18,11 @@ package = "antikythera:mcp-framework"
 # Default build: WASM bindings with single-agent support
 default = ["wasm", "single-agent"]
 
-# Shared runtime surface for SDK features that depend on core/session crates
-sdk-core = ["dep:antikythera-core", "dep:antikythera-session"]
+# Shared runtime surface for SDK features that depend on core/session crates.
+# Also enables `http-providers` in core: sdk-core is only active for native /
+# browser-WASM builds, never for `wasm32-wasip1` component builds, so it is
+# safe to include HTTP client code here.
+sdk-core = ["dep:antikythera-core", "dep:antikythera-session", "antikythera-core/http-providers"]
 
 # WASM support (optional)
 wasm = ["sdk-core", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:console_error_panic_hook", "dep:tracing-wasm"]

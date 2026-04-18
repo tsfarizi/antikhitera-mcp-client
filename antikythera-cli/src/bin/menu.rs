@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 use antikythera_core::cli::{Cli, RunMode};
 use antikythera_core::application::stdio;
-use antikythera_core::{AppConfig, ClientConfig, DynamicModelProvider, McpClient};
+use antikythera_core::{AppConfig, ClientConfig, McpClient};
+use antikythera_cli::infrastructure::llm::build_provider_from_configs;
 use clap::Parser;
 
 #[tokio::main]
@@ -30,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let provider = DynamicModelProvider::from_configs(&providers)?;
+    let provider = build_provider_from_configs(&providers)?;
     let mut client_cfg = ClientConfig::new(
         config.default_provider.clone(),
         config.model.clone(),

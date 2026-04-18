@@ -1,7 +1,12 @@
 //! Model types - Request, Response, and Error types
+//!
+//! These types define the WASM-safe message contract between core and the host.
+//! `ModelError::Network` intentionally uses a plain `String` so that `reqwest`
+//! is not part of core's public API surface — HTTP error details are converted
+//! to strings by the provider implementation layer (CLI or SDK) before
+//! constructing this error.
 
 use crate::domain::types::{ChatMessage, MessageRole};
-use reqwest::StatusCode;
 use thiserror::Error;
 
 /// Model request for LLM chat
@@ -39,12 +44,11 @@ pub enum ModelError {
     ModelNotFound { provider: String, model: String },
     #[error("provider '{provider}' requires an API key")]
     MissingApiKey { provider: String },
-    #[error("network error calling provider '{provider}': {source}")]
-    Network {
-        provider: String,
-        #[source]
-        source: reqwest::Error,
-    },
+    /// Network / HTTP error.  The provider implementation converts the
+    /// transport-layer error to a plain string so that `reqwest` is not
+    /// referenced in core's public API surface.
+    #[error("network error calling provider '{provider}': {message}")]
+    Network { provider: String, message: String },
     #[error("provider '{provider}' returned invalid response: {reason}")]
     InvalidResponse { provider: String, reason: String },
 }
@@ -69,10 +73,14 @@ impl ModelError {
         }
     }
 
-    pub fn network(provider: impl Into<String>, source: reqwest::Error) -> Self {
+    /// Build a network error from any displayable error message.
+    /// The caller (provider implementation) is responsible for converting
+    /// transport-layer errors (e.g., `reqwest::Error`) to a string before
+    /// calling this constructor.
+    pub fn network(provider: impl Into<String>, message: impl Into<String>) -> Self {
         Self::Network {
             provider: provider.into(),
-            source,
+            message: message.into(),
         }
     }
 
@@ -95,37 +103,9 @@ impl ModelError {
             ModelError::MissingApiKey { provider } => {
                 format!("Penyedia '{provider}' memerlukan API key.")
             }
-            ModelError::Network { provider, source } => {
-                #[cfg(not(target_arch = "wasm32"))]
-                if source.is_connect() {
-                    format!("Tidak dapat terhubung ke penyedia model '{provider}'.")
-                } else if source.is_timeout() {
-                    format!("Permintaan ke '{provider}' melebihi batas waktu.")
-                } else if let Some(status) = source.status() {
-                    match status {
-                        StatusCode::NOT_FOUND => format!("Endpoint '{provider}' tidak ditemukan."),
-                        StatusCode::SERVICE_UNAVAILABLE | StatusCode::BAD_GATEWAY => {
-                            format!("Penyedia '{provider}' sedang tidak tersedia.")
-                        }
-                        _ => format!("Request ke '{provider}' gagal: {}", status.as_u16()),
-                    }
-                } else {
-                    format!("Kesalahan jaringan pada '{provider}'.")
-                }
-                #[cfg(target_arch = "wasm32")]
-                if source.is_timeout() {
-                    format!("Permintaan ke '{provider}' melebihi batas waktu.")
-                } else if let Some(status) = source.status() {
-                    match status {
-                        StatusCode::NOT_FOUND => format!("Endpoint '{provider}' tidak ditemukan."),
-                        StatusCode::SERVICE_UNAVAILABLE | StatusCode::BAD_GATEWAY => {
-                            format!("Penyedia '{provider}' sedang tidak tersedia.")
-                        }
-                        _ => format!("Request ke '{provider}' gagal: {}", status.as_u16()),
-                    }
-                } else {
-                    format!("Kesalahan jaringan pada '{provider}'.")
-                }
+            ModelError::Network { provider, message } => {
+                // The provider implementation already stringified the transport error.
+                format!("Kesalahan jaringan pada '{provider}': {message}")
             }
             ModelError::InvalidResponse { provider, .. } => {
                 format!("Respons dari '{provider}' tidak valid.")
