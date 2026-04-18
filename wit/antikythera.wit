@@ -324,6 +324,74 @@ interface multi-agent-runner {
     get-status() -> result<string, string>;
 }
 
+/// Resilience management — exported by the WASM component, queried by the host.
+///
+/// Hosts use this interface to inspect runtime health and configure retry /
+/// timeout policies at runtime without recompiling the component.
+///
+/// All functions that accept or return structured data use JSON strings so the
+/// interface stays forward-compatible and host-language-agnostic.
+interface resilience {
+    /// Return the current resilience config as a JSON string.
+    ///
+    /// JSON schema (all fields present):
+    /// ```json
+    /// {
+    ///   "retry": {
+    ///     "max_attempts": 3,
+    ///     "initial_delay_ms": 200,
+    ///     "max_delay_ms": 10000,
+    ///     "backoff_factor": 2.0
+    ///   },
+    ///   "timeout": {
+    ///     "llm_timeout_ms": 30000,
+    ///     "tool_timeout_ms": 10000
+    ///   }
+    /// }
+    /// ```
+    get-config() -> string;
+
+    /// Overwrite the resilience config from a JSON string (same schema as
+    /// `get-config`).
+    ///
+    /// Returns `ok(true)` when the config was accepted, or `err(reason)` if
+    /// the JSON is malformed or contains invalid field values.
+    set-config(config-json: string) -> result<bool, string>;
+
+    /// Return a JSON array of `ComponentHealth` objects for every component
+    /// that has recorded at least one call.
+    ///
+    /// Returns an empty array (`[]`) when no calls have been recorded yet.
+    ///
+    /// Each array element has the shape:
+    /// ```json
+    /// {
+    ///   "component_id": "gemini-flash",
+    ///   "status": "healthy",
+    ///   "total_calls": 42,
+    ///   "successful_calls": 41,
+    ///   "error_rate": 0.024,
+    ///   "avg_latency_ms": 312.5,
+    ///   "last_error": null
+    /// }
+    /// ```
+    get-health() -> string;
+
+    /// Reset all accumulated health statistics for all tracked components.
+    reset-health();
+
+    /// Estimate the token count for `text` using the built-in heuristic
+    /// (1 token ≈ 4 characters).
+    estimate-tokens(text: string) -> u32;
+
+    /// Prune a JSON-encoded array of `ChatMessage` objects so the token
+    /// budget `max-tokens - reserve-tokens` is not exceeded.
+    ///
+    /// Returns the pruned array as a JSON string in the same format as the
+    /// input.  Returns an error string if the input is not a valid JSON array.
+    prune-messages(messages-json: string, max-tokens: u32, reserve-tokens: u32) -> result<string, string>;
+}
+
 world antikythera-agent {
     /// Import dari host (I/O operations - host responsibility)
     import host-imports;
@@ -334,4 +402,5 @@ world antikythera-agent {
     export prompt-manager;
     export session-manager;
     export multi-agent-runner;
+    export resilience;
 }

@@ -15,6 +15,15 @@ pub mod logging;
 
 // Re-export commonly used types
 pub use application::agent::{Agent, AgentOptions, AgentOutcome, ToolDescriptor};
+
+// Re-export resilience module at crate root
+pub use application::resilience;
+pub use application::resilience::{
+    ResilienceConfig, ResilienceManager, RetryPolicy, TimeoutPolicy,
+    ContextWindowPolicy, TokenEstimator, prune_messages,
+    HealthStatus, ComponentHealth, HealthTracker,
+    with_retry, with_retry_if,
+};
 pub use application::client::{ChatRequest, ClientConfig, McpClient};
 pub use config::AppConfig;
 pub use infrastructure::model::{DynamicModelProvider, ModelProvider};

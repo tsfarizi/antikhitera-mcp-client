@@ -214,7 +214,7 @@ Hosts embedding the framework are responsible for any additional interface layer
 
 ---
 
-## 5. What is still missing before 1.0
+## 5. What is still missing before 1.0 — ✅ ALL COMPLETED
 
 ### ✅ 5.1 Radical scope simplification — COMPLETED (Current Session)
 
@@ -274,15 +274,20 @@ After radical simplification, the API surface is crystal clear:
 - Document final contract in README
 - Record in REVISION.md as v1.0 API freeze
 
-### ⏳ 5.5 Runtime resilience — READY TO IMPLEMENT
+### ✅ 5.5 Runtime resilience — COMPLETED
 
-With scope simplified, resilience patterns can be added cleanly.
+With scope simplified, resilience patterns have been added cleanly.
 
-**TODO:**
-- Retry + exponential backoff for LLM calls
-- Timeout policies for LLM and tool execution
-- Context-window management (token estimation, history pruning, summarization)
-- Health/status tracking
+**Implemented:**
+- ✅ **Retry + exponential back-off** — `RetryPolicy` with configurable `max_attempts`, `initial_delay_ms`, `max_delay_ms`, `backoff_factor`; `with_retry` / `with_retry_if` async executors in `application::resilience::retry`.
+- ✅ **Timeout policies** — `TimeoutPolicy` with per-call `llm_timeout_ms` and `tool_timeout_ms`; `llm_duration()` / `tool_duration()` helpers for direct use with `tokio::time::timeout`.
+- ✅ **Context-window management** — `TokenEstimator` (1 token ≈ 4 chars, no tokenizer dep); `ContextWindowPolicy`; `prune_messages` (retains system messages + newest history, always keeps `min_history_messages`).
+- ✅ **Health / status tracking** — `HealthStatus` enum (`healthy` / `degraded` / `unhealthy`); `ComponentHealth` (error rate, EMA latency, last error); `HealthTracker` with `record_success` / `record_failure`, `overall_status`, `snapshot_json`.
+- ✅ **WIT / FFI exposure** — `ResilienceManager` facade with JSON-in/JSON-out methods mirrors the `resilience` WIT interface exported by the WASM component (6 functions: `get-config`, `set-config`, `get-health`, `reset-health`, `estimate-tokens`, `prune-messages`).
+- ✅ **Unit tests** — 38 inline tests across `policy`, `retry`, `context_window`, `health`, and `mod`.
+- ✅ **Integration tests** — 11 tests in `tests/resilience/resilience_tests.rs` validating the public API from an external crate.
+- ✅ **Documentation** — `documentation/RESILIENCE.md` covering all submodules, WIT interface, and usage examples.
+- ✅ **Crate-level re-exports** — all types available at `antikythera_core::*` root.
 
 ---
 

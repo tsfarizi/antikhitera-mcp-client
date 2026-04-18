@@ -14,6 +14,7 @@
 pub mod agent;
 pub mod client;
 pub mod discovery;
+pub mod resilience;
 pub mod services;
 #[cfg(feature = "native-transport")]
 pub mod stdio;
