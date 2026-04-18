@@ -95,7 +95,6 @@ The static docs site is generated from this `README.md`, `SUMMARY.md`, and the m
 
 | Document | Focus |
 |:---------|:------|
-| [`documentation/FFI.md`](documentation/FFI.md) | FFI surface and integration notes |
 | [`documentation/CONFIG.md`](documentation/CONFIG.md) | Postcard-based configuration details |
 | [`documentation/CACHE.md`](documentation/CACHE.md) | Configuration cache behavior |
 | [`documentation/IMPORT_EXPORT.md`](documentation/IMPORT_EXPORT.md) | Config import/export workflow |

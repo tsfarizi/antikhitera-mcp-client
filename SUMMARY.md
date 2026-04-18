@@ -12,7 +12,6 @@
 
 # Reference Guides
 
-- [FFI](documentation/FFI.md)
 - [Config](documentation/CONFIG.md)
 - [Cache](documentation/CACHE.md)
 - [Import Export](documentation/IMPORT_EXPORT.md)

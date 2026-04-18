@@ -14,7 +14,6 @@ All focused guides live under `documentation/` and use uppercase direct filename
 - `BUILD.md`
 - `CLI.md`
 - `COMPONENT.md`
-- `FFI.md`
 - `WORKSPACE.md`
 
 ## What changed
