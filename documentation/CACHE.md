@@ -1,4 +1,4 @@
-# 🃏 Postcard Configuration Cache
+# Cache
 
 > **Binary serialization for faster configuration loading**
 

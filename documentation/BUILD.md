@@ -1,204 +1,183 @@
-# 📦 Antikythera MCP - Build Guide
+# BUILD
 
-## 🎯 Build Modes
+This guide covers the commands that match the current workspace layout and tooling.
 
-This project supports **2 build modes**:
+## Build map
 
-### 1. CLI Mode (Native/Debug)
-For debugging and native builds on your target platform.
-
-```bash
-# Run in development mode
-cargo run
-
-# Build for current platform (debug)
-cargo build
-
-# Build for current platform (release/production)
-cargo build --release
+```mermaid
+flowchart TD
+    SRC[Workspace source] --> CARGO[cargo build --workspace]
+    SRC --> CLI[cargo build -p antikythera-cli --release]
+    SRC --> SDK_WASM[cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release]
+    SRC --> WIT[cargo run -p build-scripts --release -- wit]
+    WIT --> COMPONENT[cargo component build -p antikythera-sdk --release --target wasm32-wasip1]
 ```
 
-**Output:** `target/debug/antikythera` or `target/release/antikythera`
+## What you can build today
 
-### 2. WASM Mode (WebAssembly) - SDK Only
-For web/browser deployments. **Only the SDK crate supports WASM.**
+| Target | Status | Notes |
+|:-------|:------:|:------|
+| Workspace crates | ✅ | Normal `cargo build --workspace` flow |
+| `antikythera` native binary | ✅ | Builds successfully, but runtime modes are still placeholder-facing |
+| `antikythera-config` native binary | ✅ | Most concrete CLI workflow today |
+| `antikythera-sdk` WASM build | ✅ | Standard SDK WASM build supported |
+| `antikythera-sdk` component build | ✅ | Uses `cargo-component` with `wasm32-wasip1` |
+
+## Prerequisites
+
+- Rust 1.75+
+- `cargo-component` for component builds
+- Optional: `wasm-tools` for inspecting the generated component
+- Optional: `task` for the helpers in `Taskfile.yml`
+
+## Native builds
+
+### Build everything
 
 ```bash
-# Add WASM target (one-time)
-rustup target add wasm32-unknown-unknown
+cargo build --workspace
+```
 
-# Build SDK for WASM (default: single-agent, minimal size)
+### Build release artifacts
+
+```bash
+cargo build --workspace --release
+```
+
+### Build only the CLI crate
+
+```bash
+cargo build -p antikythera-cli --release
+```
+
+### Native binaries
+
+| Binary | Command |
+|:-------|:--------|
+| `antikythera` | `cargo run -p antikythera-cli --bin antikythera` |
+| `antikythera-config` | `cargo run -p antikythera-cli --bin antikythera-config -- --help` |
+
+## WASM and component builds
+
+### Build the SDK for WASM
+
+```bash
 cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release
-
-# Or use wasm-pack (recommended for web deployment)
-wasm-pack build -p antikythera-sdk --release
 ```
 
-**Output:** `target/wasm32-unknown-unknown/release/antikythera_sdk.wasm`
+Expected output:
 
----
-
-## 🔧 WASM Build Configuration
-
-The SDK supports **configurable features** to minimize WASM binary size:
-
-### Feature Flags
-
-| Feature | Description | Binary Size Impact |
-|:--------|:------------|:------------------|
-| `wasm` (default) | WASM bindings | Base |
-| `single-agent` (default) | Single agent support | +0 KB |
-| `multi-agent` | Multi-agent orchestration | +200 KB |
-| `cloud` | GCP integrations | +150 KB |
-| `wasm-sandbox` | WASM tool sandboxing | +300 KB |
-| `ffi` | C FFI bindings | +50 KB |
-| `full` | All features | +700 KB |
-
-### Build Examples
-
-#### 1. Minimal WASM (Single Agent Only) - Recommended
-```bash
-# Default features = wasm + single-agent
-cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release
-# Binary size: ~500 KB
+```text
+target/wasm32-unknown-unknown/release/antikythera_sdk.wasm
 ```
 
-#### 2. Multi-Agent WASM
-```bash
-cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release \
-  --no-default-features --features wasm,multi-agent
-# Binary size: ~700 KB
-```
-
-#### 3. WASM with Cloud Support
-```bash
-cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release \
-  --no-default-features --features wasm,single-agent,cloud
-# Binary size: ~650 KB
-```
-
-#### 4. Full-Featured WASM (Not Recommended)
-```bash
-cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release \
-  --features full
-# Binary size: ~1.2 MB
-```
-
-#### 5. FFI Build (Native Library)
-```bash
-cargo build -p antikythera-sdk --release --features ffi
-# Output: target/release/libantikythera_sdk.so/.dll/.dylib
-```
-
----
-
-## 📋 Available Binaries
-
-Only **1 binary** is available:
-
-| Binary | Command | Description |
-|:-------|:--------|:------------|
-| `antikythera` | `cargo run --bin antikythera` | CLI interface with TUI |
-
----
-
-## 🔧 Feature Flags
-
-Build with different feature sets:
+### Generate WIT
 
 ```bash
-# Default features (native-transport only)
-cargo build
-
-# Full-featured build (all capabilities)
-cargo build --features full
-
-# Minimal build (no cloud, no TUI)
-cargo build -p antikythera-core --no-default-features
-
-# WASM runtime support
-cargo build --features wasm-runtime
-
-# Multi-agent support
-cargo build --features multi-agent
+cargo run -p build-scripts --release -- wit
 ```
 
-### Available Features
+This generates:
 
-| Feature | Description | Dependencies |
-|:--------|:------------|:-------------|
-| `native-transport` (default) | Stdio/OS process management | `tokio/process`, `sysinfo` |
-| `gcp` | Google Cloud integration | `reqwest`, `reqwest-eventsource` |
-| `wasm-runtime` | Sandboxed WASM execution | `wasmtime`, `wasm-bindgen` |
-| `wizard` | Interactive setup wizard | `crossterm`, `ratatui`, `clap` |
-| `multi-agent` | Multi-agent orchestration | `redis`, `google-cloud-storage` |
-| `full` | All features combined | All above |
-
----
-
-## 🏗️ Build Artifacts
-
-### Native Build
-```
-target/
-├── debug/
-│   └── antikythera(.exe)       # Debug binary
-└── release/
-    └── antikythera(.exe)       # Optimized binary
+```text
+wit/antikythera.wit
 ```
 
-### WASM Build
-```
-target/wasm32-unknown-unknown/release/
-└── antikythera_sdk.wasm         # WASM module
-```
+### Build the WASM component
 
----
-
-## 🚀 Usage Examples
-
-### CLI Mode
 ```bash
-# Run with default configuration
-cargo run
-
-# Run with custom config file
-cargo run -- --config /path/to/client.toml
-
-# Run with system prompt
-cargo run -- --system "You are a helpful assistant"
+cargo component build -p antikythera-sdk --release --target wasm32-wasip1
 ```
 
-### WASM Mode (JavaScript)
-```javascript
-import init, { Client } from './pkg/antikythera_sdk.js';
+The helper binary in `scripts/build-component.rs` also supports:
 
-await init();
-const client = await Client.new(config);
-const response = await client.chat("Hello");
+```bash
+cargo run -p build-scripts --release -- component
+cargo run -p build-scripts --release -- all
 ```
 
----
+Expected component output is produced under:
 
-## ⚠️ Notes
+```text
+target/wasm32-wasip1/release/
+```
 
-1. **WASM Limitations**: The CLI binary cannot be built for WASM due to `tokio` dependencies. Only the SDK crate supports WASM.
+## Tests and quality checks
 
-2. **REST Server**: Removed in v0.8.0. The project now focuses on CLI and WASM modes only.
+### Verification flow
 
-3. **Configuration**: Ensure `config/client.toml` exists before running, or the wizard will guide you through setup.
+```mermaid
+flowchart LR
+    CHECK[cargo check --workspace] --> TEST[cargo test --workspace]
+    TEST --> FMT[cargo fmt --all]
+    FMT --> CLIPPY[cargo clippy --workspace -- -D warnings]
+```
 
----
+### Workspace-wide
 
-## 📊 Build Times (Approximate)
+```bash
+cargo test --workspace
+cargo fmt --all
+cargo clippy --workspace -- -D warnings
+```
 
-| Build Type | Time | Size |
-|:-----------|:----:|:----:|
-| Debug (native) | ~2 min | ~50 MB |
-| Release (native) | ~5 min | ~15 MB |
-| WASM (SDK only) | ~3 min | ~500 KB |
+### Common targeted checks
 
----
+```bash
+# SDK library tests
+cargo test -p antikythera-sdk --lib
 
-*Last Updated: 2026-04-01*
-*Version: 0.8.0*
+# Check all crates without producing binaries
+cargo check --workspace
+```
+
+## Taskfile helpers
+
+The repository includes `Taskfile.yml` for common flows.
+
+| Task | Purpose |
+|:-----|:--------|
+| `task build` | Build the WASM component |
+| `task build-cli` | Build the native CLI binary |
+| `task build-all` | Build both native CLI and WASM outputs |
+| `task wit` | Generate WIT |
+| `task run` | Run the CLI crate |
+| `task test` | Run workspace tests |
+| `task check` | Run `cargo check --workspace` |
+| `task lint` | Run Clippy |
+| `task format` | Run rustfmt |
+| `task inspect` | Inspect the built component with `wasm-tools` if installed |
+| `task size` | Show binary sizes |
+
+## Feature flags overview
+
+### `antikythera-core`
+
+| Feature | Purpose |
+|:--------|:--------|
+| `native-transport` | OS process and stdio transport support |
+| `gcp` | Google Cloud-related integrations |
+| `wasm-runtime` | Sandboxed WASM execution support |
+| `cache` | Postcard-based configuration cache |
+| `wizard` | Interactive setup and wizard-related dependencies |
+| `multi-agent` | Multi-agent orchestration support |
+| `full` | Enables the full capability set |
+
+### `antikythera-sdk`
+
+| Feature | Purpose |
+|:--------|:--------|
+| `wasm` | WASM bindings |
+| `component` | WASM Component Model support |
+| `wasm-config` | WASM configuration binary format support |
+| `ffi` | C-compatible FFI bindings |
+| `single-agent` | Single-agent support |
+| `multi-agent` | Multi-agent support |
+| `cloud` | Cloud-related integrations |
+| `wasm-sandbox` | WASM sandbox support |
+| `full` | Broad feature bundle for the SDK/core stack |
+
+## Notes
+
+- The main native binary currently accepts `--mode tui|rest`, but both modes still print placeholder messages.
+- For practical hands-on use today, `antikythera-config` and the library/SDK crates are more representative than the placeholder CLI modes.

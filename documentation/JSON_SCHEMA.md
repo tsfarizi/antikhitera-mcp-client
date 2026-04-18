@@ -1,4 +1,4 @@
-# JSON Schema Validation
+# JSON Schema
 
 Sistem untuk memaksa LLM menjawab dengan format JSON yang konsisten dan tervalidasi.
 

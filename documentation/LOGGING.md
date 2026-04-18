@@ -1,4 +1,4 @@
-# Antikythera Logging System
+# Logging
 
 Sistem logging terpusat untuk Antikythera MCP Framework dengan kemampuan **subscription real-time** dan **periodic polling**.
 

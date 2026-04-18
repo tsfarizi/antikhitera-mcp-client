@@ -1,4 +1,4 @@
-# Postcard Configuration System
+# Config
 
 Sistem konfigurasi baru berbasis **Postcard binary format** yang lebih efisien dan cepat dibanding TOML.
 

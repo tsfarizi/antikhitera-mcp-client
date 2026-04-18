@@ -1,4 +1,4 @@
-# Server & Agent Management via WASM FFI
+# Servers and Agents
 
 Dokumentasi untuk mengelola MCP Server dan Multi-Agent melalui WASM FFI interface.
 

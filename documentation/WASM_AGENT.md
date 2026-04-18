@@ -1,4 +1,4 @@
-# WASM Agent Architecture
+# WASM Agent
 
 Arsitektur baru dimana WASM **hanya memproses LLM responses** dari host, tidak memanggil API langsung.
 

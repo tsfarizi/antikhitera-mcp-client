@@ -1,8 +1,16 @@
-# WASM Component dengan Host Imports
+# Component
 
 Dokumentasi lengkap untuk WASM Component dengan **host imports** untuk delegasi I/O.
 
 ## Overview
+
+```mermaid
+flowchart LR
+    HOST[Host application] --> IMPORTS[host imports]
+    IMPORTS --> WASM[WASM component]
+    WASM --> EXPORTS[component exports]
+    EXPORTS --> HOST
+```
 
 Arsitektur ini memisahkan **agent intelligence** (di WASM) dari **I/O operations** (di host):
 

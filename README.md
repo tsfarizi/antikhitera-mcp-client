@@ -1,426 +1,123 @@
-<div align="center">
+# Antikythera MCP Framework
 
-# 🚀 Antikythera MCP Framework
+Rust workspace for MCP client runtime, SDK bindings, session and logging support, plus WASM component tooling.
 
-**A flexible Model Context Protocol client with modern TUI interface**
+## Current state
 
-[![Rust](https://img.shields.io/badge/rust-v1.75%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
+This repository has a strong library and SDK surface, while the main end-user CLI surface is still partial.
 
-[Overview](#-overview) •
-[Quick Start](#-quick-start) •
-[Documentation](#-documentation) •
-[Features](#-features) •
-[Architecture](#-architecture)
+| Surface | Current state |
+|:--------|:--------------|
+| `antikythera-core` | Main implementation for client, agent runtime, configuration, providers, and transports |
+| `antikythera-sdk` | Richest public API: Rust wrapper, WASM bindings, FFI helpers, config, session, server, and agent utilities |
+| `antikythera-session` | Session and history management with export/import support |
+| `antikythera-log` | Structured logging and subscription utilities |
+| `antikythera` binary | Builds, but `tui` and `rest` modes still return placeholder output |
+| `antikythera-config` binary | Usable CLI flow for lightweight Postcard-based config management |
 
-</div>
+## Quick start
 
----
+### Prerequisites
 
-## 📖 Overview
+- Rust 1.75+
+- `cargo-component` for WASM component builds
+- Optional: `task` for `Taskfile.yml` helpers
 
-Antikythera is a **feature-rich MCP (Model Context Protocol) client** built with Rust, providing:
-
-- 🖥️ **Modern TUI** - Interactive terminal interface with Ratatui
-- 🤖 **Multi-Provider** - Support for Gemini, Ollama, OpenAI, Anthropic
-- 🔧 **MCP Tools** - Tool execution via MCP servers
-- 🌐 **FFI/WASM** - C bindings and WebAssembly support
-- ⚡ **Fast Config** - Postcard binary caching for instant loads
-- 🎯 **Multi-Agent** - Sandboxed agent orchestration (optional)
-
-### Project Structure
-
-```
-antikythera-mcp-framework/
-├── antikythera-core/      # Core library (MCP protocol, agent, tools)
-├── antikythera-sdk/       # WASM/FFI bindings
-├── antikythera-cli/       # CLI binary with TUI
-└── config/                # Configuration files
-```
-
----
-
-## 🚀 Quick Start
-
-### 1. Install Prerequisites
-
-| Requirement | Version | Note |
-|:------------|:--------|:-----|
-| **Rust** | 1.75+ | Edition 2024 |
-| **Ollama** | Latest | Optional (for local models) |
-| **API Keys** | - | For cloud providers (Gemini, OpenAI, etc.) |
-
-### 2. Build from Source
+### Build the workspace
 
 ```bash
-# Clone repository
-git clone https://github.com/antikythera/mcp-framework.git
-cd mcp-framework
-
-# Build release binary
-cargo build --release
-
-# Run the CLI
-./target/release/antikythera
-# Windows: target\release\antikythera.exe
+cargo build --workspace
 ```
 
-### 3. First Run
-
-```
-┌─────────────────────────────────────────┐
-│  🚀 Antikythera MCP v0.8.0             │
-│  📦 https://github.com/antikythera/... │
-├─────────────────────────────────────────┤
-│  ↑↓ Navigate  Enter Select  q Quit     │
-├─────────────────────────────────────────┤
-│  ▶ CLI   - Debug & Native mode         │
-│    WASM  - WebAssembly build target    │
-└─────────────────────────────────────────┘
-```
-
-**Navigation:**
-- `↑↓` - Move selection
-- `Enter` - Select mode
-- `q` - Quit program
-
----
-
-## 📚 Documentation
-
-All documentation is consolidated in the [`documentation/`](documentation/) folder.
-
-### Quick Links
-
-| Document | Description |
-|:---------|:------------|
-| [📖 Documentation Index](documentation/README.md) | Complete documentation overview |
-| [🌐 WASM Component](documentation/wasm-component-host-imports.md) | WASM Component Model with host imports |
-| [🔧 Server & Agent Management](documentation/server-agent-management.md) | Managing servers and agents via FFI |
-| [🔌 FFI Reference](documentation/ffi.md) | Complete FFI API reference |
-| [🛠️ Build Guide](documentation/BUILD.md) | Build instructions and feature flags |
-| [🧪 Testing Guide](documentation/TESTING_GUIDE.md) | Running tests and verification |
-
-### Quick Reference
+### Run the current binaries
 
 ```bash
-# Run CLI
-cargo run --bin antikythera
+# Main CLI entry point
+cargo run -p antikythera-cli --bin antikythera
 
-# Build with all features
-cargo build --release --features full
+# Explicit mode selection
+cargo run -p antikythera-cli --bin antikythera -- --mode tui
+cargo run -p antikythera-cli --bin antikythera -- --mode rest
 
-# Build WASM SDK
-cargo build -p antikythera-sdk \
-  --target wasm32-unknown-unknown \
-  --release
-
-# Build FFI library
-cargo build -p antikythera-sdk --release --features ffi
+# Config CLI
+cargo run -p antikythera-cli --bin antikythera-config -- --help
 ```
 
----
-
-## ✨ Features
-
-### Core Features
-
-| Feature | Description | Status |
-|:--------|:------------|:------:|
-| 🖥️ **TUI Interface** | Full Ratatui-based interactive terminal | ✅ Stable |
-| 🤖 **Multi-Provider** | Gemini, Ollama, OpenAI, Anthropic support | ✅ Stable |
-| 🔧 **MCP Tools** | Tool execution via MCP servers | ✅ Stable |
-| 💬 **Agent Mode** | Autonomous tool-using agent | ✅ Stable |
-| ⚙️ **Setup Wizard** | Interactive configuration | ✅ Stable |
-| 🃏 **Postcard Cache** | Binary config caching (10x faster) | ✅ Stable |
-| 🌐 **FFI Bindings** | C/C++ API for integration | ✅ Stable |
-| 🧩 **WASM Support** | WebAssembly SDK for web apps | 🧪 Beta |
-| 🎭 **Multi-Agent** | Sandboxed agent orchestration | 🧪 Beta |
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|:----|:-------|
-| `Enter` | Send message |
-| `q` | Exit (when input empty) |
-| `Ctrl+Q` | Force quit |
-| `Ctrl+C` | Clear input / Cancel |
-| `/help` | Show commands |
-| `/agent on\|off` | Toggle agent mode |
-| `/setup` | Open configuration wizard |
-
-**Full list:** [CLI Documentation →](documentation/BUILD.md#keyboard-shortcuts)
-
----
-
-## 🏗️ Architecture
-
-### High-Level Overview
-
-```mermaid
-graph TB
-    subgraph UI["🖥️ User Interface"]
-        CLI[CLI Binary]
-        TUI[TUI Screens]
-        FFI[FFI Bindings]
-    end
-
-    subgraph SDK["📦 SDK Layer"]
-        HIGH[High-Level API]
-        WASM[WASM Module]
-    end
-
-    subgraph Core["🔧 Core Library"]
-        AGENT[🤖 Agent Engine]
-        CLIENT[MCP Client]
-        TOOLS[🔧 Tool Manager]
-        CONFIG[⚙️ Config System]
-    end
-
-    subgraph External["🌐 External"]
-        LLM[LLM Providers]
-        MCP[MCP Servers]
-    end
-
-    CLI --> TUI
-    CLI --> HIGH
-    FFI --> HIGH
-    
-    HIGH --> AGENT
-    HIGH --> CLIENT
-    
-    AGENT --> TOOLS
-    CLIENT --> TOOLS
-    CONFIG --> CLIENT
-    
-    TOOLS --> MCP
-    CLIENT --> LLM
-    AGENT --> LLM
-
-    style UI fill:#6c5ce7,stroke:#fff,color:#fff
-    style SDK fill:#0984e3,stroke:#fff,color:#fff
-    style Core fill:#00b894,stroke:#fff,color:#fff
-    style External fill:#fd79a8,stroke:#fff,color:#fff
-```
-
-### Data Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant TUI as TUI Interface
-    participant Agent as Agent Engine
-    participant MCP as MCP Client
-    participant Tools as Tool Manager
-    participant LLM as LLM Provider
-
-    User->>TUI: Type message
-    TUI->>Agent: Process input
-    Agent->>LLM: Send request
-    LLM-->>Agent: Response
-    Agent->>Tools: Execute tool (if needed)
-    Tools-->>Agent: Tool result
-    Agent-->>TUI: Final response
-    TUI->>User: Display result
-```
-
----
-
-## ⚙️ Configuration
-
-### Configuration Files
-
-```
-config/
-├── client.toml    # Providers, servers, REST settings
-├── model.toml     # Default model, prompts, tools
-├── .env           # API keys (gitignored)
-└── .cache/        # Postcard binary cache (auto-generated)
-    ├── client.postcard
-    └── model.postcard
-```
-
-### Quick Configuration
-
-**1. Run Setup Wizard:**
-```bash
-antikythera
-# Select "Setup" from mode selector
-```
-
-**2. Manual Configuration:**
-
-`config/client.toml`:
-```toml
-[[providers]]
-id = "ollama"
-type = "ollama"
-endpoint = "http://127.0.0.1:11434"
-models = [{ name = "llama3", display_name = "Llama 3" }]
-
-[[servers]]
-name = "filesystem"
-command = "/path/to/mcp-filesystem-server"
-```
-
-`config/model.toml`:
-```toml
-default_provider = "ollama"
-model = "llama3"
-
-[prompts]
-tool_guidance = "You have access to the following tools..."
-```
-
-**Detailed guide:** [CLI Documentation → Configuration](CLI_DOCUMENTATION.md#configuration)
-
----
-
-## 🔌 FFI Integration
-
-### C Example
-
-```c
-#include <stdio.h>
-#include "antikythera.h"
-
-int main() {
-    antikythera_init();
-    
-    const char* config = R"({
-        "providers": [{"id": "ollama", "type": "ollama"}],
-        "default_provider": "ollama",
-        "model": "llama3"
-    })";
-    
-    int64_t client = antikythera_client_create(config);
-    char* response = antikythera_chat(client, "Hello!");
-    
-    printf("Response: %s\n", response);
-    
-    antikythera_string_free(response);
-    antikythera_client_destroy(client);
-    return 0;
-}
-```
-
-**Complete examples:** [FFI Documentation → Examples](FFI_DOCUMENTATION.md#usage-examples)
-
----
-
-## 🧩 WASM Integration
-
-### JavaScript Example
-
-```javascript
-import init, { WasmClient } from './pkg/antikythera_sdk.js';
-
-await init();
-const client = new WasmClient(config_json);
-const response = await client.chat("Hello!");
-console.log(response);
-```
-
-**Build instructions:** [BUILD.md → WASM Mode](BUILD.md#wasm-mode-webassembly)
-
----
-
-## 🛠️ Development
-
-### Build Commands
+### Build the component
 
 ```bash
-# Development build
-cargo build
+# Generate WIT from Rust source
+cargo run -p build-scripts --release -- wit
 
-# Release build (optimized)
-cargo build --release
+# Build the component
+cargo component build -p antikythera-sdk --release --target wasm32-wasip1
+```
 
-# With all features
-cargo build --release --features full
+## Workspace
 
-# Run tests
+| Path | Purpose |
+|:-----|:--------|
+| `antikythera-core/` | Core MCP client, agent runtime, config, infrastructure integrations |
+| `antikythera-sdk/` | Rust API, WASM bindings, FFI/config/session/server helpers |
+| `antikythera-cli/` | Native binaries: `antikythera` and `antikythera-config` |
+| `antikythera-session/` | Session state and persistence |
+| `antikythera-log/` | Structured logging |
+| `tests/` | Workspace integration and crate-level test suites |
+| `scripts/` | WIT and component build tooling |
+| `wit/` | Generated WIT definitions |
+| `documentation/` | Focused documentation files with direct uppercase names |
+
+## Documentation
+
+This repository now keeps **one README only** at the repository root. Detailed explanations live in dedicated files under `documentation/`.
+
+### Visual guides
+
+These are the best starting points if you want diagram-based explanations.
+
+| Document | Focus |
+|:---------|:------|
+| [`documentation/WORKSPACE.md`](documentation/WORKSPACE.md) | Workspace map and crate responsibilities |
+| [`documentation/ARCHITECTURE.md`](documentation/ARCHITECTURE.md) | High-level runtime architecture and data flow |
+| [`documentation/CLI.md`](documentation/CLI.md) | Current CLI binaries, their limits, and config flow |
+| [`documentation/BUILD.md`](documentation/BUILD.md) | Build, test, lint, and component flow |
+| [`documentation/COMPONENT.md`](documentation/COMPONENT.md) | WASM component model and host-import interaction |
+
+### Reference guides
+
+| Document | Focus |
+|:---------|:------|
+| [`documentation/FFI.md`](documentation/FFI.md) | FFI surface and integration notes |
+| [`documentation/CONFIG.md`](documentation/CONFIG.md) | Postcard-based configuration details |
+| [`documentation/CACHE.md`](documentation/CACHE.md) | Configuration cache behavior |
+| [`documentation/IMPORT_EXPORT.md`](documentation/IMPORT_EXPORT.md) | Config import/export workflow |
+| [`documentation/JSON_SCHEMA.md`](documentation/JSON_SCHEMA.md) | JSON schema validation and retry flow |
+| [`documentation/LOGGING.md`](documentation/LOGGING.md) | Logging model and usage |
+| [`documentation/SERVERS_AND_AGENTS.md`](documentation/SERVERS_AND_AGENTS.md) | Server and agent management surface |
+| [`documentation/WASM_AGENT.md`](documentation/WASM_AGENT.md) | WASM-side agent behavior |
+| [`documentation/TESTING.md`](documentation/TESTING.md) | Test commands and test categories |
+| [`documentation/MIGRATION.md`](documentation/MIGRATION.md) | Historical migration notes |
+
+## Core development commands
+
+```bash
+# Build
+cargo build --workspace
+
+# Test
 cargo test --workspace
 
-# Format code
-cargo fmt
+# Format
+cargo fmt --all
 
 # Lint
-cargo clippy
+cargo clippy --workspace -- -D warnings
 ```
 
-### Feature Flags
+If you use Task, the repository also exposes helpers such as `task build`, `task build-cli`, `task test`, `task lint`, and `task wit`.
 
-| Feature | Description | Default |
-|:--------|:------------|:-------:|
-| `native-transport` | Stdio/OS process management | ✅ Yes |
-| `gcp` | Google Cloud integrations | ❌ No |
-| `wasm-runtime` | WASM sandboxed execution | ❌ No |
-| `cache` | Postcard config caching | ❌ No |
-| `wizard` | Interactive setup wizard | ❌ No |
-| `multi-agent` | Multi-agent orchestration | ❌ No |
-| `full` | All features enabled | ❌ No |
+## Notes
 
-**Complete guide:** [BUILD.md → Feature Flags](BUILD.md#feature-flags)
-
----
-
-## 📊 Performance
-
-### Postcard Cache Benefits
-
-| Metric | TOML | Postcard | Improvement |
-|:-------|:----:|:--------:|:-----------:|
-| **Load Time** | ~50ms | ~5ms | **10x faster** |
-| **File Size** | ~5KB | ~2.5KB | **50% smaller** |
-| **Memory** | ~20KB | ~10KB | **50% less** |
-
-**Details:** [POSTCARD_CACHE.md](documentation/POSTCARD_CACHE.md)
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) first.
-
-### Development Setup
-
-```bash
-# Clone repository
-git clone https://github.com/antikythera/mcp-framework.git
-cd mcp-framework
-
-# Run in development mode
-cargo run
-
-# Run tests
-cargo test --workspace
-
-# Format and lint
-cargo fmt && cargo clippy
-```
-
----
-
-## 📝 License
-
-Antikythera MCP Framework is licensed under the [MIT License](LICENSE).
-
----
-
-## 🔗 Links
-
-- **GitHub:** [https://github.com/antikythera/mcp-framework](https://github.com/antikythera/mcp-framework)
-- **Documentation:** [CLI Guide](documentation/CLI_DOCUMENTATION.md) | [FFI Reference](documentation/ffi.md) | [Build Guide](documentation/BUILD.md)
-- **Issues:** [https://github.com/antikythera/mcp-framework/issues](https://github.com/antikythera/mcp-framework/issues)
-
----
-
-<div align="center">
-
-**Made with ❤️ using Rust**
-
-[Report Bug](https://github.com/antikythera/mcp-framework/issues) · [Request Feature](https://github.com/antikythera/mcp-framework/issues)
-
-</div>
+- Workspace version is `0.9.5`.
+- The current documentation names under `documentation/` use uppercase direct filenames for consistency.
+- The main CLI binary is still partial, so the docs now distinguish clearly between implemented behavior and planned/runtime placeholder behavior.

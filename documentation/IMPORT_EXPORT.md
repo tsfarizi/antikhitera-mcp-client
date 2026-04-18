@@ -1,4 +1,4 @@
-# Config Import/Export Guide
+# Import Export
 
 Panduan untuk menggunakan mekanisme import/export konfigurasi Postcard agar tidak perlu konfigurasi ulang saat rebuild infrastruktur.
 
