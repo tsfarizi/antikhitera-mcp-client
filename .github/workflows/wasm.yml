@@ -31,10 +31,10 @@ jobs:
         run: cargo run -p build-scripts --release -- wit
 
       - name: Build browser WASM
-        run: cargo build -p antikythera-sdk --release --target wasm32-unknown-unknown
+        run: cargo build -p antikythera-sdk --release --target wasm32-unknown-unknown --no-default-features --features wasm
 
       - name: Build component WASM
-        run: cargo component build -p antikythera-sdk --release --target wasm32-wasip1
+        run: cargo component build -p antikythera-sdk --release --target wasm32-wasip1 --no-default-features --features component
 
       - name: Collect artifacts
         shell: bash

@@ -62,7 +62,8 @@ cargo build -p antikythera-cli --release
 ### Build the SDK for WASM
 
 ```bash
-cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release
+cargo build -p antikythera-sdk --target wasm32-unknown-unknown --release \
+  --no-default-features --features wasm
 ```
 
 Expected output:
@@ -86,7 +87,8 @@ wit/antikythera.wit
 ### Build the WASM component
 
 ```bash
-cargo component build -p antikythera-sdk --release --target wasm32-wasip1
+cargo component build -p antikythera-sdk --release --target wasm32-wasip1 \
+  --no-default-features --features component
 ```
 
 The helper binary in `scripts/build-component.rs` also supports:

@@ -15,7 +15,7 @@ package = "antikythera:mcp-framework"
 [package.metadata.component.dependencies]
 
 [features]
-# Default: minimal WASM build with single agent support
+# Default build: WASM bindings with single-agent support
 default = ["wasm", "single-agent"]
 
 # WASM support (optional)
@@ -42,8 +42,8 @@ wasm-sandbox = ["antikythera-core/wasm-runtime"]
 full = ["wasm", "multi-agent", "cloud", "antikythera-core/full"]
 
 [dependencies]
-# Core with configurable features - SDK enables what it needs
-antikythera-core = { path = "../antikythera-core", version = "0.9.0", default-features = false, features = ["full"] }
+# Core with configurable features - SDK enables what it needs through feature wiring
+antikythera-core = { path = "../antikythera-core", version = "0.9.0", default-features = false }
 
 # Logging
 antikythera-log = { path = "../antikythera-log", version = "0.9.0", features = ["subscriber"] }

@@ -50,7 +50,8 @@ cargo run -p antikythera-cli --bin antikythera-config -- --help
 cargo run -p build-scripts --release -- wit
 
 # Build the component
-cargo component build -p antikythera-sdk --release --target wasm32-wasip1
+cargo component build -p antikythera-sdk --release --target wasm32-wasip1 \
+  --no-default-features --features component
 ```
 
 ### Build the docs site
