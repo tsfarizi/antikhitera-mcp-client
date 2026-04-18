@@ -19,6 +19,10 @@ pub use application::client::{ChatRequest, ClientConfig, McpClient};
 pub use config::AppConfig;
 pub use infrastructure::model::{DynamicModelProvider, ModelProvider};
 
+// Re-export CLI argument types so binary crates don't need a direct `cli` dep.
+#[cfg(feature = "wizard")]
+pub use cli::{Cli, RunMode};
+
 /// Re-export logging for easy access
 pub use logging::{
     get_logger, clear_all_loggers, logger_count,
@@ -28,3 +32,5 @@ pub use logging::{
 
 /// Crate version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+

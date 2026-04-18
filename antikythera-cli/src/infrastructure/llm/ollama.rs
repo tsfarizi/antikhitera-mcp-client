@@ -1,89 +1,106 @@
 //! Ollama LLM Provider
 //!
-//! Calls local Ollama API.
+//! Thin adapter over `antikythera_core`'s `OllamaClient`.  All HTTP logic and
+//! response parsing live in the core crate; this module only translates between
+//! the CLI's `Message` type and the core's `ChatMessage` / `ModelRequest`.
 
-use crate::domain::entities::*;
+use crate::domain::entities::{Message, MessageRole};
 use crate::domain::use_cases::chat_use_case::LlmProvider;
+use antikythera_core::config::{ModelInfo, ModelProviderConfig};
+use antikythera_core::domain::types::{ChatMessage, MessageRole as CoreRole};
+use antikythera_core::infrastructure::model::{
+    factory::ProviderFactory,
+    traits::ModelClient,
+    types::ModelRequest,
+};
 use async_trait::async_trait;
-use reqwest::Client;
-use serde_json::json;
 use std::error::Error;
 
+/// Converts a CLI `Message` to a core `ChatMessage`.
+fn to_core_message(m: &Message) -> ChatMessage {
+    let role = match m.role {
+        MessageRole::User => CoreRole::User,
+        MessageRole::Assistant => CoreRole::Assistant,
+        MessageRole::System => CoreRole::System,
+        MessageRole::Tool => CoreRole::User,
+    };
+    ChatMessage::new(role, &m.content)
+}
+
+/// Ollama provider – delegates to core's `OllamaClient` via `ProviderFactory`.
 pub struct OllamaProvider {
-    client: Client,
+    client: Box<dyn ModelClient>,
+    provider_id: String,
     model: String,
+    /// Stored so `with_endpoint` can rebuild the client with the new base URL.
+    #[allow(dead_code)]
     endpoint: String,
 }
 
 impl OllamaProvider {
+    /// Create an Ollama provider pointing at the default local endpoint.
     pub fn new(model: String) -> Self {
+        let endpoint = "http://127.0.0.1:11434".to_string();
+        Self::with_endpoint_inner(model, endpoint)
+    }
+
+    fn with_endpoint_inner(model: String, endpoint: String) -> Self {
+        let provider_id = "ollama".to_string();
+        let model_name = if model.is_empty() {
+            "llama3".to_string()
+        } else {
+            model
+        };
+        let config = ModelProviderConfig {
+            id: provider_id.clone(),
+            provider_type: "ollama".to_string(),
+            endpoint: endpoint.clone(),
+            api_key: None,
+            api_path: None,
+            models: vec![ModelInfo {
+                name: model_name.clone(),
+                display_name: None,
+            }],
+        };
         Self {
-            client: Client::new(),
-            model: if model.is_empty() { "llama3".to_string() } else { model },
-            endpoint: "http://127.0.0.1:11434".to_string(),
+            client: ProviderFactory::create(&config),
+            provider_id,
+            model: model_name,
+            endpoint,
         }
     }
 
-    pub fn with_endpoint(mut self, endpoint: String) -> Self {
-        self.endpoint = endpoint;
-        self
+    /// Override the Ollama server URL (e.g. for a remote instance).
+    pub fn with_endpoint(self, endpoint: String) -> Self {
+        Self::with_endpoint_inner(self.model, endpoint)
     }
 }
 
 #[async_trait]
 impl LlmProvider for OllamaProvider {
-    async fn call(&self, messages: &[Message], system_prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
-        let url = format!("{}/api/chat", self.endpoint);
+    async fn call(
+        &self,
+        messages: &[Message],
+        system_prompt: &str,
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+        let mut core_messages: Vec<ChatMessage> =
+            Vec::with_capacity(messages.len() + 1);
 
-        // Build Ollama request format
-        let ollama_messages: Vec<_> = std::iter::once(Message::system(system_prompt))
-            .chain(messages.iter().cloned())
-            .map(|m| {
-                let role = match m.role {
-                    MessageRole::User => "user",
-                    MessageRole::Assistant => "assistant",
-                    MessageRole::System => "system",
-                    MessageRole::Tool => "user",
-                };
-                json!({
-                    "role": role,
-                    "content": m.content
-                })
-            })
-            .collect();
-
-        let request_body = json!({
-            "model": self.model,
-            "messages": ollama_messages,
-            "stream": false,
-            "options": {
-                "temperature": 0.7,
-                "num_predict": 8192,
-            }
-        });
-
-        let response = self.client
-            .post(&url)
-            .json(&request_body)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(format!("Ollama API error {}: {}", status, body).into());
+        if !system_prompt.is_empty() {
+            core_messages.push(ChatMessage::new(CoreRole::System, system_prompt));
         }
+        core_messages.extend(messages.iter().map(to_core_message));
 
-        let json: serde_json::Value = response.json().await?;
+        let request = ModelRequest {
+            provider: self.provider_id.clone(),
+            model: self.model.clone(),
+            messages: core_messages,
+            session_id: None,
+            force_json: false,
+        };
 
-        // Parse Ollama response format
-        let content = json
-            .get("message")
-            .and_then(|m| m.get("content"))
-            .and_then(|c| c.as_str())
-            .ok_or("Invalid Ollama response structure")?
-            .to_string();
-
-        Ok(content)
+        let response = self.client.chat(request).await?;
+        Ok(response.message.content())
     }
 }
+

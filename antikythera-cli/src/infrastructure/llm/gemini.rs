@@ -1,98 +1,114 @@
 //! Gemini LLM Provider
 //!
-//! Calls Google Gemini API directly.
+//! Thin adapter over `antikythera_core`'s `GeminiClient`.  All HTTP logic and
+//! response parsing live in the core crate; this module only translates between
+//! the CLI's `Message` type and the core's `ChatMessage` / `ModelRequest`.
 
-use crate::domain::entities::*;
+use crate::domain::entities::{Message, MessageRole};
 use crate::domain::use_cases::chat_use_case::LlmProvider;
+use antikythera_core::config::{ModelInfo, ModelProviderConfig};
+use antikythera_core::domain::types::{ChatMessage, MessageRole as CoreRole};
+use antikythera_core::infrastructure::model::{
+    factory::ProviderFactory,
+    traits::ModelClient,
+    types::ModelRequest,
+};
 use async_trait::async_trait;
-use reqwest::Client;
-use serde_json::json;
 use std::error::Error;
 
+/// Converts a CLI `Message` to a core `ChatMessage`.
+fn to_core_message(m: &Message) -> ChatMessage {
+    let role = match m.role {
+        MessageRole::User => CoreRole::User,
+        MessageRole::Assistant => CoreRole::Assistant,
+        MessageRole::System => CoreRole::System,
+        // No Tool role in core's domain types – treat as user context.
+        MessageRole::Tool => CoreRole::User,
+    };
+    ChatMessage::new(role, &m.content)
+}
+
+/// Gemini provider – delegates to core's `GeminiClient` via `ProviderFactory`.
 pub struct GeminiProvider {
-    client: Client,
-    api_key: String,
+    client: Box<dyn ModelClient>,
+    provider_id: String,
     model: String,
-    endpoint: String,
 }
 
 impl GeminiProvider {
+    /// Create a Gemini provider.
+    ///
+    /// `api_key` should be an environment-variable name (e.g. `"GEMINI_API_KEY"`).
+    /// The core factory resolves the variable at runtime.
     pub fn new(api_key: String, model: String) -> Self {
-        Self {
-            client: Client::new(),
-            api_key,
-            model: if model.is_empty() { "gemini-2.0-flash".to_string() } else { model },
+        let provider_id = "gemini".to_string();
+        let model_name = if model.is_empty() {
+            "gemini-2.0-flash".to_string()
+        } else {
+            model
+        };
+        let config = ModelProviderConfig {
+            id: provider_id.clone(),
+            provider_type: "gemini".to_string(),
             endpoint: "https://generativelanguage.googleapis.com".to_string(),
+            api_key: if api_key.is_empty() { None } else { Some(api_key) },
+            api_path: None,
+            models: vec![ModelInfo {
+                name: model_name.clone(),
+                display_name: None,
+            }],
+        };
+        Self {
+            client: ProviderFactory::create(&config),
+            provider_id,
+            model: model_name,
         }
     }
 
+    /// Override the endpoint (e.g. for testing or a Vertex AI proxy).
     pub fn with_endpoint(mut self, endpoint: String) -> Self {
-        self.endpoint = endpoint;
+        // Rebuild the client with the new endpoint.
+        let config = ModelProviderConfig {
+            id: self.provider_id.clone(),
+            provider_type: "gemini".to_string(),
+            endpoint,
+            api_key: None,
+            api_path: None,
+            models: vec![ModelInfo {
+                name: self.model.clone(),
+                display_name: None,
+            }],
+        };
+        self.client = ProviderFactory::create(&config);
         self
     }
 }
 
 #[async_trait]
 impl LlmProvider for GeminiProvider {
-    async fn call(&self, messages: &[Message], system_prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
-        let url = format!(
-            "{}/v1beta/models/{}:generateContent?key={}",
-            self.endpoint, self.model, self.api_key
-        );
+    async fn call(
+        &self,
+        messages: &[Message],
+        system_prompt: &str,
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+        let mut core_messages: Vec<ChatMessage> =
+            Vec::with_capacity(messages.len() + 1);
 
-        // Build Gemini request format
-        let contents: Vec<_> = messages
-            .iter()
-            .filter(|m| m.role != MessageRole::System)
-            .map(|m| {
-                let role = match m.role {
-                    MessageRole::User => "user",
-                    MessageRole::Assistant => "model",
-                    MessageRole::Tool => "user",
-                    MessageRole::System => "user",
-                };
-                json!({
-                    "role": role,
-                    "parts": [{"text": m.content}]
-                })
-            })
-            .collect();
-
-        let request_body = json!({
-            "contents": contents,
-            "systemInstruction": {"parts": [{"text": system_prompt}]},
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": 8192,
-            }
-        });
-
-        let response = self.client
-            .post(&url)
-            .json(&request_body)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(format!("Gemini API error {}: {}", status, body).into());
+        if !system_prompt.is_empty() {
+            core_messages.push(ChatMessage::new(CoreRole::System, system_prompt));
         }
+        core_messages.extend(messages.iter().map(to_core_message));
 
-        let json: serde_json::Value = response.json().await?;
+        let request = ModelRequest {
+            provider: self.provider_id.clone(),
+            model: self.model.clone(),
+            messages: core_messages,
+            session_id: None,
+            force_json: false,
+        };
 
-        // Parse Gemini response format
-        let content = json
-            .get("candidates")
-            .and_then(|c| c.get(0))
-            .and_then(|c| c.get("content"))
-            .and_then(|c| c.get("parts"))
-            .and_then(|p| p.get(0))
-            .and_then(|p| p.get("text"))
-            .and_then(|t| t.as_str())
-            .ok_or("Invalid Gemini response structure")?
-            .to_string();
-
-        Ok(content)
+        let response = self.client.chat(request).await?;
+        Ok(response.message.content())
     }
 }
+

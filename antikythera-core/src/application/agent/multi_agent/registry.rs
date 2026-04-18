@@ -1,6 +1,12 @@
 //! Agent Registry for Multi-Agent Orchestration
 //!
-//! Stub implementation - full implementation pending profile and memory modules.
+//! Manages a collection of [`AgentProfile`] entries identified by their `id`
+//! field.  Each profile describes a named agent role that the orchestrator
+//! can instantiate.
+//!
+//! **Scope**: profile storage only.  Scheduling, message routing, and
+//! inter-agent communication are handled at the orchestrator layer (outside
+//! this module).
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -75,6 +81,16 @@ impl<P> AgentRegistry<P> {
     /// List all registered profiles
     pub fn list_profiles(&self) -> Vec<&AgentProfile> {
         self.profiles.values().collect()
+    }
+
+    /// Remove a registered profile by ID, returning it if it existed.
+    pub fn remove(&mut self, id: &str) -> Option<AgentProfile> {
+        self.profiles.remove(id)
+    }
+
+    /// Return the number of registered profiles.
+    pub fn count(&self) -> usize {
+        self.profiles.len()
     }
 }
 

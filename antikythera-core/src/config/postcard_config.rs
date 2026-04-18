@@ -1,7 +1,27 @@
 //! Unified Postcard-based Configuration
 //!
-//! All configuration is stored as a single Postcard binary file.
+//! All configuration is stored as a single Postcard binary file (`app.pc`).
 //! CLI and FFI provide full access to all config fields.
+//!
+//! ## Naming disambiguation
+//!
+//! Several type names in this module (e.g. `AppConfig`, `ServerConfig`) are
+//! intentionally different from the runtime types in [`super::app`] even though
+//! they serve related purposes:
+//!
+//! | This module (`postcard_config`) | Runtime module (`app`) | Purpose |
+//! |---------------------------------|------------------------|---------|
+//! | [`AppConfig`] / [`PostcardAppConfig`] | [`super::app::AppConfig`] | Serialised blob ↔ runtime struct |
+//! | [`ServerConfig`] | [`super::app::RestServerConfig`] | REST server bind settings |
+//! | [`AgentConfig`] | *(derived at runtime)* | Agent tuning knobs |
+//!
+//! **Use [`PostcardAppConfig`]** when you need to disambiguate the serialised
+//! form from the runtime form in the same scope (e.g. in `loader.rs` or wizard
+//! code).  `AppConfig` and `PostcardAppConfig` are the **same type**.
+//!
+//! The canonical source of truth for native execution is
+//! [`super::app::AppConfig`], which is produced by
+//! [`super::loader::load_config`] from the Postcard blob.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -218,6 +238,15 @@ pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
 
     config_from_postcard(&data)
 }
+
+/// Alias for [`AppConfig`] that makes the distinction from
+/// [`super::app::AppConfig`] explicit in code that imports both.
+///
+/// ```rust,ignore
+/// use antikythera_core::config::postcard_config::PostcardAppConfig;
+/// use antikythera_core::config::AppConfig; // runtime form
+/// ```
+pub type PostcardAppConfig = AppConfig;
 
 /// Save configuration to file
 pub fn save_config(config: &AppConfig, path: Option<&Path>) -> Result<(), String> {

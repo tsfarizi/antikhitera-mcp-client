@@ -1,129 +1,83 @@
 //! CLI Configuration
 //!
-//! Configuration for CLI/native testing only (Gemini & Ollama only).
-//! NOT used by WASM - WASM receives LLM responses from host.
+//! Delegates entirely to `antikythera_core::config::postcard_config` so that the
+//! CLI binary and the core runtime share a **single** config file (`app.pc`) and
+//! schema.  Previously the CLI maintained its own Postcard blob at `cli-config.pc`
+//! with a divergent struct layout; that duplication has been removed.
+//!
+//! ## Migration note
+//!
+//! Existing `cli-config.pc` files are not automatically migrated.  Re-run
+//! `antikythera-config init` (or the setup wizard via `antikythera --mode setup`)
+//! to generate a fresh `app.pc`.
 
-use serde::{Deserialize, Serialize};
+// Re-export the unified config types from core so the rest of the CLI crate and
+// the `antikythera-config` binary can import them from a single place.
+pub use antikythera_core::config::postcard_config::{
+    AgentConfig,
+    AppConfig,
+    DocServerConfig,
+    ModelConfig,
+    ModelInfo,
+    PromptsConfig,
+    ProviderConfig,
+    ServerConfig,
+    CONFIG_PATH,
+};
+
+/// Type alias kept for backward compatibility within the CLI crate.
+/// Prefer using `AppConfig` directly in new code.
+pub type CliConfig = AppConfig;
+
+/// Type alias kept for backward compatibility within the CLI crate.
+/// Prefer using `ProviderConfig` directly in new code.
+pub type CliProviderConfig = ProviderConfig;
+
+// ── Thin serialization wrappers ────────────────────────────────────────────────
+
 use std::path::Path;
 
-// ============================================================================
-// CLI Configuration (for testing only)
-// ============================================================================
-
-/// Model information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelInfo {
-    pub name: String,
-    pub display_name: String,
+/// Serialize `AppConfig` to Postcard binary.
+pub fn config_to_postcard(config: &AppConfig) -> Result<Vec<u8>, String> {
+    antikythera_core::config::postcard_config::config_to_postcard(config)
 }
 
-/// Provider configuration (CLI testing only)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CliProviderConfig {
-    /// Provider ID
-    pub id: String,
-    /// Provider type (gemini or ollama only)
-    #[serde(rename = "type")]
-    pub provider_type: String,
-    /// API endpoint
-    pub endpoint: String,
-    /// API key (or env var name) - None for Ollama
-    pub api_key: String,
-    /// Available models
-    pub models: Vec<ModelInfo>,
+/// Deserialize `AppConfig` from Postcard binary.
+pub fn config_from_postcard(data: &[u8]) -> Result<AppConfig, String> {
+    antikythera_core::config::postcard_config::config_from_postcard(data)
 }
 
-/// Server configuration (REST server settings)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    /// Bind address
-    pub bind: String,
-    /// CORS origins
-    pub cors_origins: Vec<String>,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            bind: "127.0.0.1:8080".to_string(),
-            cors_origins: Vec::new(),
-        }
-    }
-}
-
-/// Complete CLI configuration (for testing only)
-/// Only GEMINI and OLLAMA providers supported.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CliConfig {
-    /// Providers (gemini or ollama)
-    pub providers: Vec<CliProviderConfig>,
-    /// Default provider
-    pub default_provider: String,
-    /// Default model
-    pub model: String,
-    /// Server settings
-    pub server: ServerConfig,
-}
-
-impl Default for CliConfig {
-    fn default() -> Self {
-        Self {
-            providers: Vec::new(),
-            default_provider: "ollama".to_string(),
-            model: "llama3".to_string(),
-            server: ServerConfig::default(),
-        }
-    }
-}
-
-// ============================================================================
-// Postcard Serialization
-// ============================================================================
-
-/// CLI config file path
-pub const CLI_CONFIG_PATH: &str = "cli-config.pc";
-
-/// Serialize CLI config
-pub fn config_to_postcard(config: &CliConfig) -> Result<Vec<u8>, String> {
-    postcard::to_allocvec(config).map_err(|e| format!("Serialize error: {}", e))
-}
-
-/// Deserialize CLI config
-pub fn config_from_postcard(data: &[u8]) -> Result<CliConfig, String> {
-    postcard::from_bytes(data).map_err(|e| format!("Deserialize error: {}", e))
-}
-
-/// Load CLI config
-pub fn load_config(path: Option<&Path>) -> Result<CliConfig, String> {
-    let config_path = path.unwrap_or(Path::new(CLI_CONFIG_PATH));
+/// Load `AppConfig` from `path` (defaults to [`CONFIG_PATH`] = `app.pc`).
+pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
+    let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
     if !config_path.exists() {
         return Err(format!("Config not found: {}", config_path.display()));
     }
-    let data = std::fs::read(config_path)
-        .map_err(|e| format!("Read error: {}", e))?;
+    let data =
+        std::fs::read(config_path).map_err(|e| format!("Read error: {}", e))?;
     config_from_postcard(&data)
 }
 
-/// Save CLI config
-pub fn save_config(config: &CliConfig, path: Option<&Path>) -> Result<(), String> {
-    let config_path = path.unwrap_or(Path::new(CLI_CONFIG_PATH));
+/// Save `AppConfig` to `path` (defaults to [`CONFIG_PATH`] = `app.pc`).
+pub fn save_config(config: &AppConfig, path: Option<&Path>) -> Result<(), String> {
+    let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Create dir error: {}", e))?;
     }
     let data = config_to_postcard(config)?;
-    std::fs::write(config_path, data)
-        .map_err(|e| format!("Write error: {}", e))
+    std::fs::write(config_path, &data).map_err(|e| format!("Write error: {}", e))
 }
 
-/// Check if CLI config exists
+/// Returns `true` if the config file already exists at the default path.
 pub fn config_exists() -> bool {
-    Path::new(CLI_CONFIG_PATH).exists()
+    Path::new(CONFIG_PATH).exists()
 }
 
-/// Initialize default CLI config
-pub fn init_default_config() -> Result<CliConfig, String> {
-    let config = CliConfig::default();
+/// Create and persist a default `AppConfig` at [`CONFIG_PATH`].
+pub fn init_default_config() -> Result<AppConfig, String> {
+    let config = AppConfig::default();
     save_config(&config, None)?;
     Ok(config)
 }
+

@@ -12,7 +12,9 @@ default = ["native-transport"]
 # Cloud integrations (Google Cloud Storage, Secret Manager)
 gcp = []
 
-# Sandboxed tool execution (WASM runtime)
+# Sandboxed tool execution via a WASM component model runtime.
+# ⚠️ EXPERIMENTAL: The WASM component integration is in progress.
+# Do not use in production.
 wasm-runtime = ["dep:wasmtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 
 # OS-level process management (Stdio transport)
@@ -21,10 +23,13 @@ native-transport = ["tokio/process", "dep:sysinfo"]
 # Configuration cache (Postcard binary format) - now always enabled
 cache = []
 
-# Wizard features (interactive setup)
+# Interactive configuration wizard (terminal UI + Clap argument parsing).
+# ✅ STABLE: Component model is complete; suitable for production use.
 wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
 
-# Multi-Agent orchestration support
+# Multi-Agent orchestration support (agent registry, scheduling, message routing).
+# ⚠️ EXPERIMENTAL: The registry API is functional, but full orchestration
+# (multi-agent scheduling and inter-agent message routing) is not yet implemented.
 multi-agent = ["dep:redis", "dep:google-cloud-storage"]
 
 # Full-featured build (all capabilities)
