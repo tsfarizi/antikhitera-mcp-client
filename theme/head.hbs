@@ -1,0 +1,32 @@
+<script type="module">
+document.addEventListener("DOMContentLoaded", async () => {
+  const mermaidModule = await import("https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs");
+  const mermaid = mermaidModule.default;
+
+  const isLightTheme = document.documentElement.classList.contains("light");
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "loose",
+    theme: isLightTheme ? "default" : "dark"
+  });
+
+  const blocks = Array.from(
+    document.querySelectorAll("pre code.language-mermaid, pre code.lang-mermaid")
+  );
+
+  blocks.forEach((code, index) => {
+    const pre = code.closest("pre");
+    if (!pre) {
+      return;
+    }
+
+    const container = document.createElement("div");
+    container.className = "mermaid";
+    container.id = `mermaid-diagram-${index}`;
+    container.textContent = code.textContent ?? "";
+    pre.replaceWith(container);
+  });
+
+  await mermaid.run({ querySelector: ".mermaid" });
+});
+</script>

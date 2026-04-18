@@ -53,6 +53,12 @@ cargo run -p build-scripts --release -- wit
 cargo component build -p antikythera-sdk --release --target wasm32-wasip1
 ```
 
+### Build the docs site
+
+```bash
+mdbook build
+```
+
 ## Workspace
 
 | Path | Purpose |
@@ -82,6 +88,8 @@ These are the best starting points if you want diagram-based explanations.
 | [`documentation/CLI.md`](documentation/CLI.md) | Current CLI binaries, their limits, and config flow |
 | [`documentation/BUILD.md`](documentation/BUILD.md) | Build, test, lint, and component flow |
 | [`documentation/COMPONENT.md`](documentation/COMPONENT.md) | WASM component model and host-import interaction |
+
+The static docs site is generated from this `README.md`, `SUMMARY.md`, and the markdown files under `documentation/` via `mdBook`.
 
 ### Reference guides
 

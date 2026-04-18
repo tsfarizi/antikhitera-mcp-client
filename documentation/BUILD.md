@@ -102,6 +102,29 @@ Expected component output is produced under:
 target/wasm32-wasip1/release/
 ```
 
+## Docs site build
+
+The repository also includes an `mdBook` configuration that turns `README.md` plus the `documentation/` folder into a static documentation site.
+
+```mermaid
+flowchart LR
+    README[README.md] --> SUMMARY[SUMMARY.md]
+    DOCS[documentation/*.md] --> SUMMARY
+    SUMMARY --> MDBOOK[mdbook build]
+    MDBOOK --> SITE[book/]
+    SITE --> PAGES[GitHub Pages deployment]
+```
+
+### Local commands
+
+```bash
+# Build static site
+mdbook build
+
+# Preview locally
+mdbook serve --open
+```
+
 ## Tests and quality checks
 
 ### Verification flow

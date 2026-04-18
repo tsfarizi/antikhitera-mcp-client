@@ -1,0 +1,14 @@
+[book]
+title = "Antikythera MCP Framework"
+authors = ["tsfarizi"]
+language = "en"
+multilingual = false
+src = "."
+build-dir = "book"
+
+[output.html]
+default-theme = "ayu"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/tsfarizi/antikythera-mcp-framework"
+edit-url-template = "https://github.com/tsfarizi/antikythera-mcp-framework/edit/main/{path}"
+site-url = "/antikythera-mcp-framework/"
