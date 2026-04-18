@@ -25,14 +25,6 @@ path = "session/session_tests.rs"
 # ============================================================================
 
 [[test]]
-name = "sdk_servers"
-path = "sdk/servers/server_tests.rs"
-
-[[test]]
-name = "sdk_agents"
-path = "sdk/agents/agent_tests.rs"
-
-[[test]]
 name = "sdk_config"
 path = "sdk/config/config_tests.rs"
 

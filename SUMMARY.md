@@ -4,6 +4,7 @@
 
 # Visual Guides
 
+- [Product Scope](documentation/PRODUCT_SCOPE.md)
 - [Workspace](documentation/WORKSPACE.md)
 - [Architecture](documentation/ARCHITECTURE.md)
 - [CLI](documentation/CLI.md)

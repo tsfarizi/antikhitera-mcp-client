@@ -50,8 +50,8 @@ multi-agent = []
 #      (`antikythera::call_llm_sync` host import).
 http-providers = []
 
-# Full-featured build (all capabilities)
-full = ["wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "http-providers", "dep:axum", "dep:tower-http", "dep:utoipa-swagger-ui"]
+# Full-featured build for native runtime
+full = ["wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "http-providers"]
 
 [dependencies]
 # Core async runtime
@@ -67,11 +67,7 @@ antikythera-log = { path = "../antikythera-log", version = "0.9.6", features = [
 reqwest.workspace = true
 reqwest-eventsource.workspace = true
 
-# REST API server (optional - for backward compatibility)
-axum = { workspace = true, optional = true }
-tower-http = { workspace = true, optional = true }
-utoipa.workspace = true
-utoipa-swagger-ui = { workspace = true, optional = true }
+
 
 # Serialization
 serde.workspace = true

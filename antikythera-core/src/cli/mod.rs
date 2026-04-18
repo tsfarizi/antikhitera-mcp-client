@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use clap::{Parser, ValueEnum};
 
 #[derive(Parser, Debug)]
@@ -17,9 +15,6 @@ pub struct Cli {
     pub system: Option<String>,
     #[arg(long, short, value_enum)]
     pub mode: Option<RunMode>,
-    /// REST API bind address (overrides config if specified)
-    #[arg(long)]
-    pub rest_addr: Option<SocketAddr>,
 
     // ------------------------------------------------------------------
     // Multi-agent flags (used when --mode multi-agent)
@@ -54,10 +49,6 @@ pub struct Cli {
 pub enum RunMode {
     /// Interactive STDIO mode
     Stdio,
-    /// REST API server
-    Rest,
-    /// Run both STDIO and REST simultaneously
-    All,
     /// Configuration wizard/setup menu
     Setup,
     /// Multi-agent orchestrator test harness

@@ -1,6 +1,6 @@
 # CLI
 
-This guide documents the CLI surface that actually exists in the current repository.
+This guide documents the CLI binaries exposed by `antikythera-cli`.
 
 ## Binary map
 
@@ -9,77 +9,100 @@ flowchart LR
     CLI_CRATE[antikythera-cli]
     CLI_CRATE --> MAIN[antikythera]
     CLI_CRATE --> CONFIG[antikythera-config]
-    MAIN --> MODE[mode: tui or rest]
-    MODE --> PLACEHOLDER[placeholder output]
-    CONFIG --> PC[cli-config.pc]
+    MAIN --> STDIO[mode: stdio]
+    MAIN --> SETUP[mode: setup]
+    MAIN --> MULTI[mode: multi-agent]
+    CONFIG --> PC[app.pc]
 ```
 
 ## Overview
 
-The CLI crate currently exposes two binaries:
+The CLI crate exposes two binaries:
 
-| Binary | Purpose | Current maturity |
-|:-------|:--------|:-----------------|
-| `antikythera` | Main entry point for native runtime modes | Partial: parses mode, then prints placeholder output |
-| `antikythera-config` | Lightweight config manager for CLI testing/setup | Usable |
-
-If you want the most practical command-line flow today, use `antikythera-config`.
+| Binary | Purpose |
+|:-------|:--------|
+| `antikythera` | Main runtime entry point: interactive chat, setup wizard, and multi-agent orchestration |
+| `antikythera-config` | Lightweight config manager for provider and server configuration |
 
 ## `antikythera`
 
-### What it does today
+### Runtime modes
 
-The main binary accepts a `--mode` flag with two supported values:
+The main binary accepts a `--mode` flag:
 
-- `tui` (default)
-- `rest`
-
-Both modes are present in the code, but both currently return placeholder text:
-
-- `TUI mode - coming soon`
-- `REST mode - coming soon`
+| Mode | Default | Description |
+|:-----|:-------:|:------------|
+| `stdio` | ✅ | Interactive TUI chat session |
+| `setup` | | Configuration wizard for providers and servers |
+| `multi-agent` | | Multi-agent orchestrator harness |
 
 ### Execution flow
 
 ```mermaid
 flowchart TD
-    START[Run antikythera] --> PARSE[Parse --mode]
-    PARSE --> TUI[mode = tui]
-    PARSE --> REST[mode = rest]
-    PARSE --> INVALID[other value]
-    TUI --> TUI_MSG["Print: TUI mode - coming soon"]
-    REST --> REST_MSG["Print: REST mode - coming soon"]
-    INVALID --> ERR["Exit with unknown mode error"]
+    START[Run antikythera] --> LOAD[Load app.pc config]
+    LOAD --> BUILD[Build McpClient]
+    BUILD --> PARSE[Parse --mode]
+    PARSE --> STDIO[mode = stdio]
+    PARSE --> SETUP[mode = setup]
+    PARSE --> MULTI[mode = multi-agent]
+    STDIO --> CHAT[Interactive STDIO loop]
+    SETUP --> WIZARD[Config wizard menu]
+    MULTI --> ORCH[MultiAgentOrchestrator dispatch]
 ```
 
 ### Run it
 
 ```bash
-# Default mode: tui
+# Default mode: stdio (interactive chat)
 cargo run -p antikythera-cli --bin antikythera
 
 # Explicit mode selection
-cargo run -p antikythera-cli --bin antikythera -- --mode tui
-cargo run -p antikythera-cli --bin antikythera -- --mode rest
+cargo run -p antikythera-cli --bin antikythera -- --mode stdio
+cargo run -p antikythera-cli --bin antikythera -- --mode setup
+cargo run -p antikythera-cli --bin antikythera -- --mode multi-agent --agents agents.json --task "Write a summary"
 ```
 
-### Invalid mode behavior
+### Common flags
 
-Any other mode exits with an error message:
+| Flag | Description |
+|:-----|:------------|
+| `--mode <mode>` | Runtime mode (default: `stdio`) |
+| `--config <path>` | Path to `app.pc` config file |
+| `--system <prompt>` | Override system prompt |
+| `--ollama-url <url>` | Override Ollama endpoint (default: `http://127.0.0.1:11434`) |
 
-```text
-Unknown mode: <value>. Use 'tui' or 'rest'.
+### Multi-agent flags
+
+| Flag | Description |
+|:-----|:------------|
+| `--agents <path>` | JSON file with agent profile definitions |
+| `--task <prompt>` | Task to dispatch (reads stdin when omitted) |
+| `--target-agent <id>` | Route to a specific agent using `DirectRouter` |
+| `--execution-mode <mode>` | `auto` (default), `sequential`, `concurrent`, or `parallel:N` |
+
+Agent profile JSON format:
+```json
+[
+  {
+    "id": "writer",
+    "name": "Writer Agent",
+    "role": "writer",
+    "system_prompt": "You write clear and concise content.",
+    "max_steps": 8
+  }
+]
 ```
 
 ## `antikythera-config`
 
 ### What it does
 
-`antikythera-config` manages a lightweight Postcard-based config file used by the CLI crate.
+`antikythera-config` manages the Postcard-based config file shared across all framework surfaces.
 
 | Item | Value |
 |:-----|:------|
-| Default config file | `cli-config.pc` |
+| Default config file | `app.pc` |
 | Supported provider types | `gemini`, `ollama` |
 | Config format | Postcard on disk, JSON for import/export and display |
 
@@ -87,7 +110,7 @@ Unknown mode: <value>. Use 'tui' or 'rest'.
 
 ```mermaid
 flowchart LR
-    INIT[init] --> FILE[cli-config.pc]
+    INIT[init] --> FILE[app.pc]
     FILE --> SHOW[show]
     FILE --> GET[get]
     FILE --> SET[set]
@@ -149,10 +172,10 @@ cargo run -p antikythera-cli --bin antikythera-config -- status
 
 ### Provider limitations
 
-The current config CLI explicitly rejects provider types other than `gemini` and `ollama`.
+Provider types supported: `gemini` and `ollama`.
 
-## Relationship to the rest of the repository
+## Related documents
 
-- `antikythera-core` and `antikythera-sdk` are currently more feature-complete than the main `antikythera` binary.
-- The CLI config format documented here is specific to `antikythera-cli` and is separate from the richer config structures used elsewhere in the workspace.
-- For build commands and component workflows, see [`BUILD.md`](BUILD.md).
+- [`CONFIG.md`](CONFIG.md) for the config format and serialization model
+- [`BUILD.md`](BUILD.md) for build commands and component workflows
+- [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) for deployment targets and feature flags

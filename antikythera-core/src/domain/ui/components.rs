@@ -5,13 +5,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use utoipa::ToSchema;
 
 /// Generic dynamic component - schema-driven, no struct definitions.
 ///
 /// The `component_name` references a definition in `config/ui.toml`,
 /// and `props` are validated against that schema's `field_types`.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicComponent {
     /// Component name from ui.toml (e.g. "product_card", "text", "container")
     #[serde(rename = "type")]
@@ -27,7 +26,6 @@ pub struct DynamicComponent {
 
     /// Dynamic properties hydrated from MCP data per TOML schema.
     /// Keys must match `required_fields` + `optional_fields` from schema.
-    #[schema(value_type = Object)]
     #[serde(flatten)]
     pub props: HashMap<String, Value>,
 

@@ -63,26 +63,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     apply_cli_overrides(&cli, &mut providers);
     debug!(provider_count = providers.len(), "Initializing dynamic model providers");
 
-    // Discover MCP servers from the servers folder
     let _discovery_result = crate::application::discovery::run_startup_discovery(None).await;
-
-    // Log configured HTTP/SSE servers
-    let http_servers: Vec<_> = file_config
-        .servers
-        .iter()
-        .filter(|s| s.transport == crate::config::TransportType::Http)
-        .collect();
-
-    if !http_servers.is_empty() {
-        info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        info!("Configured HTTP/SSE Servers");
-        info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        for server in &http_servers {
-            let url = server.url.as_deref().unwrap_or("(no URL)");
-            info!(server = %server.name, url = %url, "HTTP/SSE server configured");
-        }
-        info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    }
 
     let provider = DynamicModelProvider::from_configs(&providers)?;
     let mut client_config = ClientConfig::new(
@@ -111,51 +92,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             {
                 eprintln!("Chat error: {}", e);
             }
-        }
-        RunMode::Rest => {
-            let addr: std::net::SocketAddr = cli.rest_addr.unwrap_or_else(|| {
-                file_config
-                    .rest_server
-                    .bind
-                    .parse()
-                    .expect("Invalid bind address in config")
-            });
-            info!(addr = %addr, "Starting REST server");
-            crate::infrastructure::server::serve(
-                client.clone(),
-                addr,
-                &file_config.rest_server.cors_origins,
-                &file_config.rest_server.docs,
-            )
-            .await?;
-        }
-        RunMode::All => {
-            let rest_addr: std::net::SocketAddr = cli.rest_addr.unwrap_or_else(|| {
-                file_config
-                    .rest_server
-                    .bind
-                    .parse()
-                    .expect("Invalid bind address in config")
-            });
-            info!(addr = %rest_addr, "Starting both STDIO and REST server");
-            let rest_client = client.clone();
-            let cors_origins = file_config.rest_server.cors_origins.clone();
-            let doc_servers = file_config.rest_server.docs.clone();
-            let rest_handle = tokio::spawn(async move {
-                if let Err(e) = crate::infrastructure::server::serve(
-                    rest_client,
-                    rest_addr,
-                    &cors_origins,
-                    &doc_servers,
-                )
-                .await
-                {
-                    tracing::error!(error = %e, "REST server error");
-                }
-            });
-            let stdio_result = crate::application::stdio::run(client.clone()).await;
-            rest_handle.abort();
-            stdio_result?;
         }
         RunMode::Setup => {
             unreachable!("Setup mode is handled before config loading");

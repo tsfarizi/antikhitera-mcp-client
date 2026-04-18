@@ -12,7 +12,6 @@
 //! | `ollama` | Local Ollama server | No |
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 /// Trait for configuration types that can be parsed from TOML.
 ///
@@ -30,7 +29,7 @@ where
 ///
 /// Models can be specified with just a name, or with an optional display name
 /// for better UI presentation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ModelInfo {
     /// Model identifier used in API calls (e.g., "gemini-2.0-flash")
     pub name: String,
@@ -57,7 +56,7 @@ pub struct ModelInfo {
 ///     { name = "gemini-2.0-flash", display_name = "Gemini 2.0 Flash" }
 /// ]
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ModelProviderConfig {
     /// Unique identifier for this provider (e.g., "gemini", "ollama-local")
     pub id: String,

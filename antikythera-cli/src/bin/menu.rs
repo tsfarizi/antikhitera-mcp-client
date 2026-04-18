@@ -59,48 +59,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         RunMode::Stdio => {
             stdio::run(client).await?;
         }
-        RunMode::Rest => {
-            let addr = cli.rest_addr.unwrap_or_else(|| {
-                config
-                    .rest_server
-                    .bind
-                    .parse()
-                    .expect("Invalid bind address in config")
-            });
-            antikythera_core::infrastructure::server::serve(
-                client,
-                addr,
-                &config.rest_server.cors_origins,
-                &config.rest_server.docs,
-            )
-            .await?;
-        }
-        RunMode::All => {
-            let addr = cli.rest_addr.unwrap_or_else(|| {
-                config
-                    .rest_server
-                    .bind
-                    .parse()
-                    .expect("Invalid bind address in config")
-            });
-            let rest_client = client.clone();
-            let cors = config.rest_server.cors_origins.clone();
-            let docs = config.rest_server.docs.clone();
-            let rest_handle = tokio::spawn(async move {
-                if let Err(e) = antikythera_core::infrastructure::server::serve(
-                    rest_client,
-                    addr,
-                    &cors,
-                    &docs,
-                )
-                .await
-                {
-                    eprintln!("REST server error: {}", e);
-                }
-            });
-            stdio::run(client).await?;
-            rest_handle.abort();
-        }
         RunMode::Setup => {
             eprintln!(
                 "Setup mode requires the wizard feature. \

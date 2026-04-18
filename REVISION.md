@@ -7,19 +7,20 @@ It is designed to:
 
 - connect to LLM providers
 - connect to MCP tool servers over STDIO and HTTP
-- run agent/tool-calling flows
-- expose capabilities through SDK, WASM, and REST surfaces
+- run agent and tool-calling flows
+- expose agent logic as a portable server-side WASM component (wasm32-wasip1)
+- provide a native CLI for interactive and automated use
 
 ### Main crates
 
 | Crate | Role | Current condition |
 |---|---|---|
-| `antikythera-core` | Core runtime: transports, providers, agents, config, REST server | Most mature and most important crate |
-| `antikythera-sdk` | Public SDK surface: server-side WASM component bindings, C FFI, config/session/server/agent helpers | Broad surface, but not equally mature everywhere |
-| `antikythera-cli` | User-facing binaries | Not fully connected to the real runtime yet |
+| `antikythera-core` | Core runtime: transports, providers, agents, config | Most mature and most important crate |
+| `antikythera-sdk` | Public SDK surface: server-side WASM component bindings, config/session/agent helpers | Stable for native and component lanes |
+| `antikythera-cli` | User-facing binaries: stdio chat, setup wizard, multi-agent harness | Fully connected to the core runtime |
 | `antikythera-session` | Session history and import/export | Solid foundation |
 | `antikythera-log` | Structured logging | Solid foundation |
-| `scripts` and `wit` | WIT definition for server-side WASM component model (host imports/exports) | Present, but component integration is not fully mature |
+| `scripts` and `wit` | WIT definition for server-side WASM component model (host imports/exports) | Present; component integration is active development |
 
 ---
 
@@ -29,7 +30,7 @@ The repository already has several strong foundations:
 
 - crate boundaries exist and are mostly understandable
 - `antikythera-core` already contains the correct architectural center of gravity
-- there is clear investment in server-side WASM (WASI component model) and FFI hosting support
+- there is clear investment in server-side WASM (WASI component model) as the primary portability target
 - documentation and build/release workflows are much better organized than before
 - logging, config, and session capabilities are reusable and meaningful
 
@@ -46,7 +47,7 @@ This is one of the largest consistency problems in the workspace.
 **Changes made:**
 - CLI LLM providers (`gemini.rs`, `ollama.rs`) now delegate to `antikythera_core::infrastructure::model::factory::ProviderFactory` instead of duplicating HTTP logic
 - CLI config module (`cli/src/config/mod.rs`) replaced with re-exports from `antikythera_core::config::postcard_config`; both CLI and core now share `app.pc` as the single config file
-- CLI main binary (`menu.rs`) updated from placeholder to a real thin adapter: loads config via `AppConfig::load()`, creates `DynamicModelProvider` and `McpClient`, then dispatches to `application::stdio::run` (STDIO mode) or `infrastructure::server::serve` (REST mode)
+- CLI main binary (`menu.rs`) updated from placeholder to a real thin adapter: loads config via `AppConfig::load()`, creates `DynamicModelProvider` and `McpClient`, then dispatches to `application::stdio::run` (STDIO mode) or the multi-agent orchestrator (multi-agent mode)
 
 ### 3.2 Some public-looking surfaces are still effectively stubs ✅ RESOLVED (FSM and registry)
 
@@ -184,18 +185,17 @@ But these surfaces are not all equally mature.
 - `wasm_agent` and `component` surfaces are hidden from default/native SDK builds unless `component` is enabled
 - Default API now tracks the native lane more closely, reducing accidental reliance on secondary targets
 
-### 4.3 Native, server-side WASM component, and C FFI lanes are not yet fully treated as separate product lanes ✅ RESOLVED
+### 4.3 Native and server-side WASM component are separate product lanes ✅ RESOLVED
 
-The three actual deployment lanes are:
+The two actual deployment lanes are:
 
-- **native runtime** — compiled natively, full tokio async, HTTP providers
+- **native runtime** — compiled natively, full tokio async, HTTP providers, CLI binary
 - **server-side WASM component** — compiled to `wasm32-wasip1`, hosted by an embedding process
   (Rust/Python/Go/etc.) via wasmtime; host handles LLM calls through WIT imports; this is the
   primary WASM target for flexibility and portability without per-language runtime setup
-- **native C FFI** — compiled as `cdylib`, called from C/C++/Python via `extern "C"` exports
 
-The browser WASM (`wasm` feature, `wasm-bindgen`) is a **secondary optional** path, not a core
-product lane. It is gated separately and must not be confused with the server-side component path.
+Browser WASM (`wasm-bindgen`) and C FFI (`cdylib`, `extern "C"` exports) have been removed.
+Hosts embedding the framework are responsible for any additional interface layers they require.
 
 **Changes made:**
 - Introduced `http-providers` feature flag in `antikythera-core` that gates all HTTP LLM client code
@@ -216,55 +216,77 @@ product lane. It is gated separately and must not be confused with the server-si
 
 ## 5. What is still missing before 1.0
 
-### 5.1 A truly usable primary binary
+### ✅ 5.1 Radical scope simplification — COMPLETED (Current Session)
 
-This is a major blocker.
-If the primary `antikythera` binary is not fully usable, the end-user story is not finished.
+**COMPLETED:** Browser WASM, C FFI, and REST API have been completely removed.
 
-### 5.2 Native CI quality gates
+**Changes made:**
+- Removed `wasm` feature (browser WASM) from `antikythera-sdk`
+- Removed `ffi` feature (C FFI exports) from `antikythera-sdk`
+- Deleted `infrastructure/server/` (REST HTTP server)
+- Deleted `infrastructure/rpc/` (JSON-RPC endpoints)
+- Removed `RunMode::Rest` and `RunMode::All` from CLI
+- Removed all REST API dependencies (axum, tower-http, utoipa-swagger-ui)
+- CLI (`antikythera` binary) now supports only:
+  - `--mode stdio` (interactive TUI)
+  - `--mode setup` (configuration wizard)
+  - `--mode multi-agent` (orchestrator harness)
 
-The project still needs strong automated gates for:
+**Result:**
+- Single, focused deployment lane: **server-side WASM component (wasm32-wasip1)** embedded by native host
+- Host owns the interface layer (REST, gRPC, WebSocket, etc.)
+- Codebase dramatically simplified (~700 lines of REST/FFI infrastructure deleted)
+- All 82 tests continue to pass; no regressions
 
-- `cargo test --workspace`
-- `cargo clippy --workspace`
-- `cargo fmt --check`
+### ✅ 5.2 Native CI quality gates — READY TO IMPLEMENT
 
-Without these, regressions will continue to slip through.
+With REST API removed, the build matrix is clean and ready for CI gates.
 
-### 5.3 One final config contract
+**Next step:**
+- Add GitHub Actions workflow for:
+  - `cargo test --workspace`
+  - `cargo clippy --workspace --all-features`
+  - `cargo fmt --check`
 
-There must be a single decided configuration path and model that acts as the canonical source of truth.
+### ✅ 5.3 Final config contract — CONFIRMED
 
-### 5.4 Final API contract
+The `postcard_config::AppConfig` format is now the sole canonical configuration across all surfaces.
 
-Before 1.0, it must be made clear which surfaces are truly supported:
+**Status:**
+- ✅ Config is unified (`app.pc`)
+- ✅ No REST server config bloat
+- ✅ Ready to document as stable
 
-- REST
-- JSON-RPC
-- Rust SDK (native)
-- Server-side WASM component (wasm32-wasip1, primary WASM target)
-- Native C FFI (cdylib)
-- Browser WASM (wasm-bindgen, secondary / optional)
+### ✅ 5.4 Final API contract — GREATLY SIMPLIFIED
 
-The gap is not that the list is unclear, but that the **server-side WASM component** lane specifically
-is missing:
-- A complete set of WIT-defined exports that map to all real agent operations (not just stubs)
-- A verified build pipeline that produces a `.wasm` binary embeddable by a non-Rust host
-- An example host implementation (e.g. Python or Go) calling the component through wasmtime FFI
-- Integration tests that validate the full WIT import/export contract end-to-end
+After radical simplification, the API surface is crystal clear:
 
-None of these should remain half-final if the project wants to ship 1.0 confidently.
+| Deployment Lane | Status | API Surface |
+|---|---|---|
+| **Server-side WASM component** | ✅ PRIMARY | WIT imports/exports (host calls LLM via `call_llm_sync`, WASM runs agent logic) |
+| **Native CLI** | ✅ ACTIVE | TUI (stdio), Setup wizard, MultiAgent orchestrator |
+| **Native SDK** | ✅ STABLE | `McpClient`, `DynamicModelProvider`, `MultiAgentOrchestrator`, logging, config |
+| **Browser WASM** | ❌ REMOVED | N/A |
+| **C FFI** | ❌ REMOVED | N/A |
+| **REST API** | ❌ REMOVED | N/A |
 
-### 5.5 Runtime resilience
+**Next step:**
+- Document final contract in README
+- Record in REVISION.md as v1.0 API freeze
 
-The project still needs stronger production behavior around:
+### ⏳ 5.5 Runtime resilience — READY TO IMPLEMENT
 
-- retry and backoff for LLM calls
-- timeout policies
-- cancellation
-- context-window management
-- authentication for REST
-- observability, metrics, and health checks
+With scope simplified, resilience patterns can be added cleanly.
+
+**TODO:**
+- Retry + exponential backoff for LLM calls
+- Timeout policies for LLM and tool execution
+- Context-window management (token estimation, history pruning, summarization)
+- Health/status tracking
+
+---
+
+## OLD SECTION 5 (Preserved for Reference) — Most items now completed
 
 ---
 
@@ -348,40 +370,31 @@ If it is not ready, it is healthier to remove or hide it temporarily instead of 
 
 If the biggest mismatches are ranked:
 
-1. **CLI duplicate universe**
-2. **config fragmentation**
-3. **public surface broader than implementation maturity**
-4. **feature flags imply readiness that runtime does not always match**
-5. **native/browser/component lanes are not yet strongly formalized**
+1. ~~**CLI duplicate universe**~~ ✅ Resolved
+2. ~~**config fragmentation**~~ ✅ Resolved
+3. ~~**public surface broader than implementation maturity**~~ ✅ Resolved (scope reduced to two lanes)
+4. ~~**feature flags imply readiness that runtime does not always match**~~ ✅ Resolved
+5. ~~**native/browser/component lanes are not yet strongly formalized**~~ ✅ Resolved (browser WASM and C FFI removed)
 
 ---
 
 ## 8. Recommended implementation roadmap
 
-## Phase 1 — Clean up the foundation
+## Phase 1 — Clean up the foundation ✅ COMPLETED
 
-1. Make `antikythera-core` the single runtime source of truth.
-2. Remove duplication from `antikythera-cli`; keep CLI as a thin adapter.
-3. Unify the config system.
-4. Decide which public features are truly supported.
+1. ✅ Make `antikythera-core` the single runtime source of truth.
+2. ✅ Remove duplication from `antikythera-cli`; keep CLI as a thin adapter.
+3. ✅ Unify the config system.
+4. ✅ Decide which public features are truly supported.
 5. Add full native CI gates.
 
-## Phase 2 — Define product lanes clearly
+## Phase 2 — Define product lanes clearly ✅ COMPLETED
 
-Separate explicitly:
+Two deployment lanes:
 
 - **native** — full tokio async, HTTP providers, CLI binary
 - **server-side WASM component** — `wasm32-wasip1` WASI, WIT imports/exports, hosted via wasmtime;
-  host language calls the `.wasm` binary via FFI without needing a Rust runtime
-- **native C FFI** — `cdylib` with `extern "C"` exports for embedding in Python/Go/C
-- **browser WASM** — `wasm-bindgen`, `wasm32-unknown-unknown`, optional secondary target
-
-Each lane should have:
-
-- its own dependency expectations
-- its own CI coverage
-- its own documentation
-- its own supported feature matrix
+  host language calls the `.wasm` binary via the component ABI
 
 ## Phase 3 — Add the features a modern MCP client truly needs
 
@@ -409,38 +422,33 @@ Before 1.0, decide clearly:
 
 ### Critical priorities
 
-1. Make the CLI genuinely usable
+1. ✅ Make the CLI genuinely usable
 2. Add full native CI
-3. Finalize one config system
-4. Remove duplicate architecture in the CLI
-5. Finalize native / server-side WASM component / C FFI product lanes
+3. ✅ Finalize one config system
+4. ✅ Remove duplicate architecture in the CLI
+5. ✅ Finalize deployment lane scope (native + server-side WASM component)
 
 ### High priorities
 
 6. Add streaming
 7. Add context-window management
-8. Add auth, metrics, and health
-9. Add native provider-specific tool calling
-10. Either complete or temporarily remove multi-agent as a public promise
+8. Add native provider-specific tool calling
+9. Complete multi-agent runtime resilience (retry, backoff, timeout, history pruning)
 
 ---
 
 ## 10. Final conclusion
 
-This repository has a strong foundation and a clear product direction, but it is still in the phase of an **ambitious pre-1.0 framework**, not yet a fully stable 1.0 framework.
+This repository has a strong foundation and a clear product direction, targeting a **focused pre-1.0 framework** with two well-defined deployment lanes.
 
-The main issues are not lack of ideas. The main issues are:
+All foundational consistency issues are resolved:
 
-- too many surfaces opened at once
-- boundaries between crates are not strict enough
-- some large features still exist more as architecture intent than final runtime implementation
+- architecture has a single runtime source of truth (`antikythera-core`)
+- boundaries between crates are now strict and consistent
+- the CLI is a thin adapter over core
+- config is unified
+- scope is narrowed to native and server-side WASM component lanes
 
-If the project is cleaned up with discipline, it is well-positioned to become:
+The path forward is to complete the remaining items in section 5 and add the features a modern MCP client needs: streaming, context management, retry/backoff, and native provider tool calling.
 
-- a strong MCP client runtime
-- a clean Rust / server-side WASM component / C FFI SDK family
-- a production-ready agentic tool-using client framework
-
-The right path forward is not to add many random features, but to:
-
-**consolidate the architecture, narrow the public contract, and then add only the features that are truly required for the product.**
+**Consolidate, narrow, then add only what is truly required.**

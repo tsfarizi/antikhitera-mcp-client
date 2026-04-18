@@ -29,10 +29,6 @@ flowchart TD
 | Validation | Check whether configuration is usable |
 | Execution flow | Connect agents to tool-capable servers |
 
-## Practical note
-
-The documented management surface is broader than the current placeholder `antikythera` runtime mode. It is more representative of the SDK and integration-oriented parts of the repository.
-
 ## Related documents
 
 - [`CLI.md`](CLI.md)

@@ -46,7 +46,7 @@ pub use application::{agent, client, stdio, tooling};
 pub use cli::{Cli, RunMode};
 pub use config::{AppConfig, ModelProviderConfig};
 pub use domain::types;
-pub use infrastructure::{model, rpc, server};
+pub use infrastructure::{model, rpc};
 
 use application::client::{ClientConfig, McpClient};
 use infrastructure::model::DynamicModelProvider;

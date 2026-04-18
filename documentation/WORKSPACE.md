@@ -23,7 +23,7 @@ flowchart TD
 | Path | Role |
 |:-----|:-----|
 | `antikythera-core/` | Core MCP runtime, agent logic, config loading, providers, and transports |
-| `antikythera-sdk/` | Public API layer for Rust, WASM, FFI, component-facing types, and helper modules |
+| `antikythera-sdk/` | Public API layer for Rust and server-side WASM component bindings, config/session/agent helper modules |
 | `antikythera-cli/` | Native binaries for the current CLI surface |
 | `antikythera-session/` | Session storage, history, and export/import |
 | `antikythera-log/` | Structured logging and subscriptions |

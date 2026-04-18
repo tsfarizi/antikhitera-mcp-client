@@ -1,8 +1,8 @@
 use serde::Serialize;
 use serde_json::Value;
-use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Default, ToSchema)]
+
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct ToolContext {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<ToolDescriptor>,
@@ -16,7 +16,7 @@ impl ToolContext {
     }
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ToolDescriptor {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -27,7 +27,7 @@ pub struct ToolDescriptor {
     pub input_schema: Option<Value>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ServerGuidance {
     pub name: String,
     pub instruction: String,

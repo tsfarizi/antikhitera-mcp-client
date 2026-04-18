@@ -13,13 +13,12 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 /// Configuration for an available tool.
 ///
 /// Tools are synced from MCP servers and define what capabilities
 /// are available to the AI agent.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ToolConfig {
     /// Unique name of the tool (e.g., "get_current_time")
     pub name: String,

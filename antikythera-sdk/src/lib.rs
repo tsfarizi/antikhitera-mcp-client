@@ -1,57 +1,45 @@
 //! # Antikythera SDK
 //!
-//! High-level API wrapper with FFI and WASM bindings for the MCP client.
+//! Server-side WASM component framework for the MCP client.
 //!
-//! ## WASM Target Clarification
+//! ## WASM Target
 //!
-//! This framework targets **server-side WASM** (WASI component model), NOT browser WASM.
+//! This framework targets **server-side WASM** (WASI component model, `wasm32-wasip1`).
 //! The compiled `.wasm` binary is hosted by a native process (Rust, Python, Go, etc.)
-//! that embeds `wasmtime` and calls exports via FFI. The host process handles all
-//! external I/O (LLM calls, tool execution, persistence) through host imports
-//! declared in `wit/antikythera.wit`.
+//! that embeds `wasmtime` and calls exports via the WIT interface.
+//! The host process handles all external I/O (LLM calls, tool execution, persistence)
+//! through host imports declared in `wit/antikythera.wit`.
 //!
 //! Build targets:
-//! - **Server-side WASM component** (primary): `cargo component build --target wasm32-wasip1`
+//! - **Server-side WASM component**: `cargo component build --target wasm32-wasip1`
 //! - **Native Rust** (CLI, tests, embedding): `cargo build`
-//! - **Native FFI** (C/C++/Python via cdylib): `cargo build --release --features ffi`
-//! - **Browser WASM** (secondary, optional): `cargo build --target wasm32-unknown-unknown`
-//!   — this path exists but is NOT the primary integration target.
 //!
 //! ## Architecture
 //!
-//! This SDK follows **Vertical Slice Architecture (VSA)** where each feature
-//! is organized as a self-contained slice with types, logic, and FFI bindings.
+//! The SDK is organized as a set of modules that support both native and server-side WASM builds.
 //!
 //! ```text
 //! src/
-//! ├── client/        - MCP Client (browser WASM bindings — secondary target)
-//! ├── prompts/       - Prompt Template Management
-//! ├── servers/       - MCP Server Management
-//! ├── agents/        - Multi-Agent Management
-//! ├── response/      - Response Formatting (JSON/Markdown/Text)
+//! ├── component/     - Server-side WASM Component (Host Imports/Exports via WIT)
+//! ├── wasm_agent/    - WASM Agent FSM and LLM response processing
 //! ├── config/        - Binary Configuration (Postcard)
-//! ├── component/     - Server-side WASM Component (Host Imports via WIT)
-//! └── high_level_api.rs - Native Rust API
+//! ├── session/       - Session Management and History
+//! ├── prompts/       - Prompt Template Management
+//! ├── response/      - Response Formatting
+//! └── high_level_api.rs - Native Rust API (native builds only)
 //! ```
 //!
 //! ## Feature Flags
 //!
 //! - `component` - Server-side WASM component model (primary WASM target)
-//! - `wasm` - Browser WASM bindings via wasm-bindgen (secondary, optional)
-//! - `ffi` - FFI support for C bindings (native cdylib)
 //! - `single-agent` - Single agent support (default)
 //! - `multi-agent` - Multi-agent orchestration support
 //!
 //! ## Examples
 //!
-//! ### Server-side WASM component build (primary target)
+//! ### Server-side WASM component build
 //! ```bash
 //! cargo component build --target wasm32-wasip1 --release
-//! ```
-//!
-//! ### Native FFI build
-//! ```bash
-//! cargo build -p antikythera-sdk --release --features ffi
 //! ```
 
 // Re-export core types
@@ -72,13 +60,6 @@ pub use antikythera_core::application::agent::multi_agent::{
 // Vertical Slice Features
 // ============================================================================
 
-/// MCP Client feature slice (WASM bindings)
-#[cfg(all(feature = "wasm", feature = "sdk-core"))]
-pub mod client;
-
-#[cfg(all(feature = "wasm", feature = "sdk-core"))]
-pub use client::{WasmClient, init as wasm_init};
-
 /// Prompt Management feature slice
 #[cfg(feature = "sdk-core")]
 pub mod prompts;
@@ -88,33 +69,6 @@ pub use prompts::{
     mcp_get_template, mcp_update_template, mcp_reset_template,
     mcp_get_tool_guidance, mcp_update_tool_guidance,
     mcp_get_all_prompts,
-};
-
-/// Server Management feature slice
-pub mod servers;
-
-pub use servers::{
-    // Types
-    McpServerConfig, ServerTransport, ServerValidationResult,
-    ServerStatus, ServerOperationResult,
-    // FFI
-    mcp_add_server, mcp_remove_server, mcp_list_servers,
-    mcp_get_server, mcp_validate_server, mcp_export_servers_config,
-    mcp_import_servers_config,
-};
-
-/// Agent Management feature slice
-pub mod agents;
-
-pub use agents::{
-    // Types
-    AgentConfig, AgentType, SkillLevel, AgentCapability,
-    AgentValidationResult, AgentStatus, AgentTaskRequest,
-    AgentTaskResult, OrchestrationResult,
-    // FFI
-    mcp_register_agent, mcp_unregister_agent, mcp_list_agents,
-    mcp_get_agent, mcp_get_agent_status, mcp_validate_agent,
-    mcp_export_agents_config, mcp_import_agents_config,
 };
 
 /// Response Formatting feature slice
@@ -138,31 +92,6 @@ pub use config::{
     CONFIG_PATH as POSTCARD_CONFIG_PATH,
 };
 
-/// Configuration FFI (Postcard-based)
-#[cfg(feature = "sdk-core")]
-pub mod config_ffi;
-
-#[cfg(feature = "sdk-core")]
-pub use config_ffi::{
-    // Core config FFI
-    mcp_config_init, mcp_config_exists, mcp_config_size,
-    mcp_config_get_all, mcp_config_set_all,
-    mcp_config_export, mcp_config_import, mcp_config_reset,
-    mcp_config_use_from, mcp_config_backup_to,
-    // Field-level FFI
-    mcp_config_get, mcp_config_set,
-    // Provider FFI
-    mcp_config_add_provider, mcp_config_remove_provider, mcp_config_list_providers,
-    mcp_config_set_provider_api_key, mcp_config_get_provider_api_key,
-    mcp_config_add_provider_model, mcp_config_remove_provider_model,
-    mcp_config_list_provider_models,
-    // Prompt FFI
-    mcp_config_get_prompt, mcp_config_set_prompt, mcp_config_list_prompts,
-    // Agent FFI
-    mcp_config_get_agent, mcp_config_set_agent_max_steps,
-    mcp_config_set_agent_verbose, mcp_config_set_agent_auto_execute,
-};
-
 /// JSON Schema Validation (enforce JSON output format)
 pub mod json_schema;
 
@@ -171,18 +100,6 @@ pub use json_schema::{
     JsonSchema, ValidationError,
     // Validator
     JsonValidator, RetryManager,
-    // FFI Functions
-    ffi::mcp_json_schema_register,
-    ffi::mcp_json_schema_get,
-    ffi::mcp_json_schema_list,
-    ffi::mcp_json_schema_remove,
-    ffi::mcp_json_schema_example,
-    ffi::mcp_json_validate,
-    ffi::mcp_json_schema_prompt,
-    ffi::mcp_json_retry_init,
-    ffi::mcp_json_retry_record_error,
-    ffi::mcp_json_retry_prompt,
-    ffi::mcp_json_retry_is_exhausted,
 };
 
 /// Session Management module
@@ -197,16 +114,6 @@ pub use session::{
     SessionLogExport, BatchLogExport,
     // Manager
     SdkSessionManager,
-    // FFI - Session management
-    mcp_session_create, mcp_session_get, mcp_session_list,
-    mcp_session_add_message, mcp_session_get_history,
-    mcp_session_export, mcp_session_import,
-    mcp_session_delete, mcp_session_clear,
-    mcp_batch_export, mcp_batch_import,
-    // FFI - Session log integration
-    mcp_session_export_logs, mcp_session_import_logs,
-    mcp_session_get_logs, mcp_session_batch_export_logs,
-    mcp_session_batch_import_logs,
 };
 
 /// SDK Logging module
@@ -238,7 +145,7 @@ pub use wasm_agent::{
     validate_json_schema,
 };
 
-/// WASM Component feature slice (Host Imports)
+/// WASM Component feature slice (Host Imports/Exports)
 #[cfg(feature = "component")]
 pub mod component;
 
@@ -247,7 +154,7 @@ pub use component::{
     // Host Import Types
     LlmRequest, LlmResponse, ToolCallEvent, ToolExecutionResult, LogEvent,
     HostImports, DelegatingAgent,
-    // FFI
+    // Host functions
     run_agent_with_host,
 };
 
@@ -261,16 +168,3 @@ pub mod high_level_api;
 
 /// SDK version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Initialize the SDK
-pub fn init() {
-    #[cfg(all(feature = "wasm", feature = "sdk-core"))]
-    wasm_init();
-
-    #[cfg(not(all(feature = "wasm", feature = "sdk-core")))]
-    {
-        use std::io::Write;
-        let _ = writeln!(std::io::stdout(), "Antikythera SDK v{} initialized", VERSION);
-        let _ = std::io::stdout().flush();
-    }
-}

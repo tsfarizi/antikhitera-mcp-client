@@ -1,10 +1,9 @@
 //! Content types mirroring MCP server types.
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 /// Metadata for file content.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct FileMetadata {
     /// Original filename with extension
@@ -18,7 +17,7 @@ pub struct FileMetadata {
 }
 
 /// File content with metadata and base64-encoded data.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct FileContent {
     /// File metadata
@@ -52,7 +51,7 @@ impl FileContent {
 }
 
 /// Content item from MCP tool output.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentItem {
     /// Content type ("text" or "resource")
