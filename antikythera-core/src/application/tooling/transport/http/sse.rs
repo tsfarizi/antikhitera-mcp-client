@@ -71,6 +71,7 @@ pub fn start_sse_listener(
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 pub fn start_sse_listener(
     _client: Client,
     _name: String,

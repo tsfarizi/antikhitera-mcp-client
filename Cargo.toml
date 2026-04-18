@@ -48,7 +48,7 @@ tracing = { version = "0.1.44", features = ["log"] }
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 
 # Utilities
-uuid = { version = "1.23.0", features = ["v4", "js"] }
+uuid = { version = "1.23.0", features = ["v4"] }
 base64 = "0.22"
 chrono = { version = "0.4.44", features = ["serde"] }
 sysinfo = "0.38.4"
