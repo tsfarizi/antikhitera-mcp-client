@@ -55,11 +55,10 @@ single-agent = ["sdk-core", "antikythera-core/native-transport"]
 multi-agent = ["sdk-core", "antikythera-core/multi-agent"]
 
 # Optional capabilities
-cloud = ["sdk-core", "antikythera-core/gcp"]
 wasm-sandbox = ["sdk-core", "antikythera-core/wasm-runtime"]
 
 # Full-featured build (not recommended for WASM - large binary)
-full = ["wasm", "multi-agent", "cloud", "antikythera-core/full"]
+full = ["wasm", "multi-agent", "antikythera-core/full"]
 
 [dependencies]
 # Core with configurable features - SDK enables what it needs through feature wiring

@@ -64,10 +64,6 @@ ffi-support = "0.4"
 utoipa = "5.4"
 utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
 
-# Multi-Agent support (optional)
-redis = { version = "1.2.0", features = ["tokio-comp", "connection-manager"] }
-google-cloud-storage = { version = "1.10.0" }
-
 [profile.release]
 lto = true
 codegen-units = 1

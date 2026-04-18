@@ -78,7 +78,7 @@ Some features appear in manifests and docs before their runtime behavior is trul
 **Changes made:**
 - `antikythera-core/Cargo.toml` now documents maturity for each feature flag:
   - `wizard` — marked ✅ STABLE
-  - `multi-agent` — marked ✅ STABLE (v0.9.6): full orchestration; redis/gcs moved to `multi-agent-redis` / `multi-agent-gcs` sub-features
+  - `multi-agent` — marked ✅ STABLE (v0.9.6): full orchestration; storage backends removed (storage is host's responsibility)
   - `wasm-runtime` — marked ✅ STABLE (v0.9.6): `WasmAgentRunner` via wasmtime; wasm-bindgen removed (host-side only)
 
 
@@ -100,7 +100,11 @@ The `multi-agent` feature previously contained only `AgentRegistry` (CRUD for ag
 
 `AgentProfile` extended with `system_prompt: Option<String>` and `max_steps: Option<usize>` (both `#[serde(default)]` for backward compatibility).
 
-Feature flag cleaned up: `multi-agent = []` (no external deps required for core orchestration). Optional `multi-agent-redis` and `multi-agent-gcs` sub-features added for future distributed state.
+Feature flag cleaned up: `multi-agent = []` (no external dependencies required for core orchestration).
+All persistent state storage (Redis, GCS, filesystem, databases) is the exclusive responsibility
+of the HOST that embeds this framework. The WASM component only produces and consumes serialized
+state blobs via WIT host imports (`save-state` / `load-state`); where and how that state is stored
+is entirely up to the host language (Python, Go, TypeScript, Rust, etc.).
 
 **`wasm-runtime` feature — wasmtime integration**
 

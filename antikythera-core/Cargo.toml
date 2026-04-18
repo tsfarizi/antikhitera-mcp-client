@@ -9,9 +9,6 @@ description = "Core MCP protocol, transport layers, and agent runtime"
 [features]
 default = ["native-transport"]
 
-# Cloud integrations (Google Cloud Storage, Secret Manager)
-gcp = []
-
 # Sandboxed tool execution via a WASM component model runtime.
 # ✅ STABLE: Runs .wasm modules as sandboxed agents via wasmtime.
 # See `infrastructure::wasm::WasmAgentRunner` for the module ABI.
@@ -32,13 +29,11 @@ wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
 # ✅ STABLE: Full orchestration with scheduling, routing, and pipeline execution.
 # See `application::agent::multi_agent::orchestrator::MultiAgentOrchestrator`.
 # No external dependencies required for core orchestration.
+# NOTE: All persistent state storage (Redis, GCS, filesystem, etc.) is the
+# responsibility of the HOST that embeds this framework. The WASM component
+# exposes serializable state via WIT host imports (save-state / load-state);
+# how and where that state is persisted is entirely up to the host.
 multi-agent = []
-
-# Optional: Redis-backed distributed state for multi-agent contexts.
-multi-agent-redis = ["multi-agent", "dep:redis"]
-
-# Optional: Google Cloud Storage-backed distributed state for multi-agent contexts.
-multi-agent-gcs = ["multi-agent", "dep:google-cloud-storage"]
 
 # LLM HTTP provider clients (Gemini, OpenAI-compatible, Ollama).
 #
@@ -56,7 +51,7 @@ multi-agent-gcs = ["multi-agent", "dep:google-cloud-storage"]
 http-providers = []
 
 # Full-featured build (all capabilities)
-full = ["gcp", "wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "http-providers", "dep:axum", "dep:tower-http", "dep:utoipa-swagger-ui"]
+full = ["wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "http-providers", "dep:axum", "dep:tower-http", "dep:utoipa-swagger-ui"]
 
 [dependencies]
 # Core async runtime
@@ -105,10 +100,6 @@ ratatui = { workspace = true, optional = true }
 # WASM runtime (optional, for sandboxed execution)
 wasmtime = { version = "15.0", optional = true }
 anyhow = { version = "1.0", optional = true }
-
-# Multi-Agent support (optional)
-redis = { workspace = true, optional = true }
-google-cloud-storage = { workspace = true, optional = true }
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 uuid = { workspace = true, features = ["js"] }
