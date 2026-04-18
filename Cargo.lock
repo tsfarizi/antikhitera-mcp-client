@@ -105,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-cli"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "antikythera-core",
  "antikythera-sdk",
@@ -133,9 +133,10 @@ dependencies = [
 
 [[package]]
 name = "antikythera-core"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "antikythera-log",
+ "anyhow",
  "async-trait",
  "axum",
  "base64 0.22.1",
@@ -165,14 +166,12 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "wasmtime",
 ]
 
 [[package]]
 name = "antikythera-log"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -185,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-sdk"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "antikythera-core",
  "antikythera-log",
@@ -213,7 +212,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-session"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "antikythera-log",
  "chrono",
@@ -226,7 +225,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-tests"
-version = "0.9.0"
+version = "0.9.6"
 dependencies = [
  "antikythera-core",
  "antikythera-log",
@@ -481,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "build-scripts"
-version = "0.9.5"
+version = "0.9.6"
 
 [[package]]
 name = "bumpalo"

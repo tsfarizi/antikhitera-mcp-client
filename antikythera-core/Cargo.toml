@@ -13,9 +13,10 @@ default = ["native-transport"]
 gcp = []
 
 # Sandboxed tool execution via a WASM component model runtime.
-# ⚠️ EXPERIMENTAL: The WASM component integration is in progress.
-# Do not use in production.
-wasm-runtime = ["dep:wasmtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+# ✅ STABLE: Runs .wasm modules as sandboxed agents via wasmtime.
+# See `infrastructure::wasm::WasmAgentRunner` for the module ABI.
+# Requires a `rt-multi-thread` tokio runtime (native builds only).
+wasm-runtime = ["dep:wasmtime", "dep:anyhow"]
 
 # OS-level process management (Stdio transport)
 native-transport = ["tokio/process", "dep:sysinfo"]
@@ -27,10 +28,17 @@ cache = []
 # ✅ STABLE: Component model is complete; suitable for production use.
 wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
 
-# Multi-Agent orchestration support (agent registry, scheduling, message routing).
-# ⚠️ EXPERIMENTAL: The registry API is functional, but full orchestration
-# (multi-agent scheduling and inter-agent message routing) is not yet implemented.
-multi-agent = ["dep:redis", "dep:google-cloud-storage"]
+# Multi-Agent orchestration support.
+# ✅ STABLE: Full orchestration with scheduling, routing, and pipeline execution.
+# See `application::agent::multi_agent::orchestrator::MultiAgentOrchestrator`.
+# No external dependencies required for core orchestration.
+multi-agent = []
+
+# Optional: Redis-backed distributed state for multi-agent contexts.
+multi-agent-redis = ["multi-agent", "dep:redis"]
+
+# Optional: Google Cloud Storage-backed distributed state for multi-agent contexts.
+multi-agent-gcs = ["multi-agent", "dep:google-cloud-storage"]
 
 # LLM HTTP provider clients (Gemini, OpenAI-compatible, Ollama).
 #
@@ -57,7 +65,7 @@ futures.workspace = true
 async-trait.workspace = true
 
 # Logging
-antikythera-log = { path = "../antikythera-log", version = "0.9.0", features = ["subscriber"] }
+antikythera-log = { path = "../antikythera-log", version = "0.9.6", features = ["subscriber"] }
 
 # HTTP and networking
 reqwest.workspace = true
@@ -93,12 +101,9 @@ clap = { workspace = true, optional = true }
 crossterm = { workspace = true, optional = true }
 ratatui = { workspace = true, optional = true }
 
-# WASM support (optional)
-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
-
 # WASM runtime (optional, for sandboxed execution)
 wasmtime = { version = "15.0", optional = true }
+anyhow = { version = "1.0", optional = true }
 
 # Multi-Agent support (optional)
 redis = { workspace = true, optional = true }

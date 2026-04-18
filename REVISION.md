@@ -53,7 +53,7 @@ This is one of the largest consistency problems in the workspace.
 Important examples:
 
 - ~~the FSM-based agent path is not fully complete~~ **FIXED**: `transition()` fully implemented with all valid state transitions; `is_terminal()` fixed to include `FinalMessage`; 22 unit tests added
-- ~~multi-agent is closer to a stub than a production orchestration runtime~~ **IMPROVED**: Registry stub comments removed; `remove()` and `count()` methods added; Cargo.toml now clearly marks `multi-agent` as EXPERIMENTAL
+- ~~multi-agent is closer to a stub than a production orchestration runtime~~ **FULLY IMPLEMENTED (v0.9.6)**: Complete orchestration runtime with `ExecutionMode` (Auto/Sequential/Concurrent/Parallel), `TaskScheduler`, four `AgentRouter` implementations (`DirectRouter`, `RoundRobinRouter`, `FirstAvailableRouter`, `RoleRouter`), `MultiAgentOrchestrator`, pipeline execution, and CLI integration via `--mode multi-agent`
 - JSON-RPC session flows are not fully wired into real session handling *(deferred — out of 3.x scope)*
 - the WASM/component path exposes structure, but not all of it is production-complete *(deferred — out of 3.x scope)*
 
@@ -78,8 +78,65 @@ Some features appear in manifests and docs before their runtime behavior is trul
 **Changes made:**
 - `antikythera-core/Cargo.toml` now documents maturity for each feature flag:
   - `wizard` — marked ✅ STABLE
-  - `multi-agent` — marked ⚠️ EXPERIMENTAL with specific caveats (registry only; scheduling/routing not yet implemented)
-  - `wasm-runtime` — marked ⚠️ EXPERIMENTAL with component-model caveat
+  - `multi-agent` — marked ✅ STABLE (v0.9.6): full orchestration; redis/gcs moved to `multi-agent-redis` / `multi-agent-gcs` sub-features
+  - `wasm-runtime` — marked ✅ STABLE (v0.9.6): `WasmAgentRunner` via wasmtime; wasm-bindgen removed (host-side only)
+
+
+---
+
+## 3.5 Multi-agent orchestration and WASM runtime ✅ RESOLVED (v0.9.6)
+
+**`multi-agent` feature — full orchestration runtime**
+
+The `multi-agent` feature previously contained only `AgentRegistry` (CRUD for agent profiles). In v0.9.6 the following modules were added under `antikythera-core::application::agent::multi_agent`:
+
+| Module | Contents |
+|---|---|
+| `execution` | `ExecutionMode` enum: `Auto` (tokio::spawn per task), `Sequential` (loop+await), `Concurrent` (FuturesUnordered, no spawn), `Parallel { workers }` (spawn + Semaphore) |
+| `task` | `AgentTask` (builder pattern), `TaskResult` (success/failure), `PipelineResult` |
+| `router` | `AgentRouter` trait, `DirectRouter`, `RoundRobinRouter`, `FirstAvailableRouter`, `RoleRouter` |
+| `scheduler` | `TaskScheduler<T, F>` — generic over task type and executor closure; respects `ExecutionMode` |
+| `orchestrator` | `MultiAgentOrchestrator<P>` — `dispatch()`, `dispatch_many()`, `pipeline()` |
+
+`AgentProfile` extended with `system_prompt: Option<String>` and `max_steps: Option<usize>` (both `#[serde(default)]` for backward compatibility).
+
+Feature flag cleaned up: `multi-agent = []` (no external deps required for core orchestration). Optional `multi-agent-redis` and `multi-agent-gcs` sub-features added for future distributed state.
+
+**`wasm-runtime` feature — wasmtime integration**
+
+Added `antikythera-core::infrastructure::wasm::WasmAgentRunner`. The runner:
+- Accepts raw WASM bytes or a file path
+- Runs the module via wasmtime with a sandboxed `Store`
+- Registers a `antikythera::call_llm_sync(ptr, len) -> i64` host import so WASM agents can call the LLM without managing threads
+- Executes the module's `antikythera_run(ptr, len) -> i64` export
+- Runs synchronous wasmtime code inside `tokio::task::spawn_blocking` so async callers are not blocked
+
+WASM module ABI:
+```
+exports: antikythera_alloc(i32) -> i32
+         antikythera_dealloc(i32, i32)
+         antikythera_run(i32, i32) -> i64
+imports: antikythera::call_llm_sync(i32, i32) -> i64
+```
+
+`wasm-runtime` feature now requires only `dep:wasmtime` (and `dep:anyhow`). `wasm-bindgen` and `wasm-bindgen-futures` were removed — this feature is for *hosting* WASM natively, not compiling to WASM.
+
+**WIT interface updated**
+
+`wit/antikythera.wit` gained a `multi-agent-runner` interface with six functions (`init-orchestrator`, `register-agent`, `dispatch-task`, `dispatch-tasks`, `pipeline-tasks`, `get-status`) that all exchange JSON strings for WASM compatibility. The `antikythera-agent` world exports this interface.
+
+**CLI integration**
+
+`--mode multi-agent` added to the `antikythera` binary with supporting flags:
+- `--agents <path>` — JSON file containing agent profile array
+- `--task <text>` — inline task text (or pipe from stdin)
+- `--target-agent <id>` — route directly to a specific agent (uses `DirectRouter`)
+- `--execution-mode <spec>` — `auto` (default), `sequential`, `concurrent`, `parallel:N`
+
+Example:
+```bash
+mcp --mode multi-agent --agents agents.json --task "Review this code" --execution-mode parallel:4
+```
 
 
 ---

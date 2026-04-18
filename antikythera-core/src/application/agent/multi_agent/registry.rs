@@ -12,12 +12,34 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 
-/// Agent profile identifier
+/// Agent profile descriptor.
+///
+/// Profiles are stored in the [`AgentRegistry`] and consulted by the
+/// orchestrator when building [`AgentOptions`] for each task.
+///
+/// All fields added after the initial release are `#[serde(default)]` for
+/// backwards-compatible deserialization from existing JSON/TOML configs.
+///
+/// [`AgentOptions`]: crate::application::agent::AgentOptions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentProfile {
+    /// Unique identifier used for routing and look-ups.
     pub id: String,
+    /// Display name shown in logs and CLI output.
     pub name: String,
+    /// Semantic role label (e.g. `"code-reviewer"`, `"data-analyst"`).
     pub role: String,
+    /// System prompt injected into the agent's context.
+    ///
+    /// When `None` the agent uses the client's default instructions.
+    #[serde(default)]
+    pub system_prompt: Option<String>,
+    /// Maximum reasoning steps for this agent.
+    ///
+    /// Per-task `max_steps` overrides this value.  Falls back to 8 when both
+    /// are `None`.
+    #[serde(default)]
+    pub max_steps: Option<usize>,
 }
 
 /// Agent role enum
@@ -54,6 +76,7 @@ impl ContextId {
 }
 
 /// Agent Registry - manages multiple agent profiles with sandboxing
+#[derive(Clone)]
 pub struct AgentRegistry<P> {
     profiles: HashMap<String, AgentProfile>,
     _provider: PhantomData<P>,

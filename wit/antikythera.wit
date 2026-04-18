@@ -257,6 +257,73 @@ interface session-manager {
 // World definition
 // ============================================================================
 
+/// Multi-agent orchestration runner (FFI-facing).
+///
+/// All parameters and return values are JSON strings so the interface stays
+/// WASM-component-friendly.  The host language specifies execution preferences
+/// via the `orchestrator-config` JSON rather than managing threads directly.
+///
+/// # Execution mode string format
+///
+/// - `"auto"`         — default; tokio concurrency, efficient on any thread count
+/// - `"sequential"`   — tasks run one after another in order
+/// - `"concurrent"`   — concurrent async on the calling thread (no spawning)
+/// - `"parallel:N"`   — spawn N concurrent tasks (e.g. `"parallel:4"`)
+interface multi-agent-runner {
+    /// Initialise (or re-initialise) the orchestrator.
+    ///
+    /// `config-json` must deserialise to:
+    /// ```json
+    /// { "execution_mode": "auto" }
+    /// ```
+    /// Returns `true` on success.
+    init-orchestrator(config-json: string) -> result<bool, string>;
+
+    /// Register an agent profile.
+    ///
+    /// `profile-json` must deserialise to:
+    /// ```json
+    /// {
+    ///   "id": "reviewer",
+    ///   "name": "Code Reviewer",
+    ///   "role": "code-review",
+    ///   "system_prompt": "You are an expert code reviewer.",
+    ///   "max_steps": 10
+    /// }
+    /// ```
+    register-agent(profile-json: string) -> result<bool, string>;
+
+    /// Dispatch a single task and return the JSON-encoded `TaskResult`.
+    ///
+    /// `task-json` must deserialise to:
+    /// ```json
+    /// {
+    ///   "task_id": "uuid",
+    ///   "agent_id": "reviewer",
+    ///   "input": "Review my PR",
+    ///   "session_id": null,
+    ///   "max_steps": null
+    /// }
+    /// ```
+    dispatch-task(task-json: string) -> result<string, string>;
+
+    /// Dispatch multiple tasks.
+    ///
+    /// `tasks-json` is a JSON array of task objects (same schema as
+    /// `dispatch-task`).  Returns a JSON array of `TaskResult` objects.
+    dispatch-tasks(tasks-json: string) -> result<string, string>;
+
+    /// Execute tasks as a sequential pipeline.
+    ///
+    /// Each task's output is injected as context into the next task's input.
+    /// Returns a JSON-encoded `PipelineResult`.
+    pipeline-tasks(tasks-json: string) -> result<string, string>;
+
+    /// Return a JSON object with orchestrator status:
+    /// `{ "agent_count": N, "execution_mode": "auto" }`
+    get-status() -> result<string, string>;
+}
+
 world antikythera-agent {
     /// Import dari host (I/O operations - host responsibility)
     import host-imports;
@@ -266,4 +333,5 @@ world antikythera-agent {
     export json-schema-validator;
     export prompt-manager;
     export session-manager;
+    export multi-agent-runner;
 }
