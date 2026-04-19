@@ -140,10 +140,20 @@ Target: Production-grade observability, resilience, and enterprise deployment.
 - Provider replica and load-balancing primitives
 
 **Priority 4: Advanced Streaming (Phase 2)**
-- Streaming tool results and intermediate outputs
-- Streaming summaries from context management
-- Buffered and unbuffered streaming modes
-- Client-side streaming for large inputs
+- ✅ **Module**: `antikythera-core::application::streaming` (extended)
+- **Scope**:
+  - `AgentEvent::ToolResult` — streaming chunks of tool-execution output with `is_final` signal
+  - `AgentEvent::Summary` — streaming context-management summarisation chunks with `original_message_count`
+  - `BufferPolicy` — `Unbuffered` vs `Buffered { flush_threshold }` flush control
+  - `StreamingBuffer` — accumulates events and signals when a batch is ready to flush
+  - `ClientInputStream` — host-side chunked input for large payloads (stdin, file uploads)
+  - `StreamingPhase2Options` — opt-in config embedded in `StreamingRequest::phase2`
+  - `InMemoryStreamingResponse` updated with Phase 2 event filtering
+  - Unit tests: 27 passing (10 Phase 1 + 17 Phase 2) ✅
+  - Integration tests: 8 passing (4 Phase 1 + 4 Phase 2) ✅
+  - Documentation: `documentation/STREAMING.md` updated ✅
+- **Backward compatibility**: Phase 2 is opt-in via `StreamingRequest::phase2 = None` default; all Phase 1 APIs unchanged
+- **Deliverables**: Code + tests + docs + clippy ✅
 
 **Priority 5: Pre-1.0 Contract Freeze**
 - Final API documentation and stability guarantees

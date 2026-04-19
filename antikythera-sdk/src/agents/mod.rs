@@ -74,6 +74,7 @@ impl StreamingOptions {
             mode: self.mode.into(),
             include_final_response: self.include_final_response,
             max_buffered_events: self.max_buffered_events,
+            phase2: None,
         }
     }
 }

@@ -42,6 +42,7 @@ pub use observability::{
     TraceSpanContext, TraceStatus, TracingHook,
 };
 pub use streaming::{
-    AgentEvent, AgentEventStream, InMemoryStreamingResponse, StreamingMode, StreamingRequest,
-    StreamingResponse, StreamingSnapshot, ToolEventPhase,
+    AgentEvent, AgentEventStream, BufferPolicy, ClientInputStream, InMemoryStreamingResponse,
+    StreamingBuffer, StreamingMode, StreamingPhase2Options, StreamingRequest, StreamingResponse,
+    StreamingSnapshot, ToolEventPhase,
 };
