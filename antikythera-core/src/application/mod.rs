@@ -6,6 +6,7 @@
 //!
 //! - [`client`] - The main MCP client for communicating with AI models
 //! - [`agent`] - Autonomous agent that can use tools and execute multi-step tasks
+//! - [`context_management`] - Message history and context window management
 //! - [`discovery`] - Auto-discovery and loading of MCP servers from a folder
 //! - [`stdio`] - Standard input/output interface for command-line interaction
 //! - [`tooling`] - Tool server management and MCP server integration
@@ -15,6 +16,7 @@
 
 pub mod agent;
 pub mod client;
+pub mod context_management;
 pub mod discovery;
 pub mod observability;
 pub mod resilience;
