@@ -29,6 +29,26 @@ name = "sdk_config"
 path = "sdk/config/config_tests.rs"
 
 # ============================================================================
+# WASM Agent Tests (requires component feature)
+# ============================================================================
+
+[[test]]
+name = "wasm_agent_processor_tests"
+path = "sdk/wasm_agent/processor_tests.rs"
+
+[[test]]
+name = "wasm_agent_runner_tests"
+path = "sdk/wasm_agent/runner_tests.rs"
+
+# ============================================================================
+# Multi-Agent Hardening Tests
+# ============================================================================
+
+[[test]]
+name = "multi_agent_hardening_tests"
+path = "multi_agent/hardening_tests.rs"
+
+# ============================================================================
 # Resilience Module Tests
 # ============================================================================
 
@@ -44,7 +64,7 @@ path = "resilience/resilience_tests.rs"
 antikythera-log = { path = "../antikythera-log" }
 antikythera-session = { path = "../antikythera-session" }
 antikythera-core = { path = "../antikythera-core", features = ["full"] }
-antikythera-sdk = { path = "../antikythera-sdk" }
+antikythera-sdk = { path = "../antikythera-sdk", features = ["component"] }
 serde_json.workspace = true
 chrono.workspace = true
 tempfile = "3.10"

@@ -93,6 +93,7 @@ async fn execute_task<P: ModelProvider>(
     }
 
     let mut attempt: u8 = 0;
+    #[allow(unused_assignments)] // initial None is overwritten in every Err branch before use
     let mut last_error: Option<String> = None;
 
     loop {
