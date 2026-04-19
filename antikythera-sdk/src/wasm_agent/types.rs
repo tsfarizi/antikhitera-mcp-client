@@ -56,21 +56,6 @@ pub struct ContextPolicy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ProviderPolicyKey {
-    pub provider: Option<String>,
-    pub model: Option<String>,
-}
-
-impl ProviderPolicyKey {
-    pub fn as_map_key(&self) -> Option<String> {
-        match (&self.provider, &self.model) {
-            (Some(provider), Some(model)) => Some(format!("{}::{}", provider, model)),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ContextSummary {
     pub version: u64,
     pub text: String,

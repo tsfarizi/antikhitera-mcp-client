@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::processor::{build_llm_messages, process_llm_response, process_tool_result};
 use super::types::{
-    AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary, ProviderPolicyKey,
+    AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary,
     StreamEvent, StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolResult,
     TruncationStrategy,
 };
@@ -28,8 +28,6 @@ struct PrepareUserTurnInput {
     pub system_prompt: Option<String>,
     pub force_json: Option<bool>,
     pub metadata_json: Option<String>,
-    pub provider: Option<String>,
-    pub model: Option<String>,
     pub correlation_id: Option<String>,
     pub context_policy: Option<ContextPolicy>,
 }
@@ -42,8 +40,6 @@ struct PreparedTurn {
     pub system_prompt: String,
     pub force_json: bool,
     pub metadata_json: Option<String>,
-    pub provider: Option<String>,
-    pub model: Option<String>,
     pub correlation_id: Option<String>,
     pub summary_handoff: Option<ContextSummary>,
     pub messages_json: String,
@@ -69,8 +65,6 @@ struct ToolResultInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ContextPolicyUpdateInput {
-    pub provider: Option<String>,
-    pub model: Option<String>,
     pub policy: ContextPolicy,
 }
 
@@ -125,7 +119,6 @@ impl SessionRuntime {
 struct AgentRunnerRuntime {
     sessions: HashMap<String, SessionRuntime>,
     default_config: AgentConfig,
-    policy_overrides: HashMap<String, ContextPolicy>,
 }
 
 impl AgentRunnerRuntime {
@@ -141,19 +134,6 @@ impl AgentRunnerRuntime {
         if let Some(policy) = &request.context_policy {
             return policy.clone();
         }
-
-        let key = ProviderPolicyKey {
-            provider: request.provider.clone(),
-            model: request.model.clone(),
-        }
-        .as_map_key();
-
-        if let Some(key) = key {
-            if let Some(policy) = self.policy_overrides.get(&key) {
-                return policy.clone();
-            }
-        }
-
         self.default_config.context_policy.clone()
     }
 
@@ -190,17 +170,6 @@ impl AgentRunnerRuntime {
     fn set_context_policy(&mut self, policy_json: &str) -> Result<bool, String> {
         let input: ContextPolicyUpdateInput = serde_json::from_str(policy_json)
             .map_err(|e| format!("Invalid context-policy-json: {e}"))?;
-
-        if let Some(key) = (ProviderPolicyKey {
-            provider: input.provider,
-            model: input.model,
-        })
-        .as_map_key()
-        {
-            self.policy_overrides.insert(key, input.policy);
-            return Ok(true);
-        }
-
         self.default_config.context_policy = input.policy;
         Ok(true)
     }
@@ -305,8 +274,6 @@ impl AgentRunnerRuntime {
             input.correlation_id.clone(),
             serde_json::json!({
                 "messages_count": messages.len(),
-                "provider": input.provider,
-                "model": input.model,
             }),
         );
 
@@ -317,8 +284,6 @@ impl AgentRunnerRuntime {
             system_prompt,
             force_json: input.force_json.unwrap_or(false),
             metadata_json: input.metadata_json,
-            provider: input.provider,
-            model: input.model,
             correlation_id: input.correlation_id,
             summary_handoff: summary.or_else(|| runtime.state.rolling_summary.clone()),
             messages_json: serde_json::to_string(&messages)

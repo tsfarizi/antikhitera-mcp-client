@@ -136,7 +136,7 @@ pub mod wasm_agent;
 pub use wasm_agent::{
     // Types
     AgentAction, AgentState, WasmAgentConfig,
-    AgentMessage, ContextPolicy, ContextSummary, ProviderPolicyKey,
+    AgentMessage, ContextPolicy, ContextSummary,
     PromptVariables, StreamEvent, StreamEventKind, TelemetrySnapshot,
     ToolCall, ToolResult, TruncationStrategy,
     // Processor

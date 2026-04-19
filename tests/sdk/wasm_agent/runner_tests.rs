@@ -1,7 +1,7 @@
 ﻿//! Centralized tests for the WASM agent runner.
 //!
 //! Covers: session lifecycle, commit flows (plain text + structured tool call),
-//! streaming commit, telemetry counters, context-policy provider/model override,
+//! streaming commit, telemetry counters, global context-policy update,
 //! and rolling summarization with the `KeepBalanced` truncation strategy.
 
 use antikythera_sdk::wasm_agent::runner::{
@@ -139,11 +139,11 @@ fn telemetry_counters_increment_per_turn() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. set_context_policy -- per-provider/model override applied in next turn
+// 5. set_context_policy -- global policy applied in next turn
 // ---------------------------------------------------------------------------
 
 #[test]
-fn set_context_policy_provider_override_applied_on_matching_provider_model() {
+fn set_context_policy_applies_global_policy_on_next_turn() {
     // Inline high-threshold policy in every prepare call prevents concurrent init() calls
     // from other tests from mutating the global default_config and triggering early
     // summarization on this session.
@@ -172,12 +172,10 @@ fn set_context_policy_provider_override_applied_on_matching_provider_model() {
         commit_llm_response(&prepared, &format!("reply {i}")).unwrap();
     }
 
-    // Override policy for provider="p-runner-test", model="m-runner-test":
-    // summarize after only 4 messages -- 8 > 4 -- triggers on next prepare with matching pair.
+    // Override global policy to summarize after only 4 messages.
+    // Since history is already 8 messages, this triggers on next prepare.
     let override_ok = set_context_policy(
         &serde_json::json!({
-            "provider": "p-runner-test",
-            "model": "m-runner-test",
             "policy": {
                 "max_history_messages": 4,
                 "summarize_after_messages": 4,
@@ -190,15 +188,12 @@ fn set_context_policy_provider_override_applied_on_matching_provider_model() {
     .unwrap();
     assert!(override_ok);
 
-    // Next prepare with matching provider/model activates the override policy.
-    // No inline context_policy here -- the override is selected via provider+model key.
+    // Next prepare without inline context_policy uses global override policy.
     prepare_user_turn(
         &serde_json::json!({
             "prompt": "trigger summary",
             "session_id": session_id,
-            "system_prompt": "assistant",
-            "provider": "p-runner-test",
-            "model": "m-runner-test"
+            "system_prompt": "assistant"
         })
         .to_string(),
     )
@@ -208,7 +203,7 @@ fn set_context_policy_provider_override_applied_on_matching_provider_model() {
     let state: serde_json::Value = serde_json::from_str(&state_json).unwrap();
     assert!(
         !state["rolling_summary"].is_null(),
-        "rolling_summary should have been created by the provider-model override policy"
+        "rolling_summary should have been created by the updated global context policy"
     );
 }
 

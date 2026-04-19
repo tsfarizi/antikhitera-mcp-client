@@ -80,42 +80,23 @@ Define when and how to manage context:
 
 ---
 
-## Per-Provider / Per-Model Policy Override
+## Runtime Policy Update
 
-Different LLM providers have different context windows:
+Context policy is now managed as a runtime-level policy for the active MCP client workflow.
 
-| Provider | Typical Context | Recommended Policy |
-|----------|-----------------|-------------------|
-| OpenAI GPT-4 Turbo | 128K tokens | `max_history: 100`, `summarize_after: 80` |
-| Claude 3 | 200K tokens | `max_history: 150`, `summarize_after: 120` |
-| Gemini Pro | 32K tokens | `max_history: 20`, `summarize_after: 15` |
-| Local Ollama | Varies (check model) | Conservative: `max_history: 10` |
+Use `set_context_policy` to update the default policy used on subsequent turns:
 
-### Activating Per-Provider Override
-
-**Native Lane (CLI):**
-```bash
-antikythera --mode stdio \
-  --provider gemini-pro \
-  --model "models/gemini-pro" \
-  --context-policy-file custom-policy.json
-```
-
-**WASM Component Lane:**
 ```rust
-// In host code, before calling prepare_user_turn():
 set_context_policy(serde_json::json!({
-    "provider": "gemini-pro",
-    "model": "models/gemini-pro",
-    "policy": {
-        "max_history_messages": 20,
-        "summarize_after_messages": 15,
-        "summary_max_chars": 300,
-        "truncation_strategy": "keep_balanced"
-    }
+  "policy": {
+    "max_history_messages": 20,
+    "summarize_after_messages": 15,
+    "summary_max_chars": 300,
+    "truncation_strategy": "keep_balanced"
+  }
 }).to_string())?;
 
-// Next prepare_user_turn() call will use this policy for matching provider+model
+// Next prepare_user_turn() call will use this updated default policy.
 ```
 
 ---
@@ -162,7 +143,7 @@ antikythera --mode stdio
 # 3. User keeps chatting — framework automatically manages context
 ```
 
-### WASM Component with Per-Agent Policy
+### WASM Component with Runtime Policy Update
 
 ```rust
 // Host code (Python/Go/Node.js calling the WASM component)
@@ -170,10 +151,8 @@ antikythera --mode stdio
 // Initialize with default policy
 let session_id = instance.init(config_json);
 
-// For a specific agent, override policy to be more conservative
+// Update runtime default policy to be more conservative
 set_context_policy(serde_json::json!({
-    "provider": "gemini-pro",
-    "model": "models/gemini-pro",
     "policy": {
         "max_history_messages": 10,
         "summarize_after_messages": 8,
@@ -182,8 +161,7 @@ set_context_policy(serde_json::json!({
     }
 }).to_string());
 
-// All subsequent prepare_user_turn() calls for this session
-// will use the above policy for gemini-pro
+// All subsequent prepare_user_turn() calls will use the updated policy
 ```
 
 ---
@@ -192,8 +170,8 @@ set_context_policy(serde_json::json!({
 
 See `tests/sdk/wasm_agent/runner_tests.rs`:
 
-**Test 5:** `set_context_policy_provider_override_applied_on_matching_provider_model`
-- Verifies per-provider/model policy override works
+**Test 5:** `set_context_policy_applies_global_policy_on_next_turn`
+- Verifies runtime global policy update works
 - Confirms summarization is triggered on policy threshold
 
 **Test 6:** `keep_balanced_truncation_retains_head_and_tail`

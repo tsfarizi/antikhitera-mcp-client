@@ -327,26 +327,25 @@ The remaining gap is advanced context management.
 The project needs:
 
 - rolling summarization
-- per-provider or per-model policy
+- runtime/session policy updates via MCP client control plane
 - configurable truncation and summarization strategy per agent or session
 - host-visible summary handoff for component embeddings
 
 Without this, long conversations will still degrade even though hard token-limit failures are reduced.
 
-### 6.3 Native provider-specific tool calling
+### 6.3 MCP-native tool calling contract
 
 The current agent flow still leans heavily on internal JSON conventions.
 
-For a strong 1.0 client framework, host integrations should support:
+For a strong 1.0 MCP client framework, tool calling should be centered on one
+canonical MCP contract:
 
-- OpenAI native tool calling
-- Gemini tools
-- Anthropic tools
-- generic JSON fallback only where native support is unavailable
+- strict tool call envelope validation
+- strict tool result envelope validation
+- deterministic retry and error-mapping semantics for MCP tool failures
+- generic host normalization only at the boundary before committing to MCP contract
 
-This would significantly improve reliability.
-
-Provider-specific request shaping may still exist in the host, but it should not be reintroduced as built-in HTTP calling logic inside this repository.
+This keeps tool execution behavior consistent regardless of upstream model/provider API shape.
 
 ### 6.4 Host-facing policy and integration hooks
 
@@ -428,7 +427,7 @@ Implement:
 
 - streaming output for CLI and WASM component embeddings
 - advanced context management and summarization
-- host-side native provider tool calling adapters (outside this repo's runtime core)
+- MCP tool calling contract hardening (canonical envelopes and error mapping)
 - host-facing observability and policy hooks
 - transport extensibility and multi-agent hardening
 
@@ -456,8 +455,8 @@ Before 1.0, decide clearly:
 ### High priorities
 
 6. Add streaming for CLI and host embeddings
-7. Extend context management with summarization and provider-aware policies
-8. Add host-side native provider-specific tool calling adapters
+7. Extend context management with summarization and runtime/session-level policy controls
+8. Harden MCP tool-calling contracts and error mapping
 9. Add host-facing observability hooks and harden multi-agent execution
 
 ---
@@ -474,7 +473,7 @@ All foundational consistency issues are resolved:
 - config is unified
 - scope is narrowed to native and server-side WASM component lanes
 
-The path forward is to finish the remaining stabilization work and add only the features that match the current scope: streaming, advanced context management, native provider tool calling, host-facing observability, and multi-agent hardening.
+The path forward is to finish the remaining stabilization work and add only the features that match the current scope: streaming, advanced context management, MCP-native tool-calling contracts, host-facing observability, and multi-agent hardening.
 
 Antikythera should not grow an embedded REST module again. If a product needs REST, gRPC, WebSocket, or another interface layer, that surface should live in the host that embeds the framework or consumes the WASM component.
 
