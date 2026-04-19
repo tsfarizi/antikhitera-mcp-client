@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
@@ -512,8 +513,14 @@ fn with_runtime<T>(
     f(&mut guard)
 }
 
+static SESSION_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 fn new_session_id() -> String {
-    format!("session-{}", chrono::Utc::now().timestamp_millis())
+    let ts_ns = chrono::Utc::now()
+        .timestamp_nanos_opt()
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_micros() * 1_000);
+    let seq = SESSION_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("session-{ts_ns}-{seq}")
 }
 
 pub fn init(config_json: &str) -> Result<String, String> {
