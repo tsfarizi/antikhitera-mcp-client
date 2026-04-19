@@ -10,6 +10,7 @@
 //! - [`discovery`] - Auto-discovery and loading of MCP servers from a folder
 //! - [`hooks`] - Host authentication, correlation, policy, and telemetry middleware
 //! - [`stdio`] - Standard input/output interface for command-line interaction
+//! - [`streaming`] - Token/event streaming primitives and host adapters
 //! - [`tooling`] - Tool server management and MCP server integration
 //! - [`ui`] - Schema-driven UI assembler for dynamic component layout
 //! - [`resilience`] - Retry, timeout, context management, and health tracking
@@ -25,6 +26,7 @@ pub mod resilience;
 pub mod services;
 #[cfg(feature = "native-transport")]
 pub mod stdio;
+pub mod streaming;
 pub mod tooling;
 pub mod ui;
 
@@ -34,3 +36,7 @@ pub use hooks::{
     PolicyDecisionInput, PolicyTarget, TelemetryHook,
 };
 pub use observability::{CallerContext, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent};
+pub use streaming::{
+    AgentEvent, AgentEventStream, InMemoryStreamingResponse, StreamingMode, StreamingRequest,
+    StreamingResponse, StreamingSnapshot, ToolEventPhase,
+};

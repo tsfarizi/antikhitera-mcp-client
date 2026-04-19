@@ -21,6 +21,7 @@
 - [Servers and Agents](documentation/SERVERS_AND_AGENTS.md)
 - [Resilience](documentation/RESILIENCE.md)
 - [Context Management](documentation/CONTEXT_MANAGEMENT.md)
+- [Streaming](documentation/STREAMING.md)
 - [WASM Agent](documentation/WASM_AGENT.md)
 - [Testing](documentation/TESTING.md)
 - [Migration](documentation/MIGRATION.md)

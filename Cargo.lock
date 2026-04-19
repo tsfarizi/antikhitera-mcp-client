@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-tests"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "antikythera-core",
  "antikythera-log",
@@ -215,6 +215,7 @@ dependencies = [
  "antikythera-session",
  "async-trait",
  "chrono",
+ "clap",
  "serde_json",
  "serial_test",
  "tempfile",

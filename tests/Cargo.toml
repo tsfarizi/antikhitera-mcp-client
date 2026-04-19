@@ -1,6 +1,6 @@
 [package]
 name = "antikythera-tests"
-version = "0.9.7"
+version = "0.9.8"
 edition = "2024"
 publish = false
 
@@ -56,6 +56,10 @@ path = "multi_agent/guardrails_tests.rs"
 name = "hook_tests"
 path = "hooks/hook_tests.rs"
 
+[[test]]
+name = "streaming_tests"
+path = "streaming/streaming_tests.rs"
+
 # ============================================================================
 # Resilience Module Tests
 # ============================================================================
@@ -79,3 +83,4 @@ tempfile = "3.10"
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
 serial_test = "3.0"
 async-trait.workspace = true
+clap.workspace = true

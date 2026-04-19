@@ -39,7 +39,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let provider = build_provider_from_configs(&providers)?;
-    install_terminal_stream_sink();
+    if cli.stream {
+        install_terminal_stream_sink();
+    }
     let mut client_cfg = ClientConfig::new(config.default_provider.clone(), config.model.clone())
         .with_tools(config.tools.clone())
         .with_servers(config.servers.clone())

@@ -32,6 +32,10 @@ pub use application::resilience::{
     ResilienceManager, RetryPolicy, TimeoutPolicy, TokenEstimator, prune_messages, with_retry,
     with_retry_if,
 };
+pub use application::streaming::{
+    AgentEvent, AgentEventStream, InMemoryStreamingResponse, StreamingMode, StreamingRequest,
+    StreamingResponse, StreamingSnapshot, ToolEventPhase,
+};
 pub use config::AppConfig;
 pub use infrastructure::model::{
     DynamicModelProvider, HostModelClient, HostModelResponse, HostModelTransport, ModelProvider,

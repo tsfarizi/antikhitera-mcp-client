@@ -85,6 +85,7 @@ pub mod agents;
 
 #[cfg(feature = "multi-agent")]
 pub use agents::{OrchestratorMonitorSnapshot, OrchestratorOptions, TaskResultDetail};
+pub use agents::{StreamingModeOption, StreamingOptions};
 
 /// Prompt Management feature slice
 #[cfg(feature = "sdk-core")]

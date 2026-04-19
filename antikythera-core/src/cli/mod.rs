@@ -43,6 +43,10 @@ pub struct Cli {
     /// Accepted values: `auto` (default), `sequential`, `concurrent`, `parallel:N`.
     #[arg(long, default_value = "auto")]
     pub execution_mode: String,
+
+    /// Enable token streaming output in CLI mode.
+    #[arg(long)]
+    pub stream: bool,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]

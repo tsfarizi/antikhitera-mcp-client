@@ -87,10 +87,12 @@ chunked responses:
 3. terminal sink prints chunks live to stderr so stdout remains protocol-safe.
 
 This keeps interactive visibility in CLI mode while preserving structured
-stdout output (for JSON or automation consumers).
+stdout output (for JSON or automation consumers). The terminal stream sink is
+enabled with the CLI `--stream` flag.
 
 ## Related documents
 
 - [`CLI.md`](CLI.md)
+- [`STREAMING.md`](STREAMING.md)
 - [`WASM_AGENT.md`](WASM_AGENT.md)
 - [`COMPONENT.md`](COMPONENT.md)

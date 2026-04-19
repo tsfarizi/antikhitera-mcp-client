@@ -31,6 +31,64 @@ pub enum SkillLevel {
     Expert,
 }
 
+/// SDK-level streaming mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum StreamingModeOption {
+    Token,
+    Event,
+    #[default]
+    Mixed,
+}
+
+/// Host-facing streaming options for incremental output.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StreamingOptions {
+    #[serde(default)]
+    pub mode: StreamingModeOption,
+    #[serde(default = "default_true")]
+    pub include_final_response: bool,
+    #[serde(default)]
+    pub max_buffered_events: Option<usize>,
+}
+
+const fn default_true() -> bool {
+    true
+}
+
+impl StreamingOptions {
+    /// Validate user-provided streaming options.
+    pub fn validate(&self) -> Result<(), String> {
+        let errors = validate_streaming_options_collect(self);
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("; "))
+        }
+    }
+
+    /// Convert SDK streaming options into core streaming request.
+    #[cfg(feature = "sdk-core")]
+    pub fn to_streaming_request(&self) -> antikythera_core::StreamingRequest {
+        antikythera_core::StreamingRequest {
+            mode: self.mode.into(),
+            include_final_response: self.include_final_response,
+            max_buffered_events: self.max_buffered_events,
+        }
+    }
+}
+
+#[cfg(feature = "sdk-core")]
+impl From<StreamingModeOption> for antikythera_core::StreamingMode {
+    fn from(value: StreamingModeOption) -> Self {
+        match value {
+            StreamingModeOption::Token => antikythera_core::StreamingMode::Token,
+            StreamingModeOption::Event => antikythera_core::StreamingMode::Event,
+            StreamingModeOption::Mixed => antikythera_core::StreamingMode::Mixed,
+        }
+    }
+}
+
 // ============================================================================
 // Orchestrator hardening — SDK surface for manipulation and monitoring
 //
@@ -509,6 +567,32 @@ pub fn mcp_default_orchestrator_options() -> *mut c_char {
     serialize_result(&OrchestratorOptions::default())
 }
 
+/// Return default [`StreamingOptions`] as a JSON string.
+pub fn mcp_default_streaming_options() -> *mut c_char {
+    serialize_result(&StreamingOptions::default())
+}
+
+/// Validate a [`StreamingOptions`] JSON string.
+///
+/// Returns `{"valid": true}` or `{"valid": false, "error": "..."}`.
+pub fn mcp_validate_streaming_options(options_json: *const c_char) -> *mut c_char {
+    let json_str = match from_c_string(options_json) {
+        Ok(s) => s,
+        Err(e) => return to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
+    };
+    match serde_json::from_str::<StreamingOptions>(&json_str) {
+        Ok(opts) => {
+            let errors = validate_streaming_options_collect(&opts);
+            if errors.is_empty() {
+                to_c_string(r#"{"valid":true}"#)
+            } else {
+                serialize_result(&serde_json::json!({"valid": false, "errors": errors}))
+            }
+        }
+        Err(e) => to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
+    }
+}
+
 /// Validate an [`OrchestratorOptions`] JSON string.
 ///
 /// Returns `{"valid": true}` or `{"valid": false, "error": "..."}`.
@@ -663,6 +747,16 @@ fn validate_guardrail_options_collect(guardrails: &GuardrailOptions) -> Vec<Stri
         if rate_limit.max_tasks.is_some() ^ rate_limit.window_ms.is_some() {
             errors.push("guardrails.rate_limit requires both max_tasks and window_ms".to_string());
         }
+    }
+
+    errors
+}
+
+fn validate_streaming_options_collect(options: &StreamingOptions) -> Vec<String> {
+    let mut errors = Vec::new();
+
+    if options.max_buffered_events == Some(0) {
+        errors.push("max_buffered_events must be > 0 if set".to_string());
     }
 
     errors
