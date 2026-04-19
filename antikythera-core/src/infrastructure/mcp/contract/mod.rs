@@ -112,10 +112,7 @@ impl ToolResultEnvelope {
     }
 
     /// Create a partial failure result.
-    pub fn partial_failure(
-        content: impl Into<String>,
-        error_message: impl Into<String>,
-    ) -> Self {
+    pub fn partial_failure(content: impl Into<String>, error_message: impl Into<String>) -> Self {
         Self {
             outcome: ResultOutcome::PartialFailure,
             content: content.into(),
@@ -162,10 +159,7 @@ pub enum ToolExecutionError {
 impl ToolExecutionError {
     /// Check if error is retryable.
     pub fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            Self::Timeout { .. } | Self::Transient { .. }
-        )
+        matches!(self, Self::Timeout { .. } | Self::Transient { .. })
     }
 
     /// Get human-readable error message.
@@ -191,12 +185,12 @@ pub struct ContractValidator;
 impl ContractValidator {
     /// Validate a tool call envelope.
     pub fn validate_call(envelope: &ToolCallEnvelope) -> Result<(), ToolExecutionError> {
-        envelope.validate().map_err(|reason| {
-            ToolExecutionError::InvalidInput {
+        envelope
+            .validate()
+            .map_err(|reason| ToolExecutionError::InvalidInput {
                 tool_name: envelope.tool_name.clone(),
                 reason,
-            }
-        })
+            })
     }
 
     /// Validate a tool result envelope.
@@ -240,7 +234,10 @@ mod tests {
     fn tool_call_envelope_new() {
         let call = ToolCallEnvelope::new("search", serde_json::json!({"query": "test"}));
         assert_eq!(call.tool_name, "search");
-        assert_eq!(call.input.get("query").and_then(|v| v.as_str()), Some("test"));
+        assert_eq!(
+            call.input.get("query").and_then(|v| v.as_str()),
+            Some("test")
+        );
     }
 
     #[test]
@@ -260,7 +257,11 @@ mod tests {
         let call = ToolCallEnvelope::new("tool", serde_json::json!({"key": "value"}));
         let value = call
             .required_field("key")
-            .and_then(|v| v.as_str().ok_or_else(|| "not a string".to_string()).map(|s| s.to_string()))
+            .and_then(|v| {
+                v.as_str()
+                    .ok_or_else(|| "not a string".to_string())
+                    .map(|s| s.to_string())
+            })
             .expect("field should exist");
         assert_eq!(value, "value");
     }
@@ -274,7 +275,9 @@ mod tests {
     #[test]
     fn tool_call_envelope_optional_field() {
         let call = ToolCallEnvelope::new("tool", serde_json::json!({"key": "value"}));
-        let opt_value = call.optional_field("key").and_then(|v| v.as_str().map(|s| s.to_string()));
+        let opt_value = call
+            .optional_field("key")
+            .and_then(|v| v.as_str().map(|s| s.to_string()));
         assert_eq!(opt_value.as_deref(), Some("value"));
         assert_eq!(call.optional_field("missing"), None);
     }
@@ -307,20 +310,26 @@ mod tests {
 
     #[test]
     fn tool_execution_error_is_retryable() {
-        assert!(ToolExecutionError::Timeout {
-            tool_name: "search".to_string()
-        }
-        .is_retryable());
+        assert!(
+            ToolExecutionError::Timeout {
+                tool_name: "search".to_string()
+            }
+            .is_retryable()
+        );
 
-        assert!(ToolExecutionError::Transient {
-            message: "temp error".to_string()
-        }
-        .is_retryable());
+        assert!(
+            ToolExecutionError::Transient {
+                message: "temp error".to_string()
+            }
+            .is_retryable()
+        );
 
-        assert!(!ToolExecutionError::ToolNotFound {
-            tool_name: "bad".to_string()
-        }
-        .is_retryable());
+        assert!(
+            !ToolExecutionError::ToolNotFound {
+                tool_name: "bad".to_string()
+            }
+            .is_retryable()
+        );
     }
 
     #[test]
@@ -372,7 +381,10 @@ mod tests {
         let result = ToolResultEnvelope::error("failed");
         let err = ContractValidator::result_to_error("tool", &result);
         assert!(err.is_some());
-        assert!(matches!(err, Some(ToolExecutionError::ExecutionFailed { .. })));
+        assert!(matches!(
+            err,
+            Some(ToolExecutionError::ExecutionFailed { .. })
+        ));
     }
 
     #[test]

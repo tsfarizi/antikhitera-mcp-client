@@ -41,9 +41,10 @@ Target: Achieve production readiness for the core agent/tool-calling pipeline.
   - Built-in: `TimeoutGuardrail`, `BudgetGuardrail`, `RateLimitGuardrail`, `CancellationGuardrail`
   - Guardrail composition via `GuardrailChain`
   - Task pre-check, mid-check, and post-check hooks
-  - Unit tests: 18+ for each guardrail type, composition, and enforcement
-  - Integration tests: multi-agent execution with guardrails
-  - Documentation: `documentation/GUARDRAILS.md` (policy examples, custom rules)
+  - Unit tests: 20 passing tests for built-ins, composition, and enforcement ✅
+  - Integration tests: 3 passing orchestrator dispatch tests with guardrail enforcement ✅
+  - Documentation: `documentation/GUARDRAILS.md` (policy examples, custom rules) ✅
+  - Introspection metadata: `guardrail_name` and `guardrail_stage` on `TaskExecutionMetadata`
 - **Backward compatibility**: Guardrails are opt-in; existing pipelines unaffected
 - **Deliverables**: Code + tests + docs + clippy ✅
 

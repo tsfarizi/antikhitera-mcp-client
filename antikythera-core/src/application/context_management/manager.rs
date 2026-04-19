@@ -49,7 +49,10 @@ impl RuntimeContextManager {
     ///
     /// Returns an error if the internal mutex is poisoned.
     pub fn set_policy(&self, policy: ContextPolicy) -> Result<(), String> {
-        *self.policy.lock().map_err(|e| format!("policy lock poisoned: {}", e))? = policy;
+        *self
+            .policy
+            .lock()
+            .map_err(|e| format!("policy lock poisoned: {}", e))? = policy;
         Ok(())
     }
 
@@ -84,7 +87,10 @@ impl RuntimeContextManager {
     ///
     /// Returns an error if the policy lock is poisoned.
     pub fn apply_policy(&self, messages: &[ChatMessage]) -> Result<Vec<ChatMessage>, String> {
-        let policy = self.policy.lock().map_err(|e| format!("policy lock poisoned: {}", e))?;
+        let policy = self
+            .policy
+            .lock()
+            .map_err(|e| format!("policy lock poisoned: {}", e))?;
 
         // Separate system and non-system messages (cloned)
         let (mut system_msgs, mut non_system_msgs): (Vec<_>, Vec<_>) = messages
@@ -101,11 +107,10 @@ impl RuntimeContextManager {
         if non_system_msgs.len() > policy.max_history_messages {
             match policy.truncation_strategy {
                 TruncationStrategy::KeepNewest => {
-                    let skip_count = non_system_msgs.len().saturating_sub(policy.max_history_messages);
-                    non_system_msgs = non_system_msgs
-                        .into_iter()
-                        .skip(skip_count)
-                        .collect();
+                    let skip_count = non_system_msgs
+                        .len()
+                        .saturating_sub(policy.max_history_messages);
+                    non_system_msgs = non_system_msgs.into_iter().skip(skip_count).collect();
                 }
                 TruncationStrategy::KeepBalanced { head_ratio } => {
                     let head_count = ((policy.max_history_messages as f32 * head_ratio) as usize)
@@ -121,11 +126,10 @@ impl RuntimeContextManager {
                 TruncationStrategy::Summarize => {
                     // Placeholder: would invoke summarization callback
                     // For now, fall back to KeepNewest
-                    let skip_count = non_system_msgs.len().saturating_sub(policy.max_history_messages);
-                    non_system_msgs = non_system_msgs
-                        .into_iter()
-                        .skip(skip_count)
-                        .collect();
+                    let skip_count = non_system_msgs
+                        .len()
+                        .saturating_sub(policy.max_history_messages);
+                    non_system_msgs = non_system_msgs.into_iter().skip(skip_count).collect();
                 }
             }
         }
@@ -135,7 +139,9 @@ impl RuntimeContextManager {
 
         // Apply token budget if configured
         if let Some(budget) = policy.token_budget {
-            while Self::estimate_tokens(&result) > budget && result.len() > policy.min_system_messages {
+            while Self::estimate_tokens(&result) > budget
+                && result.len() > policy.min_system_messages
+            {
                 // Remove oldest non-system message
                 if let Some(pos) = result.iter().position(|m| m.role.as_str() != "system") {
                     result.remove(pos);
@@ -184,7 +190,9 @@ mod tests {
             make_message(MessageRole::Assistant, "Hi there"),
         ];
 
-        let result = manager.apply_policy(&messages).expect("apply_policy failed");
+        let result = manager
+            .apply_policy(&messages)
+            .expect("apply_policy failed");
 
         // System message should be preserved
         assert!(result.iter().any(|m| m.role.as_str() == "system"));
@@ -195,10 +203,14 @@ mod tests {
         let policy = ContextPolicy::new().with_max_history_messages(5);
         let manager = RuntimeContextManager::new(policy);
 
-        let mut messages = (0..15).map(|i| make_message(MessageRole::User, &format!("msg {}", i))).collect::<Vec<_>>();
+        let mut messages = (0..15)
+            .map(|i| make_message(MessageRole::User, &format!("msg {}", i)))
+            .collect::<Vec<_>>();
         messages.insert(0, make_message(MessageRole::System, "sys"));
 
-        let result = manager.apply_policy(&messages).expect("apply_policy failed");
+        let result = manager
+            .apply_policy(&messages)
+            .expect("apply_policy failed");
 
         // Should have system message + at most 5 user messages
         assert!(result.iter().filter(|m| m.role.as_str() == "user").count() <= 5);
@@ -219,7 +231,9 @@ mod tests {
             make_message(MessageRole::User, "msg 4"),
         ];
 
-        let result = manager.apply_policy(&messages).expect("apply_policy failed");
+        let result = manager
+            .apply_policy(&messages)
+            .expect("apply_policy failed");
 
         // Should keep the last 3 messages
         assert_eq!(result.len(), 3);
@@ -234,9 +248,13 @@ mod tests {
             .with_truncation_strategy(TruncationStrategy::KeepBalanced { head_ratio: 0.5 });
         let manager = RuntimeContextManager::new(policy);
 
-        let messages = (0..20).map(|i| make_message(MessageRole::User, &format!("msg {}", i))).collect::<Vec<_>>();
+        let messages = (0..20)
+            .map(|i| make_message(MessageRole::User, &format!("msg {}", i)))
+            .collect::<Vec<_>>();
 
-        let result = manager.apply_policy(&messages).expect("apply_policy failed");
+        let result = manager
+            .apply_policy(&messages)
+            .expect("apply_policy failed");
 
         // Should have ~3 from head and ~3 from tail
         assert_eq!(result.len(), 6);
@@ -251,9 +269,13 @@ mod tests {
             .with_token_budget(100); // Small budget
         let manager = RuntimeContextManager::new(policy);
 
-        let messages = (0..50).map(|_| make_message(MessageRole::User, &"x".repeat(20))).collect::<Vec<_>>();
+        let messages = (0..50)
+            .map(|_| make_message(MessageRole::User, &"x".repeat(20)))
+            .collect::<Vec<_>>();
 
-        let result = manager.apply_policy(&messages).expect("apply_policy failed");
+        let result = manager
+            .apply_policy(&messages)
+            .expect("apply_policy failed");
 
         // Token count should be below budget
         let tokens = (result.iter().map(|m| m.content().len()).sum::<usize>() + 3) / 4;
@@ -266,8 +288,12 @@ mod tests {
         let manager2 = manager1.clone();
 
         let messages = vec![make_message(MessageRole::User, "test")];
-        let result1 = manager1.apply_policy(&messages).expect("apply_policy failed");
-        let result2 = manager2.apply_policy(&messages).expect("apply_policy failed");
+        let result1 = manager1
+            .apply_policy(&messages)
+            .expect("apply_policy failed");
+        let result2 = manager2
+            .apply_policy(&messages)
+            .expect("apply_policy failed");
 
         assert_eq!(result1.len(), result2.len());
     }

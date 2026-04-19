@@ -132,7 +132,10 @@ mod tests {
 
     #[test]
     fn truncation_strategy_default_is_keep_newest() {
-        assert_eq!(TruncationStrategy::default(), TruncationStrategy::KeepNewest);
+        assert_eq!(
+            TruncationStrategy::default(),
+            TruncationStrategy::KeepNewest
+        );
     }
 
     #[test]

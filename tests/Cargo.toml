@@ -48,6 +48,10 @@ path = "sdk/wasm_agent/runner_tests.rs"
 name = "multi_agent_hardening_tests"
 path = "multi_agent/hardening_tests.rs"
 
+[[test]]
+name = "multi_agent_guardrails_tests"
+path = "multi_agent/guardrails_tests.rs"
+
 # ============================================================================
 # Resilience Module Tests
 # ============================================================================
@@ -70,3 +74,4 @@ chrono.workspace = true
 tempfile = "3.10"
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
 serial_test = "3.0"
+async-trait.workspace = true

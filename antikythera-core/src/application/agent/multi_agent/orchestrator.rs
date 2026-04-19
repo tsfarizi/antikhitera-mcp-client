@@ -42,6 +42,7 @@ use tracing::{info, warn};
 use super::budget::OrchestratorBudget;
 use super::cancellation::CancellationToken;
 use super::execution::ExecutionMode;
+use super::guardrails::{GuardrailChain, GuardrailContext, GuardrailRejection};
 use super::registry::{AgentProfile, AgentRegistry};
 use super::router::{AgentRouter, FirstAvailableRouter};
 use super::scheduler::TaskScheduler;
@@ -52,6 +53,16 @@ use super::task::{
 use crate::application::agent::{Agent, AgentOptions};
 use crate::application::client::McpClient;
 use crate::infrastructure::model::ModelProvider;
+
+#[derive(Clone)]
+struct ExecuteTaskRuntime {
+    routing_decision: RoutingDecision,
+    execution_mode: String,
+    cancel_token: CancellationToken,
+    budget: OrchestratorBudget,
+    guardrails: GuardrailChain,
+    concurrency_wait_ms: u64,
+}
 
 // ============================================================================
 // Internal helpers
@@ -75,18 +86,41 @@ async fn execute_task<P: ModelProvider>(
     client: Arc<McpClient<P>>,
     task: AgentTask,
     profile: AgentProfile,
-    routing_decision: RoutingDecision,
-    execution_mode: String,
-    cancel_token: CancellationToken,
-    concurrency_wait_ms: u64,
+    runtime: ExecuteTaskRuntime,
 ) -> TaskResult {
     let started = Instant::now();
+    let ExecuteTaskRuntime {
+        routing_decision,
+        execution_mode,
+        cancel_token,
+        budget,
+        guardrails,
+        concurrency_wait_ms,
+    } = runtime;
     let max_steps = task.max_steps.or(profile.max_steps).unwrap_or(8);
     let budgeted_max_steps = task
         .budget_steps
         .map(|b| b.min(max_steps))
         .unwrap_or(max_steps);
     let retry_policy = task.retry_policy.clone().unwrap_or_default();
+
+    let pre_context = GuardrailContext::new(
+        budget.snapshot(),
+        cancel_token.is_cancelled(),
+        0,
+        execution_mode.clone(),
+    );
+
+    if let Err(rejection) = guardrails.check_pre(&task, &profile, &pre_context) {
+        return guardrail_failure_result(
+            &task,
+            &profile.id,
+            &routing_decision,
+            &execution_mode,
+            concurrency_wait_ms,
+            rejection,
+        );
+    }
 
     // ---- deadline pre-check ------------------------------------------------
     let now_ms = SystemTime::now()
@@ -140,6 +174,24 @@ async fn execute_task<P: ModelProvider>(
     let mut last_error: Option<(String, ErrorKind)> = None;
 
     loop {
+        let mid_context = GuardrailContext::new(
+            budget.snapshot(),
+            cancel_token.is_cancelled(),
+            attempt.saturating_add(1),
+            execution_mode.clone(),
+        );
+
+        if let Err(rejection) = guardrails.check_mid(&task, &profile, &mid_context) {
+            return guardrail_failure_result(
+                &task,
+                &profile.id,
+                &routing_decision,
+                &execution_mode,
+                concurrency_wait_ms,
+                rejection,
+            );
+        }
+
         // ---- per-attempt cancellation check --------------------------------
         if cancel_token.is_cancelled() {
             let metadata = TaskExecutionMetadata {
@@ -227,20 +279,42 @@ async fn execute_task<P: ModelProvider>(
                     attempt_count: attempt,
                     duration_ms: started.elapsed().as_millis() as u64,
                     retry_applied: attempt > 1,
-                    execution_mode: Some(execution_mode),
-                    correlation_id: task.correlation_id,
-                    routing_decision: Some(routing_decision),
+                    execution_mode: Some(execution_mode.clone()),
+                    correlation_id: task.correlation_id.clone(),
+                    routing_decision: Some(routing_decision.clone()),
                     concurrency_wait_ms,
                     ..TaskExecutionMetadata::default()
                 };
-                return TaskResult::success(
-                    task.task_id,
-                    profile.id,
+                let result = TaskResult::success(
+                    task.task_id.clone(),
+                    profile.id.clone(),
                     outcome.response,
                     outcome.steps.len(),
                     outcome.session_id,
                 )
                 .with_metadata(metadata);
+
+                let post_context = GuardrailContext::new(
+                    budget.snapshot(),
+                    cancel_token.is_cancelled(),
+                    attempt,
+                    execution_mode.clone(),
+                );
+
+                if let Err(rejection) =
+                    guardrails.check_post(&task, &profile, &result, &post_context)
+                {
+                    return guardrail_failure_result(
+                        &task,
+                        &profile.id,
+                        &routing_decision,
+                        &execution_mode,
+                        concurrency_wait_ms,
+                        rejection,
+                    );
+                }
+
+                return result;
             }
             Err(e) => {
                 let err_str = e.to_string();
@@ -365,6 +439,8 @@ pub struct MultiAgentOrchestrator<P: ModelProvider> {
     concurrency_sem: Option<Arc<Semaphore>>,
     /// Default retry condition for tasks without explicit retry policy.
     default_retry_condition: RetryCondition,
+    /// Ordered guardrails evaluated around task execution.
+    guardrails: GuardrailChain,
 }
 
 impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
@@ -383,6 +459,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             budget: OrchestratorBudget::new(),
             concurrency_sem: None,
             default_retry_condition: RetryCondition::Always,
+            guardrails: GuardrailChain::new(),
         }
     }
 
@@ -437,6 +514,18 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         self
     }
 
+    /// Set the entire guardrail chain for this orchestrator.
+    pub fn with_guardrails(mut self, guardrails: GuardrailChain) -> Self {
+        self.guardrails = guardrails;
+        self
+    }
+
+    /// Append a single guardrail to the existing chain.
+    pub fn with_guardrail(mut self, guardrail: Arc<dyn super::guardrails::TaskGuardrail>) -> Self {
+        self.guardrails.push(guardrail);
+        self
+    }
+
     // ----------------------------------------------------------------
     // Inspection
     // ----------------------------------------------------------------
@@ -454,6 +543,11 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
     /// Return a snapshot of the current budget state.
     pub fn budget_snapshot(&self) -> super::budget::BudgetSnapshot {
         self.budget.snapshot()
+    }
+
+    /// Number of guardrails configured for this orchestrator.
+    pub fn guardrail_count(&self) -> usize {
+        self.guardrails.len()
     }
 
     // ----------------------------------------------------------------
@@ -585,10 +679,14 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             self.client.clone(),
             task,
             profile,
-            routing_decision,
-            self.execution_mode().to_string(),
-            self.cancel_token.child_token(),
-            concurrency_wait_ms,
+            ExecuteTaskRuntime {
+                routing_decision,
+                execution_mode: self.execution_mode().to_string(),
+                cancel_token: self.cancel_token.child_token(),
+                budget: self.budget.clone(),
+                guardrails: self.guardrails.clone(),
+                concurrency_wait_ms,
+            },
         )
         .await;
 
@@ -643,6 +741,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let budget = self.budget.clone();
         let concurrency_sem = self.concurrency_sem.clone();
         let default_retry_condition = self.default_retry_condition.clone();
+        let guardrails = self.guardrails.clone();
 
         self.scheduler
             .run(prepared, move |(task, profile, routing_decision)| {
@@ -652,6 +751,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                 let budget = budget.clone();
                 let concurrency_sem = concurrency_sem.clone();
                 let default_retry_condition = default_retry_condition.clone();
+                let guardrails = guardrails.clone();
                 async move {
                     let mut task = task;
                     if task.retry_policy.is_none() {
@@ -715,10 +815,14 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                                 client,
                                 task,
                                 p,
-                                routing_decision,
-                                execution_mode,
-                                cancel_token,
-                                concurrency_wait_ms,
+                                ExecuteTaskRuntime {
+                                    routing_decision,
+                                    execution_mode,
+                                    cancel_token,
+                                    budget: budget.clone(),
+                                    guardrails,
+                                    concurrency_wait_ms,
+                                },
                             )
                             .await;
                             budget.record_steps(result.steps_used);
@@ -770,4 +874,37 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
 
         PipelineResult::from_results(results)
     }
+}
+
+fn guardrail_failure_result(
+    task: &AgentTask,
+    agent_id: &str,
+    routing_decision: &RoutingDecision,
+    execution_mode: &str,
+    concurrency_wait_ms: u64,
+    rejection: GuardrailRejection,
+) -> TaskResult {
+    let metadata = TaskExecutionMetadata {
+        attempt_count: 0,
+        duration_ms: 0,
+        cancelled: rejection.error_kind == ErrorKind::Cancelled,
+        retry_applied: false,
+        execution_mode: Some(execution_mode.to_string()),
+        correlation_id: task.correlation_id.clone(),
+        routing_decision: Some(routing_decision.clone()),
+        concurrency_wait_ms,
+        budget_exhausted: rejection.error_kind == ErrorKind::BudgetExhausted,
+        error_kind: Some(rejection.error_kind.clone()),
+        guardrail_name: Some(rejection.guardrail_name.clone()),
+        guardrail_stage: Some(rejection.stage.as_str().to_string()),
+        ..TaskExecutionMetadata::default()
+    };
+
+    TaskResult::failure_with_kind(
+        task.task_id.clone(),
+        agent_id.to_string(),
+        rejection.message,
+        rejection.error_kind,
+    )
+    .with_metadata(metadata)
 }

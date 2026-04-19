@@ -49,6 +49,7 @@
 pub mod budget;
 pub mod cancellation;
 pub mod execution;
+pub mod guardrails;
 pub mod orchestrator;
 pub mod registry;
 pub mod router;
@@ -62,6 +63,10 @@ pub mod task;
 pub use budget::{BudgetSnapshot, OrchestratorBudget};
 pub use cancellation::CancellationToken;
 pub use execution::ExecutionMode;
+pub use guardrails::{
+    BudgetGuardrail, CancellationGuardrail, GuardrailChain, GuardrailContext, GuardrailRejection,
+    GuardrailStage, RateLimitGuardrail, TaskGuardrail, TimeoutGuardrail,
+};
 pub use orchestrator::MultiAgentOrchestrator;
 pub use registry::{
     AgentProfile, AgentRegistry, AgentRole, ContextId, MemoryConfig, MemoryProvider,

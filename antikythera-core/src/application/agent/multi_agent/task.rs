@@ -265,6 +265,12 @@ pub struct TaskExecutionMetadata {
     /// Whether execution was blocked by an exhausted orchestrator budget.
     #[serde(default)]
     pub budget_exhausted: bool,
+    /// Guardrail name that rejected or transformed the task, if any.
+    #[serde(default)]
+    pub guardrail_name: Option<String>,
+    /// Guardrail stage (`pre_check`, `mid_check`, `post_check`) if triggered.
+    #[serde(default)]
+    pub guardrail_stage: Option<String>,
 }
 
 // ============================================================================
