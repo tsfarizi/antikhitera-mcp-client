@@ -39,29 +39,6 @@ impl HttpClientBase {
         format!("{base}/{path}")
     }
 
-    /// POST JSON with `Authorization: Bearer <key>` header.
-    pub async fn post_with_bearer<Req, Res>(&self, url: &str, body: &Req) -> Result<Res, ModelError>
-    where
-        Req: Serialize,
-        Res: DeserializeOwned,
-    {
-        let api_key = self.require_api_key()?;
-
-        self.http
-            .post(url)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))?
-            .error_for_status()
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))?
-            .json()
-            .await
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))
-    }
-
     /// POST JSON with bearer auth and return raw response body as text.
     pub async fn post_with_bearer_text<Req>(
         &self,
@@ -88,38 +65,6 @@ impl HttpClientBase {
             .map_err(|e| ModelError::network(&self.id, e.to_string()))
     }
 
-    /// POST JSON with optional bearer auth (omits the header when no API key
-    /// is configured — used for local / unauthenticated endpoints).
-    pub async fn post_with_optional_bearer<Req, Res>(
-        &self,
-        url: &str,
-        body: &Req,
-    ) -> Result<Res, ModelError>
-    where
-        Req: Serialize,
-        Res: DeserializeOwned,
-    {
-        let mut request = self
-            .http
-            .post(url)
-            .header("Content-Type", "application/json")
-            .json(body);
-
-        if let Some(api_key) = self.api_key.as_deref().filter(|k| !k.trim().is_empty()) {
-            request = request.header("Authorization", format!("Bearer {}", api_key));
-        }
-
-        request
-            .send()
-            .await
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))?
-            .error_for_status()
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))?
-            .json()
-            .await
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))
-    }
-
     /// POST JSON with `?key=<api_key>` query parameter auth (Gemini style).
     pub async fn post_with_query_key<Req, Res>(
         &self,
@@ -135,25 +80,6 @@ impl HttpClientBase {
 
         self.http
             .post(&url_with_key)
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))?
-            .error_for_status()
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))?
-            .json()
-            .await
-            .map_err(|e| ModelError::network(&self.id, e.to_string()))
-    }
-
-    /// POST JSON without any authentication (Ollama / local services).
-    pub async fn post_no_auth<Req, Res>(&self, url: &str, body: &Req) -> Result<Res, ModelError>
-    where
-        Req: Serialize,
-        Res: DeserializeOwned,
-    {
-        self.http
-            .post(url)
             .json(body)
             .send()
             .await
