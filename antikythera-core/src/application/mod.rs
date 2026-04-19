@@ -8,6 +8,7 @@
 //! - [`agent`] - Autonomous agent that can use tools and execute multi-step tasks
 //! - [`context_management`] - Message history and context window management
 //! - [`discovery`] - Auto-discovery and loading of MCP servers from a folder
+//! - [`hooks`] - Host authentication, correlation, policy, and telemetry middleware
 //! - [`stdio`] - Standard input/output interface for command-line interaction
 //! - [`tooling`] - Tool server management and MCP server integration
 //! - [`ui`] - Schema-driven UI assembler for dynamic component layout
@@ -18,6 +19,7 @@ pub mod agent;
 pub mod client;
 pub mod context_management;
 pub mod discovery;
+pub mod hooks;
 pub mod observability;
 pub mod resilience;
 pub mod services;
@@ -26,4 +28,9 @@ pub mod stdio;
 pub mod tooling;
 pub mod ui;
 
+pub use hooks::{
+    AuthHook, CorrelationHook, HookContext, HookError, HookOperation, HookRegistry,
+    HostHookMiddleware, InMemoryTelemetryHook, PolicyDecision, PolicyDecisionHook,
+    PolicyDecisionInput, PolicyTarget, TelemetryHook,
+};
 pub use observability::{CallerContext, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent};

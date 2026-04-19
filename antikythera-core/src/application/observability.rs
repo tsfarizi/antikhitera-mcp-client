@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Caller context — propagated through all framework operations.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct CallerContext {
     /// Unique ID for this request/session (for end-to-end tracing)
     pub correlation_id: Option<String>,

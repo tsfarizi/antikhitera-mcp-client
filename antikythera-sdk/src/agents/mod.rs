@@ -75,6 +75,61 @@ pub struct OrchestratorOptions {
     /// Accepted values: `"always"` (default), `"on_transient"`, `"never"`.
     #[serde(default)]
     pub default_retry_condition: RetryConditionOption,
+    /// Optional guardrail chain configuration exposed to host code as JSON.
+    #[serde(default)]
+    pub guardrails: GuardrailOptions,
+}
+
+/// Host-friendly guardrail configuration for the multi-agent orchestrator.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GuardrailOptions {
+    #[serde(default)]
+    pub timeout: Option<TimeoutGuardrailOptions>,
+    #[serde(default)]
+    pub budget: Option<BudgetGuardrailOptions>,
+    #[serde(default)]
+    pub rate_limit: Option<RateLimitGuardrailOptions>,
+    #[serde(default)]
+    pub cancellation: bool,
+}
+
+impl GuardrailOptions {
+    /// Returns `true` when no guardrail config is enabled.
+    pub fn is_empty(&self) -> bool {
+        self.timeout.is_none()
+            && self.budget.is_none()
+            && self.rate_limit.is_none()
+            && !self.cancellation
+    }
+}
+
+/// JSON configuration for [`TimeoutGuardrail`].
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TimeoutGuardrailOptions {
+    #[serde(default)]
+    pub max_timeout_ms: Option<u64>,
+    #[serde(default)]
+    pub require_explicit_timeout: bool,
+}
+
+/// JSON configuration for [`BudgetGuardrail`].
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BudgetGuardrailOptions {
+    #[serde(default)]
+    pub max_task_steps: Option<usize>,
+    #[serde(default)]
+    pub require_explicit_budget: bool,
+    #[serde(default)]
+    pub allow_exhausted_orchestrator: bool,
+}
+
+/// JSON configuration for [`RateLimitGuardrail`].
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RateLimitGuardrailOptions {
+    #[serde(default)]
+    pub max_tasks: Option<usize>,
+    #[serde(default)]
+    pub window_ms: Option<u64>,
 }
 
 /// SDK-friendly mirror of [`RetryCondition`] with `Default = Always`.
@@ -140,6 +195,10 @@ pub struct TaskResultDetail {
     pub concurrency_wait_ms: u64,
     /// Whether the task was rejected due to an exhausted budget.
     pub budget_exhausted: bool,
+    /// Guardrail that rejected the task, if any.
+    pub guardrail_name: Option<String>,
+    /// Guardrail lifecycle stage where rejection occurred, if any.
+    pub guardrail_stage: Option<String>,
 }
 
 #[cfg(feature = "multi-agent")]
@@ -176,6 +235,7 @@ impl OrchestratorOptions {
         orchestrator
             .with_budget(self.into())
             .with_default_retry_condition(self.default_retry_condition.into())
+            .with_guardrails(self.guardrails.to_guardrail_chain())
     }
 }
 
@@ -187,7 +247,8 @@ impl OrchestratorOptions {
 mod core_conversions {
     use super::*;
     use antikythera_core::application::agent::multi_agent::{
-        BudgetSnapshot, OrchestratorBudget, RetryCondition, TaskResult,
+        BudgetGuardrail, BudgetSnapshot, CancellationGuardrail, GuardrailChain, OrchestratorBudget,
+        RateLimitGuardrail, RetryCondition, TaskResult, TimeoutGuardrail,
     };
 
     impl From<&OrchestratorOptions> for OrchestratorBudget {
@@ -216,6 +277,59 @@ mod core_conversions {
                 RetryConditionOption::OnTransient => RetryCondition::OnTransient,
                 RetryConditionOption::Never => RetryCondition::Never,
             }
+        }
+    }
+
+    impl GuardrailOptions {
+        /// Convert SDK guardrail options into a core guardrail chain.
+        pub fn to_guardrail_chain(&self) -> GuardrailChain {
+            let mut chain = GuardrailChain::new();
+
+            if let Some(timeout) = &self.timeout
+                && let Some(max_timeout_ms) = timeout.max_timeout_ms.filter(|value| *value > 0)
+            {
+                let mut guardrail = TimeoutGuardrail::new(max_timeout_ms);
+                if timeout.require_explicit_timeout {
+                    guardrail = guardrail.require_timeout();
+                }
+                chain.push(std::sync::Arc::new(guardrail));
+            }
+
+            if let Some(budget) = &self.budget {
+                let mut guardrail = BudgetGuardrail::new();
+                if let Some(max_task_steps) = budget.max_task_steps.filter(|value| *value > 0) {
+                    guardrail = guardrail.with_max_task_steps(max_task_steps);
+                }
+                if budget.require_explicit_budget {
+                    guardrail = guardrail.require_explicit_budget();
+                }
+                if budget.allow_exhausted_orchestrator {
+                    guardrail = guardrail.allow_exhausted_orchestrator();
+                }
+                if budget.max_task_steps.is_some()
+                    || budget.require_explicit_budget
+                    || budget.allow_exhausted_orchestrator
+                {
+                    chain.push(std::sync::Arc::new(guardrail));
+                }
+            }
+
+            if let Some(rate_limit) = &self.rate_limit
+                && let (Some(max_tasks), Some(window_ms)) = (
+                    rate_limit.max_tasks.filter(|value| *value > 0),
+                    rate_limit.window_ms.filter(|value| *value > 0),
+                )
+            {
+                chain.push(std::sync::Arc::new(RateLimitGuardrail::new(
+                    max_tasks, window_ms,
+                )));
+            }
+
+            if self.cancellation {
+                chain.push(std::sync::Arc::new(CancellationGuardrail::new()));
+            }
+
+            chain
         }
     }
 
@@ -263,6 +377,8 @@ mod core_conversions {
                 routing_reason: routing.and_then(|r| r.reason.clone()),
                 concurrency_wait_ms: result.metadata.concurrency_wait_ms,
                 budget_exhausted: result.metadata.budget_exhausted,
+                guardrail_name: result.metadata.guardrail_name.clone(),
+                guardrail_stage: result.metadata.guardrail_stage.clone(),
             }
         }
     }
@@ -312,6 +428,7 @@ pub fn configure_hardening(options_json: &str) -> Result<bool, String> {
     if options.max_total_tasks == Some(0) {
         return Err("max_total_tasks must be > 0 if set".to_string());
     }
+    validate_guardrail_options(&options.guardrails)?;
 
     with_hardening_runtime(|state| {
         state.options = options;
@@ -413,6 +530,7 @@ pub fn mcp_validate_orchestrator_options(options_json: *const c_char) -> *mut c_
             if opts.max_total_tasks == Some(0) {
                 errors.push("max_total_tasks must be > 0 if set".to_string());
             }
+            errors.extend(validate_guardrail_options_collect(&opts.guardrails));
             if errors.is_empty() {
                 to_c_string(r#"{"valid":true}"#)
             } else {
@@ -508,6 +626,46 @@ pub struct AgentCapability {
     pub level: SkillLevel,
     /// Description of capability
     pub description: String,
+}
+
+#[cfg(feature = "multi-agent")]
+fn validate_guardrail_options(guardrails: &GuardrailOptions) -> Result<(), String> {
+    let errors = validate_guardrail_options_collect(guardrails);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+fn validate_guardrail_options_collect(guardrails: &GuardrailOptions) -> Vec<String> {
+    let mut errors = Vec::new();
+
+    if let Some(timeout) = &guardrails.timeout
+        && timeout.max_timeout_ms == Some(0)
+    {
+        errors.push("guardrails.timeout.max_timeout_ms must be > 0 if set".to_string());
+    }
+
+    if let Some(budget) = &guardrails.budget
+        && budget.max_task_steps == Some(0)
+    {
+        errors.push("guardrails.budget.max_task_steps must be > 0 if set".to_string());
+    }
+
+    if let Some(rate_limit) = &guardrails.rate_limit {
+        if rate_limit.max_tasks == Some(0) {
+            errors.push("guardrails.rate_limit.max_tasks must be > 0 if set".to_string());
+        }
+        if rate_limit.window_ms == Some(0) {
+            errors.push("guardrails.rate_limit.window_ms must be > 0 if set".to_string());
+        }
+        if rate_limit.max_tasks.is_some() ^ rate_limit.window_ms.is_some() {
+            errors.push("guardrails.rate_limit requires both max_tasks and window_ms".to_string());
+        }
+    }
+
+    errors
 }
 
 /// Agent configuration with strict validation

@@ -52,6 +52,10 @@ path = "multi_agent/hardening_tests.rs"
 name = "multi_agent_guardrails_tests"
 path = "multi_agent/guardrails_tests.rs"
 
+[[test]]
+name = "hook_tests"
+path = "hooks/hook_tests.rs"
+
 # ============================================================================
 # Resilience Module Tests
 # ============================================================================

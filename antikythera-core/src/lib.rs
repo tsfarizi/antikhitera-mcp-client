@@ -18,6 +18,14 @@ pub use application::agent::{Agent, AgentOptions, AgentOutcome, ToolDescriptor};
 
 // Re-export resilience module at crate root
 pub use application::client::{ChatRequest, ChatResult, ClientConfig, McpClient, PreparedChatTurn};
+pub use application::hooks::{
+    AuthHook, CorrelationHook, HookContext, HookError, HookOperation, HookRegistry,
+    HostHookMiddleware, InMemoryTelemetryHook, PolicyDecision, PolicyDecisionHook,
+    PolicyDecisionInput, PolicyTarget, TelemetryHook,
+};
+pub use application::observability::{
+    CallerContext, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent,
+};
 pub use application::resilience;
 pub use application::resilience::{
     ComponentHealth, ContextWindowPolicy, HealthStatus, HealthTracker, ResilienceConfig,

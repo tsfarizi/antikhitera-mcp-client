@@ -63,8 +63,10 @@ Target: Achieve production readiness for the core agent/tool-calling pipeline.
   - `PolicyDecisionHook`: model/tool access policy inputs
   - `TelemetryHook`: structured events, audit trails
   - Hook registry and middleware pattern
-  - Unit tests: 12+ for hook registration, invocation, error handling
-  - Documentation: `documentation/HOOKS.md` (hook lifecycle, integration patterns)
+  - Unit tests: 13 passing tests for hook registration, invocation, policy aggregation, and error handling ✅
+  - Integration tests: 3 passing external tests for public hook middleware usage ✅
+  - Documentation: `documentation/HOOKS.md` (hook lifecycle, integration patterns) ✅
+  - Core re-exports: hooks and observability primitives available from crate root
 - **Backward compatibility**: Hooks are optional; no hooks = no overhead
 - **Deliverables**: Code + tests + docs + clippy ✅
 
