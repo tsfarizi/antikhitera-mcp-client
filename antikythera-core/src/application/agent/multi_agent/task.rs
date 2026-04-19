@@ -11,6 +11,74 @@ use serde_json::Value;
 use uuid::Uuid;
 
 // ============================================================================
+// RetryCondition
+// ============================================================================
+
+/// Controls under what circumstances the retry policy should engage.
+///
+/// Attach this to a [`TaskRetryPolicy`] to gate retries on error severity.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RetryCondition {
+    /// Retry on *any* failure — the default behaviour.
+    #[default]
+    Always,
+    /// Only retry when the error is classified as [`ErrorKind::Transient`].
+    /// Permanent errors, cancellations, and budget exhaustion are not retried.
+    OnTransient,
+    /// Never retry, even if `max_retries > 0`.
+    Never,
+}
+
+// ============================================================================
+// ErrorKind
+// ============================================================================
+
+/// Classifies the root cause of a task failure.
+///
+/// The orchestrator sets this on [`TaskResult`] so callers and downstream
+/// systems can decide whether to retry, escalate, or discard the failure.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorKind {
+    /// Temporary condition — network blip, resource contention, LLM rate-limit.
+    /// These errors are candidates for retry with backoff.
+    Transient,
+    /// Permanent condition — invalid input, auth failure, unsupported operation.
+    /// Retrying will not help.
+    Permanent,
+    /// Task was cancelled via [`CancellationToken::cancel`].
+    ///
+    /// [`CancellationToken::cancel`]: super::cancellation::CancellationToken::cancel
+    Cancelled,
+    /// Wall-clock deadline elapsed before or during execution.
+    DeadlineExceeded,
+    /// The orchestrator-level step or task budget was exhausted.
+    BudgetExhausted,
+}
+
+// ============================================================================
+// RoutingDecision  (introspection)
+// ============================================================================
+
+/// A record of the routing decision made for a single task.
+///
+/// Embedded in [`TaskExecutionMetadata`] to give operators visibility into
+/// *why* a task landed on a particular agent.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RoutingDecision {
+    /// Name of the router implementation that made the decision.
+    pub router_name: String,
+    /// ID of the agent selected by the router.
+    pub selected_agent_id: String,
+    /// Number of registered agent profiles that were considered.
+    pub candidates_considered: usize,
+    /// Human-readable reason for the selection (router-specific).
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+// ============================================================================
 // AgentTask
 // ============================================================================
 
@@ -156,6 +224,10 @@ pub struct TaskRetryPolicy {
     /// Base backoff in milliseconds between retries.
     #[serde(default)]
     pub backoff_ms: u64,
+    /// Gate controlling when retries are attempted.
+    /// Defaults to [`RetryCondition::Always`].
+    #[serde(default)]
+    pub condition: RetryCondition,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -178,6 +250,21 @@ pub struct TaskExecutionMetadata {
     pub execution_mode: Option<String>,
     #[serde(default)]
     pub correlation_id: Option<String>,
+    // ---- error classification ------------------------------------------------
+    /// Root-cause category of the failure, if the task did not succeed.
+    #[serde(default)]
+    pub error_kind: Option<ErrorKind>,
+    // ---- routing introspection -----------------------------------------------
+    /// Full routing decision record for this task.
+    #[serde(default)]
+    pub routing_decision: Option<RoutingDecision>,
+    // ---- scheduling introspection --------------------------------------------
+    /// Milliseconds spent waiting for a concurrency slot before execution began.
+    #[serde(default)]
+    pub concurrency_wait_ms: u64,
+    /// Whether execution was blocked by an exhausted orchestrator budget.
+    #[serde(default)]
+    pub budget_exhausted: bool,
 }
 
 // ============================================================================
@@ -202,6 +289,10 @@ pub struct TaskResult {
     /// Human-readable error message when `success` is `false`.
     #[serde(default)]
     pub error: Option<String>,
+
+    /// Structured error category (set on failure).
+    #[serde(default)]
+    pub error_kind: Option<ErrorKind>,
 
     /// Number of reasoning steps consumed.
     pub steps_used: usize,
@@ -229,29 +320,46 @@ impl TaskResult {
             output,
             success: true,
             error: None,
+            error_kind: None,
             steps_used,
             session_id,
             metadata: TaskExecutionMetadata::default(),
         }
     }
 
-    /// Construct a failure result.
-    pub fn failure(task_id: String, agent_id: String, error: String) -> Self {
+    /// Construct a failure result with a classified error kind.
+    pub fn failure_with_kind(
+        task_id: String,
+        agent_id: String,
+        error: String,
+        kind: ErrorKind,
+    ) -> Self {
         Self {
             task_id,
             agent_id,
             output: Value::Null,
             success: false,
             error: Some(error),
+            error_kind: Some(kind),
             steps_used: 0,
             session_id: String::new(),
             metadata: TaskExecutionMetadata::default(),
         }
     }
 
+    /// Construct a failure result (error kind defaults to `Permanent`).
+    pub fn failure(task_id: String, agent_id: String, error: String) -> Self {
+        Self::failure_with_kind(task_id, agent_id, error, ErrorKind::Permanent)
+    }
+
     pub fn with_metadata(mut self, metadata: TaskExecutionMetadata) -> Self {
         self.metadata = metadata;
         self
+    }
+
+    /// Returns `true` if the error kind is transient (candidate for retry).
+    pub fn is_transient(&self) -> bool {
+        matches!(self.error_kind, Some(ErrorKind::Transient))
     }
 }
 

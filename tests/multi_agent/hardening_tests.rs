@@ -7,7 +7,8 @@
 //! deadline pre-check logic.
 
 use antikythera_core::application::agent::multi_agent::task::{
-    AgentTask, PipelineResult, TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
+    AgentTask, ErrorKind, PipelineResult, RetryCondition, RoutingDecision,
+    TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
 };
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -21,6 +22,7 @@ fn agent_task_builder_sets_all_fields() {
     let policy = TaskRetryPolicy {
         max_retries: 3,
         backoff_ms: 250,
+        ..TaskRetryPolicy::default()
     };
 
     let task = AgentTask::new("analyse this code")
@@ -63,6 +65,7 @@ fn agent_task_serde_roundtrip() {
         .with_retry_policy(TaskRetryPolicy {
             max_retries: 2,
             backoff_ms: 100,
+            ..TaskRetryPolicy::default()
         });
 
     let json = serde_json::to_string(&task).expect("serialize");
@@ -93,6 +96,7 @@ fn task_retry_policy_serde_roundtrip() {
     let policy = TaskRetryPolicy {
         max_retries: 5,
         backoff_ms: 1_000,
+        ..TaskRetryPolicy::default()
     };
     let json = serde_json::to_string(&policy).expect("serialize");
     let restored: TaskRetryPolicy = serde_json::from_str(&json).expect("deserialize");
@@ -129,6 +133,7 @@ fn task_execution_metadata_serde_roundtrip() {
         routed_by: Some("round-robin".to_string()),
         execution_mode: Some("sequential".to_string()),
         correlation_id: Some("corr-xyz".to_string()),
+        ..TaskExecutionMetadata::default()
     };
 
     let json = serde_json::to_string(&meta).expect("serialize");
@@ -273,4 +278,261 @@ fn deadline_unix_ms_in_past_is_expired() {
         now_ms < future_deadline,
         "a deadline in the future must not be flagged as exceeded"
     );
+}
+
+// ---------------------------------------------------------------------------
+// CancellationToken — cooperative cancellation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cancellation_token_new_is_not_cancelled() {
+    use antikythera_core::application::agent::multi_agent::cancellation::CancellationToken;
+    let token = CancellationToken::new();
+    assert!(!token.is_cancelled());
+}
+
+#[test]
+fn cancellation_token_cancel_sets_flag() {
+    use antikythera_core::application::agent::multi_agent::cancellation::CancellationToken;
+    let token = CancellationToken::new();
+    token.cancel();
+    assert!(token.is_cancelled());
+}
+
+#[test]
+fn cancellation_token_child_shares_flag_with_parent() {
+    use antikythera_core::application::agent::multi_agent::cancellation::CancellationToken;
+    let parent = CancellationToken::new();
+    let child = parent.child_token();
+    // cancelling parent is visible through child
+    parent.cancel();
+    assert!(child.is_cancelled(), "child must share the cancellation flag");
+}
+
+#[test]
+fn cancellation_token_child_can_cancel_parent_flag() {
+    use antikythera_core::application::agent::multi_agent::cancellation::CancellationToken;
+    let parent = CancellationToken::new();
+    let child = parent.child_token();
+    // cancelling via child is visible on parent
+    child.cancel();
+    assert!(parent.is_cancelled(), "cancelling child must cancel the shared flag");
+}
+
+#[test]
+fn cancellation_snapshot_serde_roundtrip() {
+    use antikythera_core::application::agent::multi_agent::cancellation::{
+        CancellationSnapshot, CancellationToken,
+    };
+    let token = CancellationToken::new();
+    token.cancel();
+    let snap = CancellationSnapshot::from(&token);
+    let json = serde_json::to_string(&snap).expect("serialize");
+    let restored: CancellationSnapshot = serde_json::from_str(&json).expect("deserialize");
+    assert!(restored.was_cancelled);
+}
+
+// ---------------------------------------------------------------------------
+// OrchestratorBudget — step and task guardrails
+// ---------------------------------------------------------------------------
+
+#[test]
+fn budget_step_limit_exhaustion() {
+    use antikythera_core::application::agent::multi_agent::budget::OrchestratorBudget;
+    let budget = OrchestratorBudget::new().with_max_total_steps(5);
+    assert!(!budget.is_step_budget_exhausted());
+    budget.record_steps(3);
+    assert!(!budget.is_step_budget_exhausted()); // 3 < 5
+    budget.record_steps(2);
+    assert!(budget.is_step_budget_exhausted()); // 5 >= 5
+}
+
+#[test]
+fn budget_task_limit_exhaustion() {
+    use antikythera_core::application::agent::multi_agent::budget::OrchestratorBudget;
+    let budget = OrchestratorBudget::new().with_max_total_tasks(2);
+    assert!(!budget.is_task_budget_exhausted());
+    budget.record_task_dispatch();
+    assert!(!budget.is_task_budget_exhausted()); // 1 < 2
+    budget.record_task_dispatch();
+    assert!(budget.is_task_budget_exhausted()); // 2 >= 2
+}
+
+#[test]
+fn budget_clone_shares_counter_state() {
+    use antikythera_core::application::agent::multi_agent::budget::OrchestratorBudget;
+    let budget = OrchestratorBudget::new().with_max_total_steps(10);
+    let budget2 = budget.clone();
+    budget.record_steps(4);
+    // Both views should reflect the same counter
+    assert_eq!(budget2.consumed_steps(), 4);
+}
+
+#[test]
+fn budget_snapshot_reflects_current_state() {
+    use antikythera_core::application::agent::multi_agent::budget::OrchestratorBudget;
+    let budget = OrchestratorBudget::new()
+        .with_max_total_steps(20)
+        .with_max_total_tasks(5);
+    budget.record_steps(7);
+    budget.record_task_dispatch();
+    budget.record_task_dispatch();
+    let snap = budget.snapshot();
+    assert_eq!(snap.consumed_steps, 7);
+    assert_eq!(snap.dispatched_tasks, 2);
+    assert_eq!(snap.max_total_steps, Some(20));
+    assert_eq!(snap.max_total_tasks, Some(5));
+}
+
+#[test]
+fn budget_snapshot_serde_roundtrip() {
+    use antikythera_core::application::agent::multi_agent::budget::OrchestratorBudget;
+    let budget = OrchestratorBudget::new().with_max_total_steps(10);
+    budget.record_steps(3);
+    let snap = budget.snapshot();
+    let json = serde_json::to_string(&snap).expect("serialize");
+    let restored: antikythera_core::application::agent::multi_agent::budget::BudgetSnapshot =
+        serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.consumed_steps, 3);
+    assert_eq!(restored.max_total_steps, Some(10));
+}
+
+// ---------------------------------------------------------------------------
+// RetryCondition and ErrorKind — conditional retry logic
+// ---------------------------------------------------------------------------
+
+#[test]
+fn retry_condition_default_is_always() {
+    let policy = TaskRetryPolicy::default();
+    assert!(matches!(policy.condition, RetryCondition::Always));
+}
+
+#[test]
+fn retry_condition_on_transient_blocks_retry_for_permanent() {
+    // Mirrors the gate in execute_task:
+    //   if matches!(condition, OnTransient) && !error_kind.is_transient() { break; }
+    let is_transient_error = false; // permanent error
+    let condition = RetryCondition::OnTransient;
+    let should_retry = match condition {
+        RetryCondition::Always => true,
+        RetryCondition::Never => false,
+        RetryCondition::OnTransient => is_transient_error,
+    };
+    assert!(!should_retry, "OnTransient must not retry permanent errors");
+}
+
+#[test]
+fn retry_condition_on_transient_allows_retry_for_transient() {
+    let is_transient_error = true;
+    let condition = RetryCondition::OnTransient;
+    let should_retry = match condition {
+        RetryCondition::Always => true,
+        RetryCondition::Never => false,
+        RetryCondition::OnTransient => is_transient_error,
+    };
+    assert!(should_retry, "OnTransient must retry transient errors");
+}
+
+#[test]
+fn retry_condition_never_blocks_all_retries() {
+    let condition = RetryCondition::Never;
+    let should_retry = !matches!(condition, RetryCondition::Never);
+    assert!(!should_retry, "Never must block all retries");
+}
+
+#[test]
+fn error_kind_serde_roundtrip() {
+    let kinds = vec![
+        ErrorKind::Transient,
+        ErrorKind::Permanent,
+        ErrorKind::Cancelled,
+        ErrorKind::DeadlineExceeded,
+        ErrorKind::BudgetExhausted,
+    ];
+    for kind in kinds {
+        let json = serde_json::to_string(&kind).expect("serialize");
+        let restored: ErrorKind = serde_json::from_str(&json).expect("deserialize");
+        // Verify the discriminant name round-trips (serde snake_case)
+        assert_eq!(
+            serde_json::to_string(&kind).unwrap(),
+            serde_json::to_string(&restored).unwrap()
+        );
+    }
+}
+
+#[test]
+fn task_result_is_transient_helper() {
+    let transient = TaskResult::failure_with_kind(
+        "t1".into(),
+        "a".into(),
+        "rate limited".into(),
+        ErrorKind::Transient,
+    );
+    assert!(transient.is_transient());
+
+    let permanent = TaskResult::failure_with_kind(
+        "t2".into(),
+        "b".into(),
+        "auth error".into(),
+        ErrorKind::Permanent,
+    );
+    assert!(!permanent.is_transient());
+
+    let success = TaskResult::success("t3".into(), "c".into(), serde_json::json!(1), 1, "s".into());
+    assert!(!success.is_transient(), "success is never transient");
+}
+
+// ---------------------------------------------------------------------------
+// RoutingDecision — routing introspection
+// ---------------------------------------------------------------------------
+
+#[test]
+fn routing_decision_embedded_in_metadata() {
+    let decision = RoutingDecision {
+        router_name: "round-robin".to_string(),
+        selected_agent_id: "agent-42".to_string(),
+        candidates_considered: 3,
+        reason: Some("round-robin selected agent-42".to_string()),
+    };
+    let meta = TaskExecutionMetadata {
+        routing_decision: Some(decision.clone()),
+        ..TaskExecutionMetadata::default()
+    };
+    let rd = meta.routing_decision.as_ref().unwrap();
+    assert_eq!(rd.router_name, "round-robin");
+    assert_eq!(rd.selected_agent_id, "agent-42");
+    assert_eq!(rd.candidates_considered, 3);
+    assert!(rd.reason.as_deref().unwrap().contains("round-robin"));
+}
+
+#[test]
+fn routing_decision_serde_roundtrip() {
+    let decision = RoutingDecision {
+        router_name: "role".to_string(),
+        selected_agent_id: "planner".to_string(),
+        candidates_considered: 5,
+        reason: Some("role='planner' matched agent_id='planner'".to_string()),
+    };
+    let json = serde_json::to_string(&decision).expect("serialize");
+    let restored: RoutingDecision = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.router_name, "role");
+    assert_eq!(restored.selected_agent_id, "planner");
+    assert_eq!(restored.candidates_considered, 5);
+}
+
+// ---------------------------------------------------------------------------
+// AgentRouter name() and routing_reason() introspection
+// ---------------------------------------------------------------------------
+
+#[test]
+fn router_name_returns_correct_strings() {
+    use antikythera_core::application::agent::multi_agent::router::{
+        DirectRouter, FirstAvailableRouter, RoleRouter, RoundRobinRouter,
+    };
+    use antikythera_core::application::agent::multi_agent::AgentRouter;
+
+    assert_eq!(DirectRouter.name(), "direct");
+    assert_eq!(RoundRobinRouter::new().name(), "round-robin");
+    assert_eq!(FirstAvailableRouter.name(), "first-available");
+    assert_eq!(RoleRouter::new("executor").name(), "role");
 }

@@ -35,15 +35,19 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use tokio::sync::Semaphore;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
+use super::budget::OrchestratorBudget;
+use super::cancellation::CancellationToken;
 use super::execution::ExecutionMode;
 use super::registry::{AgentProfile, AgentRegistry};
 use super::router::{AgentRouter, FirstAvailableRouter};
 use super::scheduler::TaskScheduler;
 use super::task::{
-    AgentTask, PipelineResult, TaskExecutionMetadata, TaskResult,
+    AgentTask, ErrorKind, PipelineResult, RoutingDecision, RetryCondition,
+    TaskExecutionMetadata, TaskResult,
 };
 use crate::application::agent::{Agent, AgentOptions};
 use crate::application::client::McpClient;
@@ -56,19 +60,32 @@ use crate::infrastructure::model::ModelProvider;
 /// Execute a single task against a pre-resolved agent profile.
 ///
 /// This free function is used both by the sequential `dispatch` path and
-/// inside the closures passed to the scheduler.
+/// inside the closures passed to the scheduler.  It is intentionally
+/// free-standing so it can be cloned into async closures without carrying an
+/// orchestrator reference.
+///
+/// # Hardening features wired here
+/// - Deadline pre-check (fail fast before any work starts)
+/// - Cancellation check (cancel token from orchestrator)
+/// - `budget_steps` cap (min of task budget and profile max_steps)
+/// - Per-task retry with `RetryCondition` gate
+/// - Full `TaskExecutionMetadata` including `RoutingDecision`
+/// - `ErrorKind` classification on every failure path
 async fn execute_task<P: ModelProvider>(
     client: Arc<McpClient<P>>,
     task: AgentTask,
     profile: AgentProfile,
-    routed_by: Option<String>,
+    routing_decision: RoutingDecision,
     execution_mode: String,
+    cancel_token: CancellationToken,
+    concurrency_wait_ms: u64,
 ) -> TaskResult {
     let started = Instant::now();
     let max_steps = task.max_steps.or(profile.max_steps).unwrap_or(8);
     let budgeted_max_steps = task.budget_steps.map(|b| b.min(max_steps)).unwrap_or(max_steps);
     let retry_policy = task.retry_policy.clone().unwrap_or_default();
 
+    // ---- deadline pre-check ------------------------------------------------
     let now_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_else(|_| Duration::from_millis(0))
@@ -78,25 +95,71 @@ async fn execute_task<P: ModelProvider>(
         if now_ms >= deadline {
             let metadata = TaskExecutionMetadata {
                 deadline_exceeded: true,
-                routed_by,
                 execution_mode: Some(execution_mode),
                 correlation_id: task.correlation_id.clone(),
+                routing_decision: Some(routing_decision),
+                concurrency_wait_ms,
+                error_kind: Some(ErrorKind::DeadlineExceeded),
                 ..TaskExecutionMetadata::default()
             };
-            return TaskResult::failure(
+            return TaskResult::failure_with_kind(
                 task.task_id,
                 profile.id,
                 "Task deadline exceeded before execution".to_string(),
+                ErrorKind::DeadlineExceeded,
             )
             .with_metadata(metadata);
         }
     }
 
+    // ---- cancellation pre-check --------------------------------------------
+    if cancel_token.is_cancelled() {
+        let metadata = TaskExecutionMetadata {
+            cancelled: true,
+            execution_mode: Some(execution_mode),
+            correlation_id: task.correlation_id.clone(),
+            routing_decision: Some(routing_decision),
+            concurrency_wait_ms,
+            error_kind: Some(ErrorKind::Cancelled),
+            ..TaskExecutionMetadata::default()
+        };
+        return TaskResult::failure_with_kind(
+            task.task_id,
+            profile.id,
+            "Task cancelled before execution".to_string(),
+            ErrorKind::Cancelled,
+        )
+        .with_metadata(metadata);
+    }
+
     let mut attempt: u8 = 0;
-    #[allow(unused_assignments)] // initial None is overwritten in every Err branch before use
-    let mut last_error: Option<String> = None;
+    #[allow(unused_assignments)]
+    let mut last_error: Option<(String, ErrorKind)> = None;
 
     loop {
+        // ---- per-attempt cancellation check --------------------------------
+        if cancel_token.is_cancelled() {
+            let metadata = TaskExecutionMetadata {
+                attempt_count: attempt,
+                duration_ms: started.elapsed().as_millis() as u64,
+                cancelled: true,
+                retry_applied: attempt > 1,
+                execution_mode: Some(execution_mode),
+                correlation_id: task.correlation_id,
+                routing_decision: Some(routing_decision),
+                concurrency_wait_ms,
+                error_kind: Some(ErrorKind::Cancelled),
+                ..TaskExecutionMetadata::default()
+            };
+            return TaskResult::failure_with_kind(
+                task.task_id,
+                profile.id,
+                "Task cancelled during execution".to_string(),
+                ErrorKind::Cancelled,
+            )
+            .with_metadata(metadata);
+        }
+
         attempt = attempt.saturating_add(1);
         let agent = Agent::new(client.clone());
         let options = AgentOptions {
@@ -118,28 +181,34 @@ async fn execute_task<P: ModelProvider>(
             match tokio::time::timeout(Duration::from_millis(timeout_ms), run_future).await {
                 Ok(result) => result,
                 Err(_) => {
-                    let metadata = TaskExecutionMetadata {
-                        attempt_count: attempt,
-                        duration_ms: started.elapsed().as_millis() as u64,
-                        timed_out: true,
-                        retry_applied: attempt > 1,
-                        routed_by: routed_by.clone(),
-                        execution_mode: Some(execution_mode.clone()),
-                        correlation_id: task.correlation_id.clone(),
-                        ..TaskExecutionMetadata::default()
-                    };
+                    // classify timeout as transient — could be a slow LLM
+                    let should_retry = attempt <= retry_policy.max_retries
+                        && retry_policy.condition != RetryCondition::Never;
 
-                    if attempt <= retry_policy.max_retries {
+                    if should_retry {
                         if retry_policy.backoff_ms > 0 {
                             sleep(Duration::from_millis(retry_policy.backoff_ms)).await;
                         }
                         continue;
                     }
 
-                    return TaskResult::failure(
+                    let metadata = TaskExecutionMetadata {
+                        attempt_count: attempt,
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        timed_out: true,
+                        retry_applied: attempt > 1,
+                        execution_mode: Some(execution_mode),
+                        correlation_id: task.correlation_id,
+                        routing_decision: Some(routing_decision),
+                        concurrency_wait_ms,
+                        error_kind: Some(ErrorKind::Transient),
+                        ..TaskExecutionMetadata::default()
+                    };
+                    return TaskResult::failure_with_kind(
                         task.task_id,
                         profile.id,
                         format!("Task timed out after {} ms", timeout_ms),
+                        ErrorKind::Transient,
                     )
                     .with_metadata(metadata);
                 }
@@ -155,9 +224,10 @@ async fn execute_task<P: ModelProvider>(
                     attempt_count: attempt,
                     duration_ms: started.elapsed().as_millis() as u64,
                     retry_applied: attempt > 1,
-                    routed_by,
                     execution_mode: Some(execution_mode),
                     correlation_id: task.correlation_id,
+                    routing_decision: Some(routing_decision),
+                    concurrency_wait_ms,
                     ..TaskExecutionMetadata::default()
                 };
                 return TaskResult::success(
@@ -170,16 +240,30 @@ async fn execute_task<P: ModelProvider>(
                 .with_metadata(metadata);
             }
             Err(e) => {
+                let err_str = e.to_string();
+                // Heuristic: classify agent-side errors.
+                // Callers can override by setting task.retry_policy.condition = OnTransient.
+                let kind = classify_agent_error(&err_str);
+
                 warn!(
                     task_id = %task.task_id,
                     agent_id = %profile.id,
-                    error = %e,
+                    error = %err_str,
                     attempt = attempt,
+                    kind = ?kind,
                     "Task failed"
                 );
-                last_error = Some(e.to_string());
 
-                if attempt <= retry_policy.max_retries {
+                let should_retry = attempt <= retry_policy.max_retries
+                    && match retry_policy.condition {
+                        RetryCondition::Never => false,
+                        RetryCondition::Always => true,
+                        RetryCondition::OnTransient => kind == ErrorKind::Transient,
+                    };
+
+                last_error = Some((err_str, kind));
+
+                if should_retry {
                     if retry_policy.backoff_ms > 0 {
                         sleep(Duration::from_millis(retry_policy.backoff_ms)).await;
                     }
@@ -191,22 +275,42 @@ async fn execute_task<P: ModelProvider>(
         break;
     }
 
+    let (error_msg, error_kind) = last_error.unwrap_or_else(|| ("Task failed".to_string(), ErrorKind::Permanent));
     let metadata = TaskExecutionMetadata {
         attempt_count: attempt,
         duration_ms: started.elapsed().as_millis() as u64,
         retry_applied: attempt > 1,
-        routed_by,
         execution_mode: Some(execution_mode),
         correlation_id: task.correlation_id,
+        routing_decision: Some(routing_decision),
+        concurrency_wait_ms,
+        error_kind: Some(error_kind.clone()),
         ..TaskExecutionMetadata::default()
     };
 
-    TaskResult::failure(
-        task.task_id,
-        profile.id,
-        last_error.unwrap_or_else(|| "Task failed".to_string()),
-    )
-    .with_metadata(metadata)
+    TaskResult::failure_with_kind(task.task_id, profile.id, error_msg, error_kind)
+        .with_metadata(metadata)
+}
+
+/// Classify an agent error string as transient or permanent.
+///
+/// This is a best-effort heuristic; callers can always override retry behaviour
+/// via [`TaskRetryPolicy::condition`].
+fn classify_agent_error(error: &str) -> ErrorKind {
+    let lower = error.to_lowercase();
+    if lower.contains("timeout")
+        || lower.contains("rate limit")
+        || lower.contains("503")
+        || lower.contains("502")
+        || lower.contains("429")
+        || lower.contains("connection")
+        || lower.contains("network")
+        || lower.contains("temporarily")
+    {
+        ErrorKind::Transient
+    } else {
+        ErrorKind::Permanent
+    }
 }
 
 // ============================================================================
@@ -249,6 +353,12 @@ pub struct MultiAgentOrchestrator<P: ModelProvider> {
     scheduler: TaskScheduler,
     router: Arc<dyn AgentRouter>,
     client: Arc<McpClient<P>>,
+    /// Orchestrator-level cancellation — shared with all running tasks.
+    cancel_token: CancellationToken,
+    /// Orchestrator-level concurrency and step budget guardrails.
+    budget: OrchestratorBudget,
+    /// Optional semaphore enforcing `budget.max_concurrent_tasks`.
+    concurrency_sem: Option<Arc<Semaphore>>,
 }
 
 impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
@@ -263,6 +373,9 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             scheduler: TaskScheduler::new(mode),
             router: Arc::new(FirstAvailableRouter),
             client,
+            cancel_token: CancellationToken::new(),
+            budget: OrchestratorBudget::new(),
+            concurrency_sem: None,
         }
     }
 
@@ -295,6 +408,20 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         self
     }
 
+    /// Set orchestrator-level budget guardrails.
+    ///
+    /// The budget is enforced in addition to per-task `budget_steps` and
+    /// `ExecutionMode::Parallel { workers }`.  Setting
+    /// `OrchestratorBudget::max_concurrent_tasks` installs a semaphore that
+    /// limits concurrent executions across *all* dispatch paths.
+    pub fn with_budget(mut self, budget: OrchestratorBudget) -> Self {
+        self.concurrency_sem = budget
+            .max_concurrent_tasks
+            .map(|n| Arc::new(Semaphore::new(n.max(1))));
+        self.budget = budget;
+        self
+    }
+
     // ----------------------------------------------------------------
     // Inspection
     // ----------------------------------------------------------------
@@ -309,6 +436,40 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         self.scheduler.mode
     }
 
+    /// Return a snapshot of the current budget state.
+    pub fn budget_snapshot(&self) -> super::budget::BudgetSnapshot {
+        self.budget.snapshot()
+    }
+
+    // ----------------------------------------------------------------
+    // Cancellation
+    // ----------------------------------------------------------------
+
+    /// Signal all running (and future) tasks to stop.
+    ///
+    /// After calling `cancel`, any task that checks the cancellation token
+    /// will receive a [`TaskResult`] with `error_kind = Cancelled`.
+    ///
+    /// Cancellation is *cooperative* — tasks check the token between retry
+    /// iterations, not mid-step.
+    pub fn cancel(&self) {
+        self.cancel_token.cancel();
+    }
+
+    /// Returns `true` if [`cancel`] has been called on this orchestrator.
+    ///
+    /// [`cancel`]: MultiAgentOrchestrator::cancel
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel_token.is_cancelled()
+    }
+
+    /// Return a child [`CancellationToken`] that can be stored or passed to
+    /// other components.  Cancelling the orchestrator will propagate to all
+    /// child tokens.
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancel_token.child_token()
+    }
+
     // ----------------------------------------------------------------
     // Dispatch
     // ----------------------------------------------------------------
@@ -318,7 +479,49 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
     /// The router is called to resolve the target agent.  If the router
     /// returns `None` a [`TaskResult::failure`] is returned immediately.
     pub async fn dispatch(&self, task: AgentTask) -> TaskResult {
+        // ---- budget guard -----------------------------------------------
+        let dispatch_count = self.budget.record_task_dispatch();
+        if self.budget.is_task_budget_exhausted() {
+            let meta = TaskExecutionMetadata {
+                budget_exhausted: true,
+                execution_mode: Some(self.execution_mode().to_string()),
+                correlation_id: task.correlation_id.clone(),
+                error_kind: Some(ErrorKind::BudgetExhausted),
+                ..TaskExecutionMetadata::default()
+            };
+            return TaskResult::failure_with_kind(
+                task.task_id.clone(),
+                task.agent_id.clone().unwrap_or_default(),
+                format!("Orchestrator task budget exhausted (dispatched {})", dispatch_count),
+                ErrorKind::BudgetExhausted,
+            )
+            .with_metadata(meta);
+        }
+
+        if self.budget.is_step_budget_exhausted() {
+            let meta = TaskExecutionMetadata {
+                budget_exhausted: true,
+                execution_mode: Some(self.execution_mode().to_string()),
+                correlation_id: task.correlation_id.clone(),
+                error_kind: Some(ErrorKind::BudgetExhausted),
+                ..TaskExecutionMetadata::default()
+            };
+            return TaskResult::failure_with_kind(
+                task.task_id.clone(),
+                task.agent_id.clone().unwrap_or_default(),
+                format!(
+                    "Orchestrator step budget exhausted ({} / {} steps consumed)",
+                    self.budget.consumed_steps(),
+                    self.budget.max_total_steps.unwrap_or(0),
+                ),
+                ErrorKind::BudgetExhausted,
+            )
+            .with_metadata(meta);
+        }
+
+        // ---- routing -------------------------------------------------------
         let profiles: Vec<&AgentProfile> = self.registry.list_profiles();
+        let candidates = profiles.len();
         let profile = match self.router.route(&task, &profiles) {
             Some(p) => p.clone(),
             None => {
@@ -329,14 +532,38 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                 );
             }
         };
-        execute_task(
+
+        let routing_decision = RoutingDecision {
+            router_name: self.router.name().to_string(),
+            selected_agent_id: profile.id.clone(),
+            candidates_considered: candidates,
+            reason: self.router.routing_reason(&task, &profile),
+        };
+
+        // ---- concurrency slot (optional semaphore) -------------------------
+        let concurrency_wait_start = Instant::now();
+        let _permit = if let Some(sem) = &self.concurrency_sem {
+            Some(sem.clone().acquire_owned().await.expect("orchestrator semaphore closed"))
+        } else {
+            None
+        };
+        let concurrency_wait_ms = concurrency_wait_start.elapsed().as_millis() as u64;
+
+        let result = execute_task(
             self.client.clone(),
             task,
             profile,
-            Some("router".to_string()),
+            routing_decision,
             self.execution_mode().to_string(),
+            self.cancel_token.child_token(),
+            concurrency_wait_ms,
         )
-        .await
+        .await;
+
+        // ---- record steps consumed -----------------------------------------
+        self.budget.record_steps(result.steps_used);
+
+        result
     }
 
     /// Dispatch multiple tasks and collect all results.
@@ -354,22 +581,71 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
 
         // Resolve routing for all tasks before entering the scheduler
         let profiles: Vec<&AgentProfile> = self.registry.list_profiles();
-        let prepared: Vec<(AgentTask, Option<AgentProfile>)> = tasks
+        let candidates = profiles.len();
+        let execution_mode = self.execution_mode().to_string();
+
+        let prepared: Vec<(AgentTask, Option<AgentProfile>, RoutingDecision)> = tasks
             .into_iter()
             .map(|task| {
                 let profile = self.router.route(&task, &profiles).cloned();
-                (task, profile)
+                let routing_decision = match &profile {
+                    Some(p) => RoutingDecision {
+                        router_name: self.router.name().to_string(),
+                        selected_agent_id: p.id.clone(),
+                        candidates_considered: candidates,
+                        reason: self.router.routing_reason(&task, p),
+                    },
+                    None => RoutingDecision {
+                        router_name: self.router.name().to_string(),
+                        selected_agent_id: String::new(),
+                        candidates_considered: candidates,
+                        reason: Some("No matching agent found".to_string()),
+                    },
+                };
+                (task, profile, routing_decision)
             })
             .collect();
 
         let client = self.client.clone();
-        let execution_mode = self.execution_mode().to_string();
+        let cancel_token = self.cancel_token.clone();
+        let budget = self.budget.clone();
+        let concurrency_sem = self.concurrency_sem.clone();
 
-        self.scheduler
-            .run(prepared, move |(task, profile)| {
+        let results = self.scheduler
+            .run(prepared, move |(task, profile, routing_decision)| {
                 let client = client.clone();
                 let execution_mode = execution_mode.clone();
+                let cancel_token = cancel_token.clone();
+                let budget = budget.clone();
+                let concurrency_sem = concurrency_sem.clone();
                 async move {
+                    // Budget guard per-task inside batch
+                    let dispatch_count = budget.record_task_dispatch();
+                    if budget.is_task_budget_exhausted() {
+                        let meta = TaskExecutionMetadata {
+                            budget_exhausted: true,
+                            execution_mode: Some(execution_mode),
+                            routing_decision: Some(routing_decision),
+                            error_kind: Some(ErrorKind::BudgetExhausted),
+                            ..TaskExecutionMetadata::default()
+                        };
+                        return TaskResult::failure_with_kind(
+                            task.task_id.clone(),
+                            task.agent_id.clone().unwrap_or_default(),
+                            format!("Orchestrator task budget exhausted (dispatched {})", dispatch_count),
+                            ErrorKind::BudgetExhausted,
+                        ).with_metadata(meta);
+                    }
+
+                    // Concurrency slot
+                    let concurrency_wait_start = Instant::now();
+                    let _permit = if let Some(sem) = &concurrency_sem {
+                        Some(sem.clone().acquire_owned().await.expect("orchestrator semaphore closed"))
+                    } else {
+                        None
+                    };
+                    let concurrency_wait_ms = concurrency_wait_start.elapsed().as_millis() as u64;
+
                     match profile {
                         None => TaskResult::failure(
                             task.task_id.clone(),
@@ -377,25 +653,31 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                             "No agent profile found for this task".to_string(),
                         )
                         .with_metadata(TaskExecutionMetadata {
-                            routed_by: Some("router".to_string()),
                             execution_mode: Some(execution_mode),
                             correlation_id: task.correlation_id,
+                            routing_decision: Some(routing_decision),
                             ..TaskExecutionMetadata::default()
                         }),
                         Some(p) => {
-                            execute_task(
+                            let result = execute_task(
                                 client,
                                 task,
                                 p,
-                                Some("router".to_string()),
+                                routing_decision,
                                 execution_mode,
+                                cancel_token,
+                                concurrency_wait_ms,
                             )
-                            .await
+                            .await;
+                            budget.record_steps(result.steps_used);
+                            result
                         }
                     }
                 }
             })
-            .await
+            .await;
+
+        results
     }
 
     /// Execute tasks as a sequential pipeline.

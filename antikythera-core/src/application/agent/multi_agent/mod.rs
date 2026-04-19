@@ -46,6 +46,8 @@
 //!
 //! [`Agent`]: crate::application::agent::runner::Agent
 
+pub mod budget;
+pub mod cancellation;
 pub mod execution;
 pub mod orchestrator;
 pub mod registry;
@@ -57,11 +59,14 @@ pub mod task;
 // Convenient re-exports (maintain backwards compatibility)
 // ============================================================================
 
+pub use budget::{BudgetSnapshot, OrchestratorBudget};
+pub use cancellation::CancellationToken;
 pub use execution::ExecutionMode;
 pub use orchestrator::MultiAgentOrchestrator;
 pub use registry::{AgentProfile, AgentRegistry, AgentRole, ContextId, MemoryConfig, MemoryProvider};
 pub use router::{AgentRouter, DirectRouter, FirstAvailableRouter, RoleRouter, RoundRobinRouter};
 pub use scheduler::TaskScheduler;
 pub use task::{
-    AgentTask, PipelineResult, TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
+    AgentTask, ErrorKind, PipelineResult, RetryCondition, RoutingDecision,
+    TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
 };
