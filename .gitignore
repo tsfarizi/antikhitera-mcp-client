@@ -4,3 +4,4 @@
 *.txt
 /servers
 .env
+.code-review-graph/
