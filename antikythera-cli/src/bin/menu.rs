@@ -10,18 +10,17 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use antikythera_core::cli::{Cli, RunMode};
-use antikythera_core::application::stdio;
-use antikythera_core::{AppConfig, ClientConfig, McpClient};
 use antikythera_cli::infrastructure::llm::{
     build_provider_from_configs, install_terminal_stream_sink,
 };
+use antikythera_core::application::stdio;
+use antikythera_core::cli::{Cli, RunMode};
+use antikythera_core::{AppConfig, ClientConfig, McpClient};
 use clap::Parser;
 
 #[cfg(feature = "multi-agent")]
 use antikythera_core::application::agent::multi_agent::{
-    AgentProfile, AgentTask, DirectRouter, ExecutionMode, MultiAgentOrchestrator,
-    RoundRobinRouter,
+    AgentProfile, AgentTask, DirectRouter, ExecutionMode, MultiAgentOrchestrator, RoundRobinRouter,
 };
 
 #[tokio::main]
@@ -41,14 +40,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let provider = build_provider_from_configs(&providers)?;
     install_terminal_stream_sink();
-    let mut client_cfg = ClientConfig::new(
-        config.default_provider.clone(),
-        config.model.clone(),
-    )
-    .with_tools(config.tools.clone())
-    .with_servers(config.servers.clone())
-    .with_prompts(config.prompts.clone())
-    .with_providers(providers.clone());
+    let mut client_cfg = ClientConfig::new(config.default_provider.clone(), config.model.clone())
+        .with_tools(config.tools.clone())
+        .with_servers(config.servers.clone())
+        .with_prompts(config.prompts.clone())
+        .with_providers(providers.clone());
 
     if let Some(system) = cli.system.clone().or(config.system_prompt.clone()) {
         client_cfg = client_cfg.with_system_prompt(system);
@@ -88,8 +84,7 @@ async fn run_multi_agent(
     // ----------------------------------------------------------------
     // Parse execution mode
     // ----------------------------------------------------------------
-    let exec_mode = ExecutionMode::from_spec(&cli.execution_mode)
-        .unwrap_or(ExecutionMode::Auto);
+    let exec_mode = ExecutionMode::from_spec(&cli.execution_mode).unwrap_or(ExecutionMode::Auto);
 
     // ----------------------------------------------------------------
     // Load agent profiles
@@ -97,8 +92,7 @@ async fn run_multi_agent(
     let profiles: Vec<AgentProfile> = if let Some(agents_path) = cli.agents.as_deref() {
         let raw = std::fs::read_to_string(agents_path)
             .map_err(|e| format!("Failed to read agents file '{}': {e}", agents_path))?;
-        serde_json::from_str(&raw)
-            .map_err(|e| format!("Failed to parse agents JSON: {e}"))?
+        serde_json::from_str(&raw).map_err(|e| format!("Failed to parse agents JSON: {e}"))?
     } else {
         // Default: one general-purpose agent
         vec![AgentProfile {

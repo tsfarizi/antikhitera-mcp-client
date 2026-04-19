@@ -43,7 +43,7 @@ pub mod policy;
 pub mod policy_audit;
 pub mod retry;
 
-pub use context_window::{prune_messages, ContextWindowPolicy, TokenEstimator};
+pub use context_window::{ContextWindowPolicy, TokenEstimator, prune_messages};
 pub use health::{ComponentHealth, HealthStatus, HealthTracker};
 pub use policy::{ResilienceConfig, RetryPolicy, TimeoutPolicy};
 pub use policy_audit::{

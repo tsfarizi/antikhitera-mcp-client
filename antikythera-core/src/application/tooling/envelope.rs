@@ -37,7 +37,10 @@ impl std::fmt::Display for EnvelopeError {
             EnvelopeError::MissingTool => write!(f, "tool must be a non-empty string"),
             EnvelopeError::InvalidArguments => write!(f, "arguments must be a JSON object"),
             EnvelopeError::InconsistentResult => {
-                write!(f, "error must be present for failed results and absent for successful ones")
+                write!(
+                    f,
+                    "error must be present for failed results and absent for successful ones"
+                )
             }
         }
     }
@@ -159,8 +162,14 @@ mod tests {
     #[test]
     fn transport_message_mapping_matrix() {
         let matrix = [
-            (EnvelopeError::MissingTool, "tool must be a non-empty string"),
-            (EnvelopeError::InvalidArguments, "arguments must be a JSON object"),
+            (
+                EnvelopeError::MissingTool,
+                "tool must be a non-empty string",
+            ),
+            (
+                EnvelopeError::InvalidArguments,
+                "arguments must be a JSON object",
+            ),
             (
                 EnvelopeError::InconsistentResult,
                 "error must be present for failed results and absent for successful ones",

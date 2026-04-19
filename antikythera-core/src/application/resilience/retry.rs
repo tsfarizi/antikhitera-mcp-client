@@ -88,8 +88,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     fn fast_policy(max: u32) -> RetryPolicy {
         RetryPolicy {
@@ -104,15 +104,14 @@ mod tests {
     async fn succeeds_on_first_attempt_without_retry() {
         let calls = Arc::new(AtomicU32::new(0));
         let c = Arc::clone(&calls);
-        let result: Result<&str, String> =
-            with_retry(&RetryPolicy::no_retry(), || {
-                let c = Arc::clone(&c);
-                async move {
-                    c.fetch_add(1, Ordering::SeqCst);
-                    Ok("ok")
-                }
-            })
-            .await;
+        let result: Result<&str, String> = with_retry(&RetryPolicy::no_retry(), || {
+            let c = Arc::clone(&c);
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok("ok")
+            }
+        })
+        .await;
         assert_eq!(result.unwrap(), "ok");
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
@@ -121,15 +120,14 @@ mod tests {
     async fn retries_up_to_max_attempts_on_every_failure() {
         let calls = Arc::new(AtomicU32::new(0));
         let c = Arc::clone(&calls);
-        let result: Result<&str, String> =
-            with_retry(&fast_policy(3), || {
-                let c = Arc::clone(&c);
-                async move {
-                    c.fetch_add(1, Ordering::SeqCst);
-                    Err("network error".to_string())
-                }
-            })
-            .await;
+        let result: Result<&str, String> = with_retry(&fast_policy(3), || {
+            let c = Arc::clone(&c);
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Err("network error".to_string())
+            }
+        })
+        .await;
         assert!(result.is_err());
         assert_eq!(calls.load(Ordering::SeqCst), 3);
     }

@@ -55,9 +55,10 @@ impl<P: ModelProvider> FsmAgent<P> {
         prompt: String,
         mut options: AgentOptions,
     ) -> Result<AgentOutcome, AgentError> {
-        let context_id = options.session_id.clone().unwrap_or_else(|| {
-            uuid::Uuid::new_v4().to_string()
-        });
+        let context_id = options
+            .session_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
         info!(
             context_id = %context_id,
@@ -106,11 +107,16 @@ impl<P: ModelProvider> FsmAgent<P> {
             "Resuming agent execution"
         );
 
-        let snapshot = self.memory.load_state(&context_id.to_string()).await?
-            .ok_or_else(|| AgentError::InvalidResponse(format!("Context {} not found", context_id)))?;
+        let snapshot = self
+            .memory
+            .load_state(&context_id.to_string())
+            .await?
+            .ok_or_else(|| {
+                AgentError::InvalidResponse(format!("Context {} not found", context_id))
+            })?;
 
         let mut state = self.rehydrate_from_snapshot(snapshot)?;
-        
+
         // If new input provided, inject it as context
         if let Some(input) = new_input {
             state = state.transition(Event::ContextReceived { context: input });
@@ -118,7 +124,7 @@ impl<P: ModelProvider> FsmAgent<P> {
 
         // Continue execution
         let outcome = self.continue_fsm_loop(state).await?;
-        
+
         // Save updated state
         self.save_state(&outcome).await?;
 
@@ -152,11 +158,19 @@ impl<P: ModelProvider> FsmAgent<P> {
             "ParsingDirective" => AgentState::ParsingDirective,
             "ExecutingTool" => {
                 // Extract tool info from context vars
-                let tool_id = snapshot.context_vars.get("current_tool")
-                    .cloned().unwrap_or_default();
+                let tool_id = snapshot
+                    .context_vars
+                    .get("current_tool")
+                    .cloned()
+                    .unwrap_or_default();
                 AgentState::ExecutingTool {
                     tool_id,
-                    input: snapshot.tool_cache.values().next().cloned().unwrap_or_default(),
+                    input: snapshot
+                        .tool_cache
+                        .values()
+                        .next()
+                        .cloned()
+                        .unwrap_or_default(),
                 }
             }
             "WaitingForContext" => AgentState::WaitingForContext,
@@ -166,11 +180,9 @@ impl<P: ModelProvider> FsmAgent<P> {
                 AgentState::RecoveringError { error, retry_count }
             }
             "FinalizingResponse" => AgentState::FinalizingResponse,
-            "Terminated" => {
-                AgentState::Terminated {
-                    reason: TerminationReason::Success,
-                }
-            }
+            "Terminated" => AgentState::Terminated {
+                reason: TerminationReason::Success,
+            },
             _ => AgentState::Idle,
         };
 
@@ -193,7 +205,9 @@ impl<P: ModelProvider> FsmAgent<P> {
 
         // Prepare initial context
         let context = self.runtime.build_context(Some(&prompt)).await;
-        let instructions = self.runtime.compose_system_instructions(&context, self.client.prompts());
+        let instructions = self
+            .runtime
+            .compose_system_instructions(&context, self.client.prompts());
         let system_prompt = match options.system_prompt.take() {
             Some(existing) if !existing.trim().is_empty() => {
                 format!("{existing}\n\n{instructions}")
@@ -202,7 +216,10 @@ impl<P: ModelProvider> FsmAgent<P> {
         };
 
         let mut next_prompt = self.runtime.initial_user_prompt(prompt.clone(), &context);
-        logs.push(format!("Initial agent request: {}", McpClient::<P>::summarise(&prompt)));
+        logs.push(format!(
+            "Initial agent request: {}",
+            McpClient::<P>::summarise(&prompt)
+        ));
 
         let mut system_prompt_to_send = Some(system_prompt);
         let mut first_call = true;
@@ -260,12 +277,24 @@ impl<P: ModelProvider> FsmAgent<P> {
                             first_call = false;
 
                             // Parse directive with retry logic
-                            match self.parse_with_retry(&result.content, &mut logs, &session_id).await {
+                            match self
+                                .parse_with_retry(&result.content, &mut logs, &session_id)
+                                .await
+                            {
                                 Ok(directive) => {
-                                    state = self.handle_directive(directive, &mut remaining_steps, &mut logs, &mut steps).await?;
+                                    state = self
+                                        .handle_directive(
+                                            directive,
+                                            &mut remaining_steps,
+                                            &mut logs,
+                                            &mut steps,
+                                        )
+                                        .await?;
                                 }
                                 Err(e) => {
-                                    state = state.transition(Event::Error { message: e.to_string() });
+                                    state = state.transition(Event::Error {
+                                        message: e.to_string(),
+                                    });
                                 }
                             }
                         }
@@ -279,7 +308,8 @@ impl<P: ModelProvider> FsmAgent<P> {
                                     delay_ms = delay_ms,
                                     "Transient error, retrying with exponential backoff"
                                 );
-                                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                                tokio::time::sleep(std::time::Duration::from_millis(delay_ms))
+                                    .await;
                                 continue;
                             } else {
                                 error!("Max transient retries exceeded");
@@ -291,14 +321,14 @@ impl<P: ModelProvider> FsmAgent<P> {
 
                 AgentState::ExecutingTool { tool_id, input } => {
                     info!(tool = %tool_id, "Executing tool");
-                    
+
                     match self.runtime.execute(tool_id, input.clone()).await {
                         Ok(execution) => {
                             logs.push(format!(
                                 "Tool '{}' executed (success: {})",
                                 execution.tool, execution.success
                             ));
-                            
+
                             if let Some(message) = execution.message.as_deref() {
                                 logs.push(format!(
                                     "Tool message: {}",
@@ -315,10 +345,17 @@ impl<P: ModelProvider> FsmAgent<P> {
                             });
 
                             // Save state after tool execution (pause point)
-                            self.save_intermediate_state(&session_id, &logs, &steps, "ExecutingTool").await?;
+                            self.save_intermediate_state(
+                                &session_id,
+                                &logs,
+                                &steps,
+                                "ExecutingTool",
+                            )
+                            .await?;
 
                             // Prepare tool result prompt
-                            let tool_result_instruction = self.client.prompts().tool_result_instruction();
+                            let tool_result_instruction =
+                                self.client.prompts().tool_result_instruction();
                             next_prompt = json!({
                                 "tool_result": {
                                     "tool": execution.tool,
@@ -348,12 +385,13 @@ impl<P: ModelProvider> FsmAgent<P> {
                 AgentState::WaitingForContext => {
                     // Save state and wait for external input (pause point)
                     info!("Agent waiting for external context - state persisted");
-                    self.save_intermediate_state(&session_id, &logs, &steps, "WaitingForContext").await?;
-                    
+                    self.save_intermediate_state(&session_id, &logs, &steps, "WaitingForContext")
+                        .await?;
+
                     // In stateless environment, execution would stop here
                     // and resume when new input arrives via resume()
                     return Err(AgentError::InvalidResponse(
-                        "Waiting for external context - use resume() to continue".into()
+                        "Waiting for external context - use resume() to continue".into(),
                     ));
                 }
 
@@ -362,15 +400,17 @@ impl<P: ModelProvider> FsmAgent<P> {
                         error!("Max error retries exceeded: {}", error);
                         return Err(AgentError::InvalidResponse(error.clone()));
                     }
-                    
+
                     info!(
                         retry_count = retry_count,
                         error = %error,
                         "Attempting error recovery"
                     );
-                    
+
                     // Retry logic would go here
-                    state = state.transition(Event::Error { message: error.clone() });
+                    state = state.transition(Event::Error {
+                        message: error.clone(),
+                    });
                 }
 
                 AgentState::FinalizingResponse => {
@@ -399,7 +439,8 @@ impl<P: ModelProvider> FsmAgent<P> {
         initial_state: AgentState,
     ) -> Result<AgentOutcome, AgentError> {
         // Simplified continuation - in practice would need to pass more context
-        self.execute_fsm_loop(initial_state, String::new(), AgentOptions::default()).await
+        self.execute_fsm_loop(initial_state, String::new(), AgentOptions::default())
+            .await
     }
 
     /// Handle directive from LLM
@@ -427,23 +468,27 @@ impl<P: ModelProvider> FsmAgent<P> {
                             serde_json::json!({
                                 "response": response,
                                 "type": "text"
-                            }).to_string()
+                            })
+                            .to_string()
                         }
                     }
                 };
 
                 // Try to extract structured data if response is JSON
-                let (content, data, metadata) = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&formatted_response) {
+                let (content, data, metadata) = if let Ok(json) =
+                    serde_json::from_str::<serde_json::Value>(&formatted_response)
+                {
                     // Check if it has 'response' or 'content' field
-                    let content = json.get("response")
+                    let content = json
+                        .get("response")
                         .or_else(|| json.get("content"))
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    
+
                     // Extract data field if present
                     let data = json.get("data").cloned();
-                    
+
                     // Build metadata from remaining fields
                     let mut metadata_obj = serde_json::Map::new();
                     if let Some(obj) = json.as_object() {
@@ -458,13 +503,13 @@ impl<P: ModelProvider> FsmAgent<P> {
                     } else {
                         Some(serde_json::Value::Object(metadata_obj))
                     };
-                    
+
                     (content, data, metadata)
                 } else {
                     // Plain text response
                     (formatted_response.clone(), None, None)
                 };
-                
+
                 Ok(AgentState::FinalMessage {
                     content,
                     data,
@@ -478,7 +523,7 @@ impl<P: ModelProvider> FsmAgent<P> {
                 }
                 *remaining_steps -= 1;
                 info!(tool = %tool, "Agent requested tool execution");
-                
+
                 Ok(AgentState::ExecutingTool {
                     tool_id: tool,
                     input,
@@ -490,8 +535,11 @@ impl<P: ModelProvider> FsmAgent<P> {
                     return Err(AgentError::MaxStepsExceeded);
                 }
                 *remaining_steps -= 1;
-                info!(count = tools.len(), "Agent requested parallel tool execution");
-                
+                info!(
+                    count = tools.len(),
+                    "Agent requested parallel tool execution"
+                );
+
                 // For simplicity, execute first tool - parallel execution would be similar
                 if let Some((tool, input)) = tools.into_iter().next() {
                     Ok(AgentState::ExecutingTool {
@@ -515,23 +563,30 @@ impl<P: ModelProvider> FsmAgent<P> {
     ) -> Result<AgentOutcome, AgentError> {
         match state {
             // ⭐ NEW: Handle FinalMessage state with JSON response formatting
-            AgentState::FinalMessage { content, data, metadata } => {
+            AgentState::FinalMessage {
+                content,
+                data,
+                metadata,
+            } => {
                 info!("Agent reached FinalMessage state with structured response");
-                
+
                 // Build structured JSON response
                 let mut response_obj = serde_json::Map::new();
-                response_obj.insert("content".to_string(), serde_json::Value::String(content.clone()));
-                
+                response_obj.insert(
+                    "content".to_string(),
+                    serde_json::Value::String(content.clone()),
+                );
+
                 if let Some(data_value) = data {
                     response_obj.insert("data".to_string(), data_value);
                 }
-                
+
                 if let Some(metadata_value) = metadata {
                     response_obj.insert("metadata".to_string(), metadata_value);
                 }
-                
+
                 let structured_response = Value::Object(response_obj);
-                
+
                 Ok(AgentOutcome {
                     logs,
                     session_id: session_id.unwrap_or_default(),
@@ -549,9 +604,7 @@ impl<P: ModelProvider> FsmAgent<P> {
                         steps,
                     })
                 }
-                TerminationReason::Error { message } => {
-                    Err(AgentError::InvalidResponse(message))
-                }
+                TerminationReason::Error { message } => Err(AgentError::InvalidResponse(message)),
                 TerminationReason::MaxStepsExceeded => Err(AgentError::MaxStepsExceeded),
                 TerminationReason::Timeout => Err(AgentError::Timeout),
                 TerminationReason::Cancelled => {
@@ -559,7 +612,9 @@ impl<P: ModelProvider> FsmAgent<P> {
                 }
                 _ => Err(AgentError::InvalidResponse("Unknown termination".into())),
             },
-            _ => Err(AgentError::InvalidResponse("Unexpected terminal state".into())),
+            _ => Err(AgentError::InvalidResponse(
+                "Unexpected terminal state".into(),
+            )),
         }
     }
 
@@ -571,19 +626,26 @@ impl<P: ModelProvider> FsmAgent<P> {
         steps: &[AgentStep],
         state_name: &str,
     ) -> Result<(), AgentError> {
-        let context_id = session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        
+        let context_id = session_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
         let mut snapshot = AgentStateSnapshot::new(context_id, "agent".into());
         snapshot.fsm_state = state_name.to_string();
-        snapshot.history = logs.iter().map(|log| ConversationTurn {
-            role: "system".into(),
-            content: log.clone(),
-            timestamp: chrono::Utc::now().timestamp(),
-            attachments: Vec::new(),
-        }).collect();
+        snapshot.history = logs
+            .iter()
+            .map(|log| ConversationTurn {
+                role: "system".into(),
+                content: log.clone(),
+                timestamp: chrono::Utc::now().timestamp(),
+                attachments: Vec::new(),
+            })
+            .collect();
         snapshot.metadata.steps_executed = steps.len() as u32;
 
-        self.memory.save_state(snapshot).await
+        self.memory
+            .save_state(snapshot)
+            .await
             .map_err(|e| AgentError::InvalidResponse(format!("State persistence failed: {}", e)))?;
 
         debug!("Intermediate state saved: {}", state_name);
@@ -594,16 +656,21 @@ impl<P: ModelProvider> FsmAgent<P> {
     async fn save_state(&self, outcome: &AgentOutcome) -> Result<(), AgentError> {
         let mut snapshot = AgentStateSnapshot::new(outcome.session_id.clone(), "agent".into());
         snapshot.fsm_state = "Terminated".to_string();
-        snapshot.history = outcome.logs.iter().map(|log| ConversationTurn {
-            role: "system".into(),
-            content: log.clone(),
-            timestamp: chrono::Utc::now().timestamp(),
-            attachments: Vec::new(),
-        }).collect();
+        snapshot.history = outcome
+            .logs
+            .iter()
+            .map(|log| ConversationTurn {
+                role: "system".into(),
+                content: log.clone(),
+                timestamp: chrono::Utc::now().timestamp(),
+                attachments: Vec::new(),
+            })
+            .collect();
         snapshot.metadata.steps_executed = outcome.steps.len() as u32;
 
-        self.memory.save_state(snapshot).await
-            .map_err(|e| AgentError::InvalidResponse(format!("Final state persistence failed: {}", e)))?;
+        self.memory.save_state(snapshot).await.map_err(|e| {
+            AgentError::InvalidResponse(format!("Final state persistence failed: {}", e))
+        })?;
 
         info!("Final agent state saved");
         Ok(())

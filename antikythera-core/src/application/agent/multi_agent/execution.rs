@@ -87,7 +87,9 @@ impl ExecutionMode {
 
     /// Construct a [`Parallel`] mode value with the given worker limit.
     pub fn parallel(workers: usize) -> Self {
-        Self::Parallel { workers: workers.max(1) }
+        Self::Parallel {
+            workers: workers.max(1),
+        }
     }
 
     /// Detect a reasonable mode from the current environment.
@@ -102,7 +104,9 @@ impl ExecutionMode {
             .map(|n| n.get())
             .unwrap_or(1);
         if cpus > 1 {
-            Self::Parallel { workers: cpus.min(8) }
+            Self::Parallel {
+                workers: cpus.min(8),
+            }
         } else {
             Self::Concurrent
         }

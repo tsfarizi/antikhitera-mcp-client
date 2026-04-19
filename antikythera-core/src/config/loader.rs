@@ -4,8 +4,8 @@
 
 use super::app::{PromptsConfig, RestServerConfig};
 use super::error::ConfigError;
-use super::provider::ModelProviderConfig;
 use super::postcard_config;
+use super::provider::ModelProviderConfig;
 use crate::logging::ConfigLogger;
 use dotenvy::from_filename;
 use std::path::Path;
@@ -37,15 +37,17 @@ pub fn load_config(path: Option<&Path>) -> Result<super::AppConfig, ConfigError>
         source: e,
     })?;
 
-    let config = postcard_config::config_from_postcard(&data).map_err(|e| {
-        ConfigError::CacheError(format!("Postcard deserialize error: {}", e))
-    })?;
+    let config = postcard_config::config_from_postcard(&data)
+        .map_err(|e| ConfigError::CacheError(format!("Postcard deserialize error: {}", e)))?;
 
     // Log successful load
     let logger = ConfigLogger::new("config");
     logger.info(&format!("Config loaded from: {}", config_path.display()));
     logger.debug(&format!("  Providers: {}", config.providers.len()));
-    logger.debug(&format!("  Default: {}/{}", config.model.default_provider, config.model.model));
+    logger.debug(&format!(
+        "  Default: {}/{}",
+        config.model.default_provider, config.model.model
+    ));
 
     Ok(convert_to_app_config(&config))
 }
@@ -55,9 +57,8 @@ pub fn save_config(config: &super::AppConfig, path: Option<&Path>) -> Result<(),
     let config_path = path.unwrap_or_else(|| Path::new(postcard_config::CONFIG_PATH));
 
     let pc_config = convert_to_postcard_config(config);
-    let data = postcard_config::config_to_postcard(&pc_config).map_err(|e| {
-        ConfigError::CacheError(format!("Postcard serialize error: {}", e))
-    })?;
+    let data = postcard_config::config_to_postcard(&pc_config)
+        .map_err(|e| ConfigError::CacheError(format!("Postcard serialize error: {}", e)))?;
 
     if let Some(parent) = config_path.parent() {
         if !parent.exists() {
@@ -89,24 +90,45 @@ fn convert_to_app_config(pc: &postcard_config::AppConfig) -> super::AppConfig {
         system_prompt: None,
         tools: Vec::new(),
         servers: Vec::new(),
-        providers: pc.providers.iter().map(|p| ModelProviderConfig {
-            id: p.id.clone(),
-            provider_type: p.provider_type.clone(),
-            endpoint: p.endpoint.clone(),
-            api_key: if p.api_key.is_empty() { None } else { Some(p.api_key.clone()) },
-            api_path: None,
-            models: p.models.iter().map(|m| crate::config::provider::ModelInfo {
-                name: m.name.clone(),
-                display_name: if m.display_name.is_empty() { None } else { Some(m.display_name.clone()) },
-            }).collect(),
-        }).collect(),
+        providers: pc
+            .providers
+            .iter()
+            .map(|p| ModelProviderConfig {
+                id: p.id.clone(),
+                provider_type: p.provider_type.clone(),
+                endpoint: p.endpoint.clone(),
+                api_key: if p.api_key.is_empty() {
+                    None
+                } else {
+                    Some(p.api_key.clone())
+                },
+                api_path: None,
+                models: p
+                    .models
+                    .iter()
+                    .map(|m| crate::config::provider::ModelInfo {
+                        name: m.name.clone(),
+                        display_name: if m.display_name.is_empty() {
+                            None
+                        } else {
+                            Some(m.display_name.clone())
+                        },
+                    })
+                    .collect(),
+            })
+            .collect(),
         rest_server: RestServerConfig {
             bind: pc.server.bind.clone(),
             cors_origins: pc.server.cors_origins.clone(),
-            docs: pc.server.docs.iter().map(|d| crate::config::app::DocServerConfig {
-                url: d.url.clone(),
-                description: d.description.clone(),
-            }).collect(),
+            docs: pc
+                .server
+                .docs
+                .iter()
+                .map(|d| crate::config::app::DocServerConfig {
+                    url: d.url.clone(),
+                    description: d.description.clone(),
+                })
+                .collect(),
         },
         prompts: PromptsConfig {
             template: opt_nonempty(&pc.prompts.template),
@@ -124,7 +146,11 @@ fn convert_to_app_config(pc: &postcard_config::AppConfig) -> super::AppConfig {
 }
 
 fn opt_nonempty(s: &str) -> Option<String> {
-    if s.is_empty() { None } else { Some(s.to_string()) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s.to_string())
+    }
 }
 
 /// Convert AppConfig to Postcard config
@@ -133,21 +159,34 @@ fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::App
         server: postcard_config::ServerConfig {
             bind: config.rest_server.bind.clone(),
             cors_origins: config.rest_server.cors_origins.clone(),
-            docs: config.rest_server.docs.iter().map(|d| postcard_config::DocServerConfig {
-                url: d.url.clone(),
-                description: d.description.clone(),
-            }).collect(),
+            docs: config
+                .rest_server
+                .docs
+                .iter()
+                .map(|d| postcard_config::DocServerConfig {
+                    url: d.url.clone(),
+                    description: d.description.clone(),
+                })
+                .collect(),
         },
-        providers: config.providers.iter().map(|p| postcard_config::ProviderConfig {
-            id: p.id.clone(),
-            provider_type: p.provider_type.clone(),
-            endpoint: p.endpoint.clone(),
-            api_key: p.api_key.clone().unwrap_or_default(),
-            models: p.models.iter().map(|m| postcard_config::ModelInfo {
-                name: m.name.clone(),
-                display_name: m.display_name.clone().unwrap_or_default(),
-            }).collect(),
-        }).collect(),
+        providers: config
+            .providers
+            .iter()
+            .map(|p| postcard_config::ProviderConfig {
+                id: p.id.clone(),
+                provider_type: p.provider_type.clone(),
+                endpoint: p.endpoint.clone(),
+                api_key: p.api_key.clone().unwrap_or_default(),
+                models: p
+                    .models
+                    .iter()
+                    .map(|m| postcard_config::ModelInfo {
+                        name: m.name.clone(),
+                        display_name: m.display_name.clone().unwrap_or_default(),
+                    })
+                    .collect(),
+            })
+            .collect(),
         model: postcard_config::ModelConfig {
             default_provider: config.default_provider.clone(),
             model: config.model.clone(),
@@ -156,12 +195,32 @@ fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::App
             template: config.prompts.template.clone().unwrap_or_default(),
             tool_guidance: config.prompts.tool_guidance.clone().unwrap_or_default(),
             fallback_guidance: config.prompts.fallback_guidance.clone().unwrap_or_default(),
-            json_retry_message: config.prompts.json_retry_message.clone().unwrap_or_default(),
-            tool_result_instruction: config.prompts.tool_result_instruction.clone().unwrap_or_default(),
-            agent_instructions: config.prompts.agent_instructions.clone().unwrap_or_default(),
+            json_retry_message: config
+                .prompts
+                .json_retry_message
+                .clone()
+                .unwrap_or_default(),
+            tool_result_instruction: config
+                .prompts
+                .tool_result_instruction
+                .clone()
+                .unwrap_or_default(),
+            agent_instructions: config
+                .prompts
+                .agent_instructions
+                .clone()
+                .unwrap_or_default(),
             ui_instructions: config.prompts.ui_instructions.clone().unwrap_or_default(),
-            language_instructions: config.prompts.language_instructions.clone().unwrap_or_default(),
-            agent_max_steps_error: config.prompts.agent_max_steps_error.clone().unwrap_or_default(),
+            language_instructions: config
+                .prompts
+                .language_instructions
+                .clone()
+                .unwrap_or_default(),
+            agent_max_steps_error: config
+                .prompts
+                .agent_max_steps_error
+                .clone()
+                .unwrap_or_default(),
             no_tools_guidance: config.prompts.no_tools_guidance.clone().unwrap_or_default(),
         },
         agent: postcard_config::AgentConfig::default(),

@@ -14,7 +14,10 @@ pub enum AgentState {
     /// Parsing LLM response
     ParsingDirective,
     /// Executing a tool
-    ExecutingTool { tool_id: String, input: serde_json::Value },
+    ExecutingTool {
+        tool_id: String,
+        input: serde_json::Value,
+    },
     /// Waiting for external context
     WaitingForContext,
     /// Recovering from error
@@ -49,18 +52,37 @@ pub enum TerminationReason {
 /// Events that trigger state transitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Event {
-    PromptReceived { prompt: String },
-    DirectiveParsed { tool: String, input: serde_json::Value },
-    DirectivesParsed { tools: Vec<(String, serde_json::Value)> },
+    PromptReceived {
+        prompt: String,
+    },
+    DirectiveParsed {
+        tool: String,
+        input: serde_json::Value,
+    },
+    DirectivesParsed {
+        tools: Vec<(String, serde_json::Value)>,
+    },
     FinalResponse,
-    ToolCompleted { tool: String, output: serde_json::Value },
-    ToolsCompleted { results: Vec<Result<ToolResult, String>> },
-    ToolFailed { tool: String, error: String },
-    ContextReceived { context: String },
+    ToolCompleted {
+        tool: String,
+        output: serde_json::Value,
+    },
+    ToolsCompleted {
+        results: Vec<Result<ToolResult, String>>,
+    },
+    ToolFailed {
+        tool: String,
+        error: String,
+    },
+    ContextReceived {
+        context: String,
+    },
     ResponseSent,
     MaxStepsExceeded,
     Timeout,
-    Error { message: String },
+    Error {
+        message: String,
+    },
     Cancelled,
 }
 
@@ -104,20 +126,28 @@ impl AgentState {
 
             // ── ParsingDirective ──────────────────────────────────────────────
             (AgentState::ParsingDirective, Event::DirectiveParsed { tool, input }) => {
-                AgentState::ExecutingTool { tool_id: tool, input }
+                AgentState::ExecutingTool {
+                    tool_id: tool,
+                    input,
+                }
             }
             (AgentState::ParsingDirective, Event::DirectivesParsed { tools }) => {
                 if let Some((tool, input)) = tools.into_iter().next() {
-                    AgentState::ExecutingTool { tool_id: tool, input }
+                    AgentState::ExecutingTool {
+                        tool_id: tool,
+                        input,
+                    }
                 } else {
                     AgentState::FinalizingResponse
                 }
             }
             (AgentState::ParsingDirective, Event::FinalResponse) => AgentState::FinalizingResponse,
-            (AgentState::ParsingDirective, Event::Error { message }) => AgentState::RecoveringError {
-                error: message,
-                retry_count: 0,
-            },
+            (AgentState::ParsingDirective, Event::Error { message }) => {
+                AgentState::RecoveringError {
+                    error: message,
+                    retry_count: 0,
+                }
+            }
             (AgentState::ParsingDirective, Event::MaxStepsExceeded) => AgentState::Terminated {
                 reason: TerminationReason::MaxStepsExceeded,
             },
@@ -136,10 +166,16 @@ impl AgentState {
                 AgentState::ParsingDirective
             }
             (AgentState::ExecutingTool { .. }, Event::ToolFailed { error, .. }) => {
-                AgentState::RecoveringError { error, retry_count: 0 }
+                AgentState::RecoveringError {
+                    error,
+                    retry_count: 0,
+                }
             }
             (AgentState::ExecutingTool { .. }, Event::Error { message }) => {
-                AgentState::RecoveringError { error: message, retry_count: 0 }
+                AgentState::RecoveringError {
+                    error: message,
+                    retry_count: 0,
+                }
             }
             (AgentState::ExecutingTool { .. }, Event::MaxStepsExceeded) => AgentState::Terminated {
                 reason: TerminationReason::MaxStepsExceeded,
@@ -161,10 +197,12 @@ impl AgentState {
             (AgentState::WaitingForContext, Event::Cancelled) => AgentState::Terminated {
                 reason: TerminationReason::Cancelled,
             },
-            (AgentState::WaitingForContext, Event::Error { message }) => AgentState::RecoveringError {
-                error: message,
-                retry_count: 0,
-            },
+            (AgentState::WaitingForContext, Event::Error { message }) => {
+                AgentState::RecoveringError {
+                    error: message,
+                    retry_count: 0,
+                }
+            }
 
             // ── RecoveringError ───────────────────────────────────────────────
             // Another error while recovering increments the retry counter.
@@ -202,10 +240,12 @@ impl AgentState {
             (AgentState::FinalizingResponse, Event::Cancelled) => AgentState::Terminated {
                 reason: TerminationReason::Cancelled,
             },
-            (AgentState::FinalizingResponse, Event::Error { message }) => AgentState::RecoveringError {
-                error: message,
-                retry_count: 0,
-            },
+            (AgentState::FinalizingResponse, Event::Error { message }) => {
+                AgentState::RecoveringError {
+                    error: message,
+                    retry_count: 0,
+                }
+            }
 
             // ── FinalMessage – sticky terminal ────────────────────────────────
             (state @ AgentState::FinalMessage { .. }, _) => state,
@@ -227,7 +267,9 @@ mod tests {
 
     #[test]
     fn terminated_is_terminal() {
-        let state = AgentState::Terminated { reason: TerminationReason::Success };
+        let state = AgentState::Terminated {
+            reason: TerminationReason::Success,
+        };
         assert!(state.is_terminal());
     }
 
@@ -257,20 +299,32 @@ mod tests {
 
     #[test]
     fn idle_prompt_received_transitions_to_parsing_directive() {
-        let next = AgentState::Idle.transition(Event::PromptReceived { prompt: "hello".into() });
+        let next = AgentState::Idle.transition(Event::PromptReceived {
+            prompt: "hello".into(),
+        });
         assert_eq!(next, AgentState::ParsingDirective);
     }
 
     #[test]
     fn idle_cancelled_transitions_to_terminated() {
         let next = AgentState::Idle.transition(Event::Cancelled);
-        assert!(matches!(next, AgentState::Terminated { reason: TerminationReason::Cancelled }));
+        assert!(matches!(
+            next,
+            AgentState::Terminated {
+                reason: TerminationReason::Cancelled
+            }
+        ));
     }
 
     #[test]
     fn idle_error_transitions_to_recovering() {
-        let next = AgentState::Idle.transition(Event::Error { message: "boom".into() });
-        assert!(matches!(next, AgentState::RecoveringError { retry_count: 0, .. }));
+        let next = AgentState::Idle.transition(Event::Error {
+            message: "boom".into(),
+        });
+        assert!(matches!(
+            next,
+            AgentState::RecoveringError { retry_count: 0, .. }
+        ));
     }
 
     // ── transition: ParsingDirective ─────────────────────────────────────────
@@ -292,9 +346,13 @@ mod tests {
 
     #[test]
     fn parsing_error_transitions_to_recovering() {
-        let next = AgentState::ParsingDirective
-            .transition(Event::Error { message: "parse error".into() });
-        assert!(matches!(next, AgentState::RecoveringError { retry_count: 0, .. }));
+        let next = AgentState::ParsingDirective.transition(Event::Error {
+            message: "parse error".into(),
+        });
+        assert!(matches!(
+            next,
+            AgentState::RecoveringError { retry_count: 0, .. }
+        ));
     }
 
     #[test]
@@ -302,7 +360,9 @@ mod tests {
         let next = AgentState::ParsingDirective.transition(Event::MaxStepsExceeded);
         assert!(matches!(
             next,
-            AgentState::Terminated { reason: TerminationReason::MaxStepsExceeded }
+            AgentState::Terminated {
+                reason: TerminationReason::MaxStepsExceeded
+            }
         ));
     }
 
@@ -331,15 +391,19 @@ mod tests {
             tool: "t".into(),
             error: "network error".into(),
         });
-        assert!(matches!(next, AgentState::RecoveringError { retry_count: 0, .. }));
+        assert!(matches!(
+            next,
+            AgentState::RecoveringError { retry_count: 0, .. }
+        ));
     }
 
     // ── transition: WaitingForContext ────────────────────────────────────────
 
     #[test]
     fn waiting_context_received_transitions_to_parsing() {
-        let next = AgentState::WaitingForContext
-            .transition(Event::ContextReceived { context: "data".into() });
+        let next = AgentState::WaitingForContext.transition(Event::ContextReceived {
+            context: "data".into(),
+        });
         assert_eq!(next, AgentState::ParsingDirective);
     }
 
@@ -347,16 +411,35 @@ mod tests {
 
     #[test]
     fn recovering_error_increments_retry_count() {
-        let state = AgentState::RecoveringError { error: "e".into(), retry_count: 1 };
-        let next = state.transition(Event::Error { message: "e2".into() });
-        assert!(matches!(next, AgentState::RecoveringError { retry_count: 2, .. }));
+        let state = AgentState::RecoveringError {
+            error: "e".into(),
+            retry_count: 1,
+        };
+        let next = state.transition(Event::Error {
+            message: "e2".into(),
+        });
+        assert!(matches!(
+            next,
+            AgentState::RecoveringError { retry_count: 2, .. }
+        ));
     }
 
     #[test]
     fn recovering_saturates_at_max_u8() {
-        let state = AgentState::RecoveringError { error: "e".into(), retry_count: u8::MAX };
-        let next = state.transition(Event::Error { message: "e".into() });
-        assert!(matches!(next, AgentState::RecoveringError { retry_count: 255, .. }));
+        let state = AgentState::RecoveringError {
+            error: "e".into(),
+            retry_count: u8::MAX,
+        };
+        let next = state.transition(Event::Error {
+            message: "e".into(),
+        });
+        assert!(matches!(
+            next,
+            AgentState::RecoveringError {
+                retry_count: 255,
+                ..
+            }
+        ));
     }
 
     // ── transition: FinalizingResponse ───────────────────────────────────────
@@ -371,16 +454,29 @@ mod tests {
 
     #[test]
     fn final_message_ignores_all_events() {
-        let state = AgentState::FinalMessage { content: "x".into(), data: None, metadata: None };
+        let state = AgentState::FinalMessage {
+            content: "x".into(),
+            data: None,
+            metadata: None,
+        };
         let next = state.transition(Event::Cancelled);
         assert!(matches!(next, AgentState::FinalMessage { .. }));
     }
 
     #[test]
     fn terminated_ignores_all_events() {
-        let state = AgentState::Terminated { reason: TerminationReason::Success };
-        let next = state.transition(Event::PromptReceived { prompt: "hi".into() });
-        assert!(matches!(next, AgentState::Terminated { reason: TerminationReason::Success }));
+        let state = AgentState::Terminated {
+            reason: TerminationReason::Success,
+        };
+        let next = state.transition(Event::PromptReceived {
+            prompt: "hi".into(),
+        });
+        assert!(matches!(
+            next,
+            AgentState::Terminated {
+                reason: TerminationReason::Success
+            }
+        ));
     }
 }
 

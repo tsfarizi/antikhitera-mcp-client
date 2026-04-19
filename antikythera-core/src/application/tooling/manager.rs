@@ -2,11 +2,11 @@
 //!
 //! Handles both STDIO and HTTP transport connections.
 
-use super::error::ToolInvokeError;
 use super::envelope::{
     ToolCallEnvelope, ToolResultEnvelope, validate_tool_call_envelope,
     validate_tool_result_envelope,
 };
+use super::error::ToolInvokeError;
 use super::interface::{ServerToolInfo, ToolServerInterface};
 #[cfg(feature = "native-transport")]
 use super::process::McpProcess;
@@ -96,15 +96,16 @@ impl ServerManager {
             TransportType::Stdio => {
                 #[cfg(feature = "native-transport")]
                 {
-                let process = Arc::new(McpProcess::new(config));
-                process.ensure_running().await?;
-                ServerInstance::Stdio(process)
+                    let process = Arc::new(McpProcess::new(config));
+                    process.ensure_running().await?;
+                    ServerInstance::Stdio(process)
                 }
                 #[cfg(not(feature = "native-transport"))]
                 {
                     return Err(ToolInvokeError::Transport {
                         server: server.to_string(),
-                        message: "STDIO transport requires the native-transport feature".to_string(),
+                        message: "STDIO transport requires the native-transport feature"
+                            .to_string(),
                     });
                 }
             }
@@ -180,9 +181,11 @@ impl ToolServerInterface for ServerManager {
                     error: None,
                     correlation_id: None,
                 };
-                validate_tool_result_envelope(&result_env).map_err(|e| ToolInvokeError::Transport {
-                    server: server.to_string(),
-                    message: e.to_transport_message("result"),
+                validate_tool_result_envelope(&result_env).map_err(|e| {
+                    ToolInvokeError::Transport {
+                        server: server.to_string(),
+                        message: e.to_transport_message("result"),
+                    }
                 })?;
                 Ok(value)
             }
@@ -194,9 +197,11 @@ impl ToolServerInterface for ServerManager {
                     error: Some(err.to_string()),
                     correlation_id: None,
                 };
-                validate_tool_result_envelope(&result_env).map_err(|e| ToolInvokeError::Transport {
-                    server: server.to_string(),
-                    message: e.to_transport_message("result"),
+                validate_tool_result_envelope(&result_env).map_err(|e| {
+                    ToolInvokeError::Transport {
+                        server: server.to_string(),
+                        message: e.to_transport_message("result"),
+                    }
                 })?;
                 Err(err)
             }

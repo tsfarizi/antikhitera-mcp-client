@@ -2,8 +2,8 @@
 //!
 //! Real-time log streaming via subscription.
 
-use crate::logger::Logger;
 use crate::entries::LogEntry;
+use crate::logger::Logger;
 use crossbeam_channel::{Receiver, Sender};
 
 // ============================================================================

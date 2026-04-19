@@ -42,7 +42,9 @@ pub fn mcp_session_add_message(
 
     match SESSION_MANAGER.add_message(&id_str, message) {
         Ok(()) => {
-            let history = SESSION_MANAGER.get_chat_history(&id_str).unwrap_or_default();
+            let history = SESSION_MANAGER
+                .get_chat_history(&id_str)
+                .unwrap_or_default();
             success_with(&[
                 ("session_id", serde_json::json!(id_str)),
                 ("message_count", serde_json::json!(history.len())),
@@ -67,4 +69,3 @@ pub fn mcp_session_get_history(session_id: *const c_char) -> *mut c_char {
         Err(e) => error_response(&e),
     }
 }
-

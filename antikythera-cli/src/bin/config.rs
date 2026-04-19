@@ -87,7 +87,12 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
             Ok(())
         }
 
-        ConfigCommand::AddProvider { id, provider_type, endpoint, api_key } => {
+        ConfigCommand::AddProvider {
+            id,
+            provider_type,
+            endpoint,
+            api_key,
+        } => {
             let mut config = load_config(None)?;
 
             if config.providers.iter().any(|p| p.id == id) {
@@ -151,8 +156,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
 
             match output {
                 Some(path) => {
-                    std::fs::write(&path, &json)
-                        .map_err(|e| format!("Failed to write: {}", e))?;
+                    std::fs::write(&path, &json).map_err(|e| format!("Failed to write: {}", e))?;
                     println!("✓ Exported to: {}", path);
                 }
                 None => println!("{}", json),
@@ -161,11 +165,11 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
         }
 
         ConfigCommand::Import { input } => {
-            let json = std::fs::read_to_string(&input)
-                .map_err(|e| format!("Failed to read: {}", e))?;
+            let json =
+                std::fs::read_to_string(&input).map_err(|e| format!("Failed to read: {}", e))?;
 
-            let config: AppConfig = serde_json::from_str(&json)
-                .map_err(|e| format!("Invalid JSON: {}", e))?;
+            let config: AppConfig =
+                serde_json::from_str(&json).map_err(|e| format!("Invalid JSON: {}", e))?;
 
             save_config(&config, None)?;
             println!("✓ Imported from: {}", input);
@@ -203,8 +207,9 @@ fn get_field(config: &AppConfig, field: &str) -> Result<String, String> {
         "default_provider" => Ok(config.model.default_provider.clone()),
         "model" => Ok(config.model.model.clone()),
         "server.bind" => Ok(config.server.bind.clone()),
-        "providers" => serde_json::to_string(&config.providers)
-            .map_err(|e| format!("Serialize error: {}", e)),
+        "providers" => {
+            serde_json::to_string(&config.providers).map_err(|e| format!("Serialize error: {}", e))
+        }
         _ => Err(format!("Unknown field: {}", field)),
     }
 }
@@ -234,4 +239,3 @@ fn main() {
         std::process::exit(1);
     }
 }
-

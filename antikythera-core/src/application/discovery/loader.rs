@@ -31,8 +31,8 @@
 //! ```
 
 use super::types::{DiscoveredServer, DiscoverySummary, LoadStatus};
-use crate::config::ServerConfig;
 use crate::application::tooling::spawn_and_list_tools;
+use crate::config::ServerConfig;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};

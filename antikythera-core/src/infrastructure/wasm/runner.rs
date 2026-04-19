@@ -78,13 +78,14 @@ impl WasmAgentRunner {
     // ----------------------------------------------------------------
 
     /// Load a WASM agent from raw bytes.
-    pub fn from_bytes(
-        agent_id: impl Into<String>,
-        wasm: &[u8],
-    ) -> Result<Self, WasmRuntimeError> {
+    pub fn from_bytes(agent_id: impl Into<String>, wasm: &[u8]) -> Result<Self, WasmRuntimeError> {
         let engine = Engine::default();
         let module = Module::new(&engine, wasm)?;
-        Ok(Self { agent_id: agent_id.into(), engine, module })
+        Ok(Self {
+            agent_id: agent_id.into(),
+            engine,
+            module,
+        })
     }
 
     /// Load a WASM agent from a file on disk.
@@ -124,10 +125,9 @@ impl WasmAgentRunner {
         let runner = self.clone();
         let task_clone = task.clone();
 
-        let result = tokio::task::spawn_blocking(move || {
-            runner.run_task_sync(task_clone, llm_handler)
-        })
-        .await;
+        let result =
+            tokio::task::spawn_blocking(move || runner.run_task_sync(task_clone, llm_handler))
+                .await;
 
         match result {
             Ok(r) => r,
@@ -171,13 +171,16 @@ impl WasmAgentRunner {
                 let response_len = response_bytes.len() as i32;
 
                 // Allocate space in WASM memory for the response
-                let alloc_fn =
-                    match caller.get_export("antikythera_alloc").and_then(|e| {
-                        if let Extern::Func(f) = e { Some(f) } else { None }
-                    }) {
-                        Some(f) => f,
-                        None => return -2,
-                    };
+                let alloc_fn = match caller.get_export("antikythera_alloc").and_then(|e| {
+                    if let Extern::Func(f) = e {
+                        Some(f)
+                    } else {
+                        None
+                    }
+                }) {
+                    Some(f) => f,
+                    None => return -2,
+                };
 
                 // Split typed-check from call to avoid simultaneous &/&mut borrow
                 let typed_alloc = match alloc_fn.typed::<i32, i32>(&caller) {
@@ -190,9 +193,7 @@ impl WasmAgentRunner {
                 };
 
                 // Write the response into WASM memory
-                if let Err(()) =
-                    Self::write_wasm_bytes(&mut caller, result_ptr, &response_bytes)
-                {
+                if let Err(()) = Self::write_wasm_bytes(&mut caller, result_ptr, &response_bytes) {
                     return -4;
                 }
 
@@ -217,7 +218,7 @@ impl WasmAgentRunner {
                     task.task_id,
                     self.agent_id.clone(),
                     format!("WASM instantiation failed: {e}"),
-                )
+                );
             }
         };
 
@@ -231,7 +232,7 @@ impl WasmAgentRunner {
                     task.task_id,
                     self.agent_id.clone(),
                     format!("Failed to serialise task: {e}"),
-                )
+                );
             }
         };
         let task_bytes = task_json.as_bytes();
@@ -247,7 +248,7 @@ impl WasmAgentRunner {
                     task.task_id,
                     self.agent_id.clone(),
                     "WASM module missing 'antikythera_alloc' export".to_string(),
-                )
+                );
             }
         };
 
@@ -258,7 +259,7 @@ impl WasmAgentRunner {
                     task.task_id,
                     self.agent_id.clone(),
                     format!("WASM alloc failed: {e}"),
-                )
+                );
             }
         };
 
@@ -286,17 +287,17 @@ impl WasmAgentRunner {
         // ----------------------------------------------------------------
         // Call `antikythera_run`
         // ----------------------------------------------------------------
-        let run_fn =
-            match instance.get_typed_func::<(i32, i32), i64>(&mut store, "antikythera_run") {
-                Ok(f) => f,
-                Err(_) => {
-                    return TaskResult::failure(
-                        task.task_id,
-                        self.agent_id.clone(),
-                        "WASM module missing 'antikythera_run' export".to_string(),
-                    )
-                }
-            };
+        let run_fn = match instance.get_typed_func::<(i32, i32), i64>(&mut store, "antikythera_run")
+        {
+            Ok(f) => f,
+            Err(_) => {
+                return TaskResult::failure(
+                    task.task_id,
+                    self.agent_id.clone(),
+                    "WASM module missing 'antikythera_run' export".to_string(),
+                );
+            }
+        };
 
         let packed = match run_fn.call(&mut store, (task_ptr, task_len)) {
             Ok(v) => v,
@@ -305,7 +306,7 @@ impl WasmAgentRunner {
                     task.task_id,
                     self.agent_id.clone(),
                     format!("WASM execution error: {e}"),
-                )
+                );
             }
         };
 
@@ -323,25 +324,24 @@ impl WasmAgentRunner {
         // ----------------------------------------------------------------
         // Read the result JSON from WASM memory
         // ----------------------------------------------------------------
-        let result_bytes = if let Some(Extern::Memory(memory)) =
-            instance.get_export(&mut store, "memory")
-        {
-            let mem = memory.data(&store);
-            if result_ptr + result_len > mem.len() {
+        let result_bytes =
+            if let Some(Extern::Memory(memory)) = instance.get_export(&mut store, "memory") {
+                let mem = memory.data(&store);
+                if result_ptr + result_len > mem.len() {
+                    return TaskResult::failure(
+                        task.task_id,
+                        self.agent_id.clone(),
+                        "WASM result pointer out of bounds".to_string(),
+                    );
+                }
+                mem[result_ptr..result_ptr + result_len].to_vec()
+            } else {
                 return TaskResult::failure(
                     task.task_id,
                     self.agent_id.clone(),
-                    "WASM result pointer out of bounds".to_string(),
+                    "WASM module missing 'memory' export (on result read)".to_string(),
                 );
-            }
-            mem[result_ptr..result_ptr + result_len].to_vec()
-        } else {
-            return TaskResult::failure(
-                task.task_id,
-                self.agent_id.clone(),
-                "WASM module missing 'memory' export (on result read)".to_string(),
-            );
-        };
+            };
 
         // Free the result memory if dealloc is available
         if let Ok(dealloc) =
@@ -360,7 +360,7 @@ impl WasmAgentRunner {
                     task.task_id,
                     self.agent_id.clone(),
                     format!("WASM result is not valid UTF-8: {e}"),
-                )
+                );
             }
         };
 
@@ -386,7 +386,11 @@ impl WasmAgentRunner {
 
     fn read_wasm_string(caller: &mut Caller<'_, HostState>, ptr: i32, len: i32) -> Option<String> {
         let memory = caller.get_export("memory").and_then(|e| {
-            if let Extern::Memory(m) = e { Some(m) } else { None }
+            if let Extern::Memory(m) = e {
+                Some(m)
+            } else {
+                None
+            }
         })?;
         // Reborrow as immutable after get_export's &mut borrow has ended
         let data = memory.data(&*caller);
@@ -395,7 +399,9 @@ impl WasmAgentRunner {
         if end > data.len() {
             return None;
         }
-        std::str::from_utf8(&data[start..end]).ok().map(|s| s.to_string())
+        std::str::from_utf8(&data[start..end])
+            .ok()
+            .map(|s| s.to_string())
     }
 
     fn write_wasm_bytes(
@@ -404,7 +410,11 @@ impl WasmAgentRunner {
         bytes: &[u8],
     ) -> Result<(), ()> {
         let memory = caller.get_export("memory").and_then(|e| {
-            if let Extern::Memory(m) = e { Some(m) } else { None }
+            if let Extern::Memory(m) = e {
+                Some(m)
+            } else {
+                None
+            }
         });
         let memory = memory.ok_or(())?;
         let data = memory.data_mut(caller);

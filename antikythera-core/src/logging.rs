@@ -3,7 +3,7 @@
 //! Centralized logging for antikythera-core.
 //! All log entries automatically include the source module.
 
-use antikythera_log::{LogEntry, LogLevel, LogFilter, LogBatch, Logger};
+use antikythera_log::{LogBatch, LogEntry, LogFilter, LogLevel, Logger};
 use std::sync::{Arc, LazyLock};
 
 // ============================================================================
@@ -53,19 +53,23 @@ impl ConfigLogger {
     }
 
     pub fn debug(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Debug, "config", message);
+        self.logger
+            .log_with_source(LogLevel::Debug, "config", message);
     }
 
     pub fn info(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Info, "config", message);
+        self.logger
+            .log_with_source(LogLevel::Info, "config", message);
     }
 
     pub fn warn(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Warn, "config", message);
+        self.logger
+            .log_with_source(LogLevel::Warn, "config", message);
     }
 
     pub fn error(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Error, "config", message);
+        self.logger
+            .log_with_source(LogLevel::Error, "config", message);
     }
 }
 
@@ -82,19 +86,23 @@ impl AgentLogger {
     }
 
     pub fn debug(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Debug, "agent", message);
+        self.logger
+            .log_with_source(LogLevel::Debug, "agent", message);
     }
 
     pub fn info(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Info, "agent", message);
+        self.logger
+            .log_with_source(LogLevel::Info, "agent", message);
     }
 
     pub fn warn(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Warn, "agent", message);
+        self.logger
+            .log_with_source(LogLevel::Warn, "agent", message);
     }
 
     pub fn error(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Error, "agent", message);
+        self.logger
+            .log_with_source(LogLevel::Error, "agent", message);
     }
 
     pub fn tool_call(&self, tool: &str, args: &serde_json::Value) {
@@ -104,8 +112,15 @@ impl AgentLogger {
     }
 
     pub fn tool_result(&self, tool: &str, success: bool, step: u32) {
-        let level = if success { LogLevel::Info } else { LogLevel::Error };
-        let context = format!("{{\"tool\": \"{}\", \"success\": {}, \"step\": {}}}", tool, success, step);
+        let level = if success {
+            LogLevel::Info
+        } else {
+            LogLevel::Error
+        };
+        let context = format!(
+            "{{\"tool\": \"{}\", \"success\": {}, \"step\": {}}}",
+            tool, success, step
+        );
         self.logger.log_with_context(
             level,
             format!("Tool result: {} (step {})", tool, step),
@@ -122,8 +137,11 @@ impl AgentLogger {
     }
 
     pub fn agent_complete(&self, steps: u32) {
-        self.logger
-            .log_with_source(LogLevel::Info, "agent", format!("Agent completed in {} steps", steps))
+        self.logger.log_with_source(
+            LogLevel::Info,
+            "agent",
+            format!("Agent completed in {} steps", steps),
+        )
     }
 }
 
@@ -140,29 +158,39 @@ impl TransportLogger {
     }
 
     pub fn debug(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Debug, "transport", message);
+        self.logger
+            .log_with_source(LogLevel::Debug, "transport", message);
     }
 
     pub fn info(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Info, "transport", message);
+        self.logger
+            .log_with_source(LogLevel::Info, "transport", message);
     }
 
     pub fn warn(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Warn, "transport", message);
+        self.logger
+            .log_with_source(LogLevel::Warn, "transport", message);
     }
 
     pub fn error(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Error, "transport", message);
+        self.logger
+            .log_with_source(LogLevel::Error, "transport", message);
     }
 
     pub fn connect(&self, server: &str) {
-        self.logger
-            .log_with_source(LogLevel::Info, "transport", format!("Connecting to: {}", server));
+        self.logger.log_with_source(
+            LogLevel::Info,
+            "transport",
+            format!("Connecting to: {}", server),
+        );
     }
 
     pub fn disconnect(&self, server: &str) {
-        self.logger
-            .log_with_source(LogLevel::Info, "transport", format!("Disconnected from: {}", server));
+        self.logger.log_with_source(
+            LogLevel::Info,
+            "transport",
+            format!("Disconnected from: {}", server),
+        );
     }
 
     pub fn tool_request(&self, server: &str, tool: &str) {
@@ -174,7 +202,11 @@ impl TransportLogger {
     }
 
     pub fn tool_response(&self, server: &str, tool: &str, success: bool) {
-        let level = if success { LogLevel::Debug } else { LogLevel::Error };
+        let level = if success {
+            LogLevel::Debug
+        } else {
+            LogLevel::Error
+        };
         self.logger.log_with_source(
             level,
             "transport",
@@ -196,19 +228,23 @@ impl ProviderLogger {
     }
 
     pub fn debug(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Debug, "provider", message);
+        self.logger
+            .log_with_source(LogLevel::Debug, "provider", message);
     }
 
     pub fn info(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Info, "provider", message);
+        self.logger
+            .log_with_source(LogLevel::Info, "provider", message);
     }
 
     pub fn warn(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Warn, "provider", message);
+        self.logger
+            .log_with_source(LogLevel::Warn, "provider", message);
     }
 
     pub fn error(&self, message: impl Into<String>) {
-        self.logger.log_with_source(LogLevel::Error, "provider", message);
+        self.logger
+            .log_with_source(LogLevel::Error, "provider", message);
     }
 
     pub fn api_call(&self, provider: &str, model: &str) {
@@ -220,7 +256,9 @@ impl ProviderLogger {
     }
 
     pub fn api_response(&self, provider: &str, model: &str, tokens: Option<u32>) {
-        let token_info = tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
+        let token_info = tokens
+            .map(|t| format!(", {} tokens", t))
+            .unwrap_or_default();
         self.logger.log_with_source(
             LogLevel::Debug,
             "provider",
@@ -270,7 +308,11 @@ pub fn get_logs_json(session_id: &str, filter: &LogFilter) -> Result<String, Str
 
 /// Subscribe to real-time log stream
 pub fn subscribe_logs(session_id: &str) -> Option<antikythera_log::LogSubscriber> {
-    LOGGERS.lock().unwrap().get(session_id).map(|l| l.subscribe())
+    LOGGERS
+        .lock()
+        .unwrap()
+        .get(session_id)
+        .map(|l| l.subscribe())
 }
 
 /// Clear logs for a session

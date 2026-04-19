@@ -7,8 +7,8 @@
 //! deadline pre-check logic.
 
 use antikythera_core::application::agent::multi_agent::task::{
-    AgentTask, ErrorKind, PipelineResult, RetryCondition, RoutingDecision,
-    TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
+    AgentTask, ErrorKind, PipelineResult, RetryCondition, RoutingDecision, TaskExecutionMetadata,
+    TaskResult, TaskRetryPolicy,
 };
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -188,8 +188,20 @@ fn task_result_failure_constructor_marks_failure() {
 #[test]
 fn pipeline_result_all_success_computes_totals() {
     let results = vec![
-        TaskResult::success("t1".into(), "a".into(), serde_json::json!("first"), 3, "s".into()),
-        TaskResult::success("t2".into(), "b".into(), serde_json::json!("second"), 4, "s".into()),
+        TaskResult::success(
+            "t1".into(),
+            "a".into(),
+            serde_json::json!("first"),
+            3,
+            "s".into(),
+        ),
+        TaskResult::success(
+            "t2".into(),
+            "b".into(),
+            serde_json::json!("second"),
+            4,
+            "s".into(),
+        ),
     ];
 
     let pipeline = PipelineResult::from_results(results);
@@ -244,7 +256,10 @@ fn budget_steps_guardrail_caps_at_max_steps() {
         .budget_steps
         .map(|b| b.min(max_steps))
         .unwrap_or(max_steps);
-    assert_eq!(budgeted, 10, "budget_steps > max_steps → max_steps wins (guardrail)");
+    assert_eq!(
+        budgeted, 10,
+        "budget_steps > max_steps → max_steps wins (guardrail)"
+    );
 
     let task_without_budget = AgentTask::new("test");
     let budgeted = task_without_budget
@@ -306,7 +321,10 @@ fn cancellation_token_child_shares_flag_with_parent() {
     let child = parent.child_token();
     // cancelling parent is visible through child
     parent.cancel();
-    assert!(child.is_cancelled(), "child must share the cancellation flag");
+    assert!(
+        child.is_cancelled(),
+        "child must share the cancellation flag"
+    );
 }
 
 #[test]
@@ -316,7 +334,10 @@ fn cancellation_token_child_can_cancel_parent_flag() {
     let child = parent.child_token();
     // cancelling via child is visible on parent
     child.cancel();
-    assert!(parent.is_cancelled(), "cancelling child must cancel the shared flag");
+    assert!(
+        parent.is_cancelled(),
+        "cancelling child must cancel the shared flag"
+    );
 }
 
 #[test]
@@ -366,8 +387,7 @@ fn budget_task_limit_exhaustion() {
 #[serial_test::serial]
 fn sdk_hardening_runtime_configure_cancel_and_snapshot() {
     use antikythera_sdk::agents::{
-        cancel_orchestrator, configure_hardening, get_monitor_snapshot,
-        reset_hardening_runtime,
+        cancel_orchestrator, configure_hardening, get_monitor_snapshot, reset_hardening_runtime,
     };
 
     reset_hardening_runtime().expect("reset runtime");
@@ -395,8 +415,8 @@ fn sdk_hardening_runtime_configure_cancel_and_snapshot() {
 
 #[test]
 fn sdk_default_retry_condition_applies_to_unconfigured_task() {
-    use antikythera_sdk::agents::{OrchestratorOptions, RetryConditionOption};
     use antikythera_core::application::agent::multi_agent::task::AgentTask;
+    use antikythera_sdk::agents::{OrchestratorOptions, RetryConditionOption};
 
     let mut task = AgentTask::new("summarize this document");
     let options = OrchestratorOptions {
@@ -626,10 +646,10 @@ fn routing_decision_serde_roundtrip() {
 
 #[test]
 fn router_name_returns_correct_strings() {
+    use antikythera_core::application::agent::multi_agent::AgentRouter;
     use antikythera_core::application::agent::multi_agent::router::{
         DirectRouter, FirstAvailableRouter, RoleRouter, RoundRobinRouter,
     };
-    use antikythera_core::application::agent::multi_agent::AgentRouter;
 
     assert_eq!(DirectRouter.name(), "direct");
     assert_eq!(RoundRobinRouter::new().name(), "round-robin");

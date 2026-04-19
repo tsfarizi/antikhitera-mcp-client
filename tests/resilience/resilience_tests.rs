@@ -4,11 +4,11 @@
 //! correctly end-to-end from an external crate perspective, mirroring the
 //! access pattern a host application would use.
 
-use antikythera_core::resilience::{
-    prune_messages, ContextWindowPolicy, HealthStatus, HealthTracker, ResilienceConfig,
-    ResilienceManager, RetryPolicy, TimeoutPolicy, TokenEstimator, with_retry_if,
-};
 use antikythera_core::domain::types::{ChatMessage, MessageRole};
+use antikythera_core::resilience::{
+    ContextWindowPolicy, HealthStatus, HealthTracker, ResilienceConfig, ResilienceManager,
+    RetryPolicy, TimeoutPolicy, TokenEstimator, prune_messages, with_retry_if,
+};
 
 // ── RetryPolicy integration ───────────────────────────────────────────────────
 
@@ -42,8 +42,8 @@ fn timeout_policy_durations_match_millisecond_fields() {
 
 #[tokio::test]
 async fn with_retry_if_succeeds_after_transient_network_errors() {
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     let attempts = Arc::new(AtomicU32::new(0));
     let a = Arc::clone(&attempts);
@@ -81,7 +81,10 @@ async fn with_retry_if_succeeds_after_transient_network_errors() {
 fn token_estimator_scales_proportionally_to_text_length() {
     let short = TokenEstimator::estimate_text("hello");
     let long = TokenEstimator::estimate_text(&"word ".repeat(200));
-    assert!(long > short * 10, "long text should have much higher token estimate");
+    assert!(
+        long > short * 10,
+        "long text should have much higher token estimate"
+    );
 }
 
 #[test]
@@ -128,9 +131,11 @@ fn prune_messages_with_tight_budget_keeps_newest_messages() {
     assert!(non_system.len() >= policy.min_history_messages);
     // Newest message (last in original) must be in the output
     let last_original = messages.last().unwrap();
-    assert!(pruned
-        .iter()
-        .any(|m| m.content() == last_original.content()));
+    assert!(
+        pruned
+            .iter()
+            .any(|m| m.content() == last_original.content())
+    );
 }
 
 // ── HealthTracker integration ─────────────────────────────────────────────────
@@ -214,8 +219,7 @@ fn resilience_manager_full_lifecycle() {
 
     // Reset and verify clean slate
     mgr.reset_health();
-    let after_reset: Vec<serde_json::Value> =
-        serde_json::from_str(&mgr.get_health_json()).unwrap();
+    let after_reset: Vec<serde_json::Value> = serde_json::from_str(&mgr.get_health_json()).unwrap();
     assert!(after_reset.is_empty());
 }
 

@@ -202,8 +202,8 @@ mod tests {
             make_msg(MessageRole::Assistant, "world"),
         ];
         let total = TokenEstimator::estimate_messages(&msgs);
-        let expected = TokenEstimator::estimate_message(&msgs[0])
-            + TokenEstimator::estimate_message(&msgs[1]);
+        let expected =
+            TokenEstimator::estimate_message(&msgs[0]) + TokenEstimator::estimate_message(&msgs[1]);
         assert_eq!(total, expected);
     }
 
@@ -305,7 +305,10 @@ mod tests {
             min_history_messages: 2,
         };
         let pruned = prune_messages(&msgs, &policy);
-        let non_system_count = pruned.iter().filter(|m| m.role != MessageRole::System).count();
+        let non_system_count = pruned
+            .iter()
+            .filter(|m| m.role != MessageRole::System)
+            .count();
         assert!(non_system_count >= policy.min_history_messages);
     }
 }

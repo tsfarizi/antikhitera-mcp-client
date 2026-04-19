@@ -61,4 +61,4 @@ pub use logger::*;
 #[cfg(feature = "subscriber")]
 pub use subscriber::{LogSender, LogSubscriber};
 
-pub use session_logs::{SessionLogExport, BatchLogExport};
+pub use session_logs::{BatchLogExport, SessionLogExport};

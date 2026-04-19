@@ -97,7 +97,10 @@ impl<H: HostImports> DelegatingAgent<H> {
     }
 
     pub async fn run(&mut self, prompt: String, system_prompt: String) -> Result<String, String> {
-        self.log("info", format!("Starting agent run: {}", &prompt[..prompt.len().min(50)]));
+        self.log(
+            "info",
+            format!("Starting agent run: {}", &prompt[..prompt.len().min(50)]),
+        );
 
         let mut current_prompt = prompt.clone();
 
@@ -140,7 +143,10 @@ impl<H: HostImports> DelegatingAgent<H> {
             let response_json: serde_json::Value = match serde_json::from_str(&response_body) {
                 Ok(value) => value,
                 Err(_) => {
-                    self.log("info", "Host returned plain text response; finishing session".to_string());
+                    self.log(
+                        "info",
+                        "Host returned plain text response; finishing session".to_string(),
+                    );
                     return Ok(llm_response.content);
                 }
             };
@@ -149,13 +155,15 @@ impl<H: HostImports> DelegatingAgent<H> {
                 match action {
                     "call_tool" | "call_tools" => {
                         self.step_counter += 1;
-                        let tool_name = response_json.get("tool")
+                        let tool_name = response_json
+                            .get("tool")
                             .or_else(|| response_json.get("name"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                             .to_string();
 
-                        let tool_args = response_json.get("input")
+                        let tool_args = response_json
+                            .get("input")
                             .or_else(|| response_json.get("arguments"))
                             .cloned()
                             .unwrap_or(serde_json::json!({}));
@@ -172,12 +180,12 @@ impl<H: HostImports> DelegatingAgent<H> {
 
                         current_prompt = format!(
                             "Tool '{}' executed. Result: {}\n\nContinue.",
-                            tool_result.tool_name,
-                            tool_result.output_json
+                            tool_result.tool_name, tool_result.output_json
                         );
                     }
                     "final" => {
-                        let final_content = response_json.get("response")
+                        let final_content = response_json
+                            .get("response")
                             .or_else(|| response_json.get("content"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("No content")
@@ -191,13 +199,18 @@ impl<H: HostImports> DelegatingAgent<H> {
                                 "response": final_content,
                                 "steps": self.step_counter,
                             });
-                            let _ = self.host.save_state(session_id.clone(), state.to_string()).await;
+                            let _ = self
+                                .host
+                                .save_state(session_id.clone(), state.to_string())
+                                .await;
                         }
 
                         return Ok(final_content);
                     }
                     _ => {
-                        current_prompt = "Unknown action. Please respond with tool call or final response.".to_string();
+                        current_prompt =
+                            "Unknown action. Please respond with tool call or final response."
+                                .to_string();
                     }
                 }
             } else {
@@ -258,4 +271,3 @@ pub fn run_agent_with_host(
 
     CString::new(result).unwrap().into_raw()
 }
-

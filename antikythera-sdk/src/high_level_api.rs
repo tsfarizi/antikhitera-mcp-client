@@ -90,7 +90,8 @@ impl Client {
             force_json: false,
         };
 
-        let response = self.core_client
+        let response = self
+            .core_client
             .chat(request)
             .await
             .map_err(|e| SdkError::Chat(e.to_string()))?;
@@ -143,7 +144,8 @@ impl Client {
         }
 
         let agent = Agent::new(self.core_client.clone());
-        agent.run(prompt, options)
+        agent
+            .run(prompt, options)
             .await
             .map_err(|e| SdkError::Agent(e.to_string()))
     }

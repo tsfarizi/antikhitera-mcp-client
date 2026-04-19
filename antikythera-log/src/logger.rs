@@ -157,8 +157,7 @@ impl Logger {
 
     /// Log at specific level
     pub fn log(&self, level: LogLevel, message: impl Into<String>) {
-        let entry = LogEntry::new(level, message)
-            .with_session(&self.session_id);
+        let entry = LogEntry::new(level, message).with_session(&self.session_id);
 
         self.buffer.push(entry.clone());
 
@@ -167,7 +166,12 @@ impl Logger {
     }
 
     /// Log with source module
-    pub fn log_with_source(&self, level: LogLevel, source: impl Into<String>, message: impl Into<String>) {
+    pub fn log_with_source(
+        &self,
+        level: LogLevel,
+        source: impl Into<String>,
+        message: impl Into<String>,
+    ) {
         let entry = LogEntry::new(level, message)
             .with_session(&self.session_id)
             .with_source(source);
@@ -179,7 +183,12 @@ impl Logger {
     }
 
     /// Log with context
-    pub fn log_with_context(&self, level: LogLevel, message: impl Into<String>, context: impl Into<String>) {
+    pub fn log_with_context(
+        &self,
+        level: LogLevel,
+        message: impl Into<String>,
+        context: impl Into<String>,
+    ) {
         let entry = LogEntry::new(level, message)
             .with_session(&self.session_id)
             .with_context(context);

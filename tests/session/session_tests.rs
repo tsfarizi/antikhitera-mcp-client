@@ -61,8 +61,12 @@ fn test_clear_session() {
     let manager = SessionManager::new();
     let session_id = manager.create_session("user-123", "gpt-4");
 
-    manager.add_message(&session_id, Message::user("Hello!")).unwrap();
-    manager.add_message(&session_id, Message::assistant("Hi!")).unwrap();
+    manager
+        .add_message(&session_id, Message::user("Hello!"))
+        .unwrap();
+    manager
+        .add_message(&session_id, Message::assistant("Hi!"))
+        .unwrap();
 
     let history = manager.get_chat_history(&session_id).unwrap();
     assert_eq!(history.len(), 2);
@@ -77,8 +81,12 @@ fn test_export_import_postcard() {
     let manager = SessionManager::new();
     let session_id = manager.create_session("user-123", "gpt-4");
 
-    manager.add_message(&session_id, Message::user("Test")).unwrap();
-    manager.add_message(&session_id, Message::assistant("Response")).unwrap();
+    manager
+        .add_message(&session_id, Message::user("Test"))
+        .unwrap();
+    manager
+        .add_message(&session_id, Message::assistant("Response"))
+        .unwrap();
 
     // Export
     let session = manager.get_session(&session_id).unwrap();
@@ -98,7 +106,9 @@ fn test_batch_export_import() {
     let session1 = manager.create_session("user-1", "gpt-4");
     let session2 = manager.create_session("user-2", "gpt-3.5");
 
-    manager.add_message(&session1, Message::user("Hello")).unwrap();
+    manager
+        .add_message(&session1, Message::user("Hello"))
+        .unwrap();
     manager.add_message(&session2, Message::user("Hi")).unwrap();
 
     // Export batch
@@ -163,10 +173,14 @@ fn test_session_summary() {
     let manager = SessionManager::new();
     let session_id = manager.create_session("user-123", "gpt-4");
 
-    manager.add_message(&session_id, Message::user("Hello")).unwrap();
+    manager
+        .add_message(&session_id, Message::user("Hello"))
+        .unwrap();
     manager.record_tool(&session_id, "get_weather", 1).unwrap();
 
-    let summary = manager.get_session(&session_id).map(|s| SessionSummary::from(&s));
+    let summary = manager
+        .get_session(&session_id)
+        .map(|s| SessionSummary::from(&s));
     let summary = summary.unwrap();
 
     assert_eq!(summary.message_count, 1);

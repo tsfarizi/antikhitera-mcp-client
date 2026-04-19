@@ -25,7 +25,9 @@ pub enum SchemaType {
     /// Array of items with specified type
     Array { items: Box<SchemaType> },
     /// Object with nested fields
-    Object { fields: HashMap<String, SchemaField> },
+    Object {
+        fields: HashMap<String, SchemaField>,
+    },
 }
 
 impl PartialEq for SchemaType {
@@ -70,7 +72,9 @@ impl SchemaType {
                     if field.required {
                         obj.contains_key(key) && field.field_type.matches_value(&obj[key])
                     } else {
-                        obj.get(key).map(|v| field.field_type.matches_value(v)).unwrap_or(true)
+                        obj.get(key)
+                            .map(|v| field.field_type.matches_value(v))
+                            .unwrap_or(true)
                     }
                 })
             }
@@ -94,7 +98,9 @@ pub struct SchemaField {
     pub example: Option<serde_json::Value>,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 impl PartialEq for SchemaField {
     fn eq(&self, other: &Self) -> bool {
@@ -138,7 +144,9 @@ impl JsonSchema {
         }
 
         // Check required fields for objects
-        if let (SchemaType::Object { fields }, serde_json::Value::Object(obj)) = (&self.root_type, &value) {
+        if let (SchemaType::Object { fields }, serde_json::Value::Object(obj)) =
+            (&self.root_type, &value)
+        {
             for (key, field) in fields {
                 if field.required && !obj.contains_key(key) {
                     return Err(ValidationError::MissingRequiredField {
@@ -162,7 +170,9 @@ impl JsonSchema {
     pub fn to_prompt_instruction(&self) -> String {
         let mut instruction = String::new();
 
-        instruction.push_str(&format!("You must respond with a JSON object matching this schema:\n"));
+        instruction.push_str(&format!(
+            "You must respond with a JSON object matching this schema:\n"
+        ));
         instruction.push_str(&format!("Schema: {}\n", self.name));
 
         if let Some(desc) = &self.description {
@@ -176,7 +186,8 @@ impl JsonSchema {
         instruction.push_str(&self.generate_example());
         instruction.push_str("\n```\n");
 
-        instruction.push_str("\nIMPORTANT: Respond with ONLY valid JSON. No explanations or markdown.");
+        instruction
+            .push_str("\nIMPORTANT: Respond with ONLY valid JSON. No explanations or markdown.");
 
         instruction
     }
@@ -192,7 +203,11 @@ pub enum ValidationError {
     /// JSON parsing failed
     InvalidJson(String),
     /// Type mismatch
-    TypeMismatch { expected: String, got: String, path: String },
+    TypeMismatch {
+        expected: String,
+        got: String,
+        path: String,
+    },
     /// Required field missing
     MissingRequiredField { field: String, path: String },
 }
@@ -201,8 +216,16 @@ impl std::fmt::Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ValidationError::InvalidJson(e) => write!(f, "Invalid JSON: {}", e),
-            ValidationError::TypeMismatch { expected, got, path } => {
-                write!(f, "Type mismatch at {}: expected {}, got {}", path, expected, got)
+            ValidationError::TypeMismatch {
+                expected,
+                got,
+                path,
+            } => {
+                write!(
+                    f,
+                    "Type mismatch at {}: expected {}, got {}",
+                    path, expected, got
+                )
             }
             ValidationError::MissingRequiredField { field, path } => {
                 write!(f, "Missing required field '{}' at {}", field, path)
@@ -219,9 +242,7 @@ fn value_type_name(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::Null => "null".to_string(),
         serde_json::Value::Bool(_) => "boolean".to_string(),
-        serde_json::Value::Number(n) => {
-            if n.is_i64() { "integer" } else { "float" }.to_string()
-        }
+        serde_json::Value::Number(n) => if n.is_i64() { "integer" } else { "float" }.to_string(),
         serde_json::Value::String(_) => "string".to_string(),
         serde_json::Value::Array(_) => "array".to_string(),
         serde_json::Value::Object(_) => "object".to_string(),
@@ -263,7 +284,11 @@ fn generate_schema_instruction(schema_type: &SchemaType, indent: usize) -> Strin
         SchemaType::Object { fields } => {
             let mut s = format!("{}object:\n", indent_str);
             for (key, field) in fields {
-                let req = if field.required { "(required)" } else { "(optional)" };
+                let req = if field.required {
+                    "(required)"
+                } else {
+                    "(optional)"
+                };
                 s.push_str(&format!("{}{} {}:\n", indent_str, key, req));
                 if let Some(desc) = &field.description {
                     s.push_str(&format!("{}  # {}\n", indent_str, desc));
@@ -311,7 +336,12 @@ impl JsonSchema {
     }
 
     /// Create a nested object field schema
-    pub fn object_field(_name: &str, fields: HashMap<String, SchemaField>, required: bool, description: Option<&str>) -> SchemaField {
+    pub fn object_field(
+        _name: &str,
+        fields: HashMap<String, SchemaField>,
+        required: bool,
+        description: Option<&str>,
+    ) -> SchemaField {
         SchemaField {
             field_type: SchemaType::Object { fields },
             required,
@@ -321,9 +351,16 @@ impl JsonSchema {
     }
 
     /// Create an array field schema
-    pub fn array_field(_name: &str, item_type: SchemaType, required: bool, description: Option<&str>) -> SchemaField {
+    pub fn array_field(
+        _name: &str,
+        item_type: SchemaType,
+        required: bool,
+        description: Option<&str>,
+    ) -> SchemaField {
         SchemaField {
-            field_type: SchemaType::Array { items: Box::new(item_type) },
+            field_type: SchemaType::Array {
+                items: Box::new(item_type),
+            },
             required,
             description: description.map(|s| s.to_string()),
             example: None,

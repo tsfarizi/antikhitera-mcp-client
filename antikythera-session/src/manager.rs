@@ -144,7 +144,11 @@ impl SessionManager {
     }
 
     /// Update session metadata
-    pub fn update_metadata(&self, session_id: &str, metadata: impl Into<String>) -> Result<(), String> {
+    pub fn update_metadata(
+        &self,
+        session_id: &str,
+        metadata: impl Into<String>,
+    ) -> Result<(), String> {
         let mut sessions = self.sessions.write().unwrap();
         match sessions.get_mut(session_id) {
             Some(session) => {

@@ -23,9 +23,11 @@
 
 use super::tooling::{ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
-use crate::infrastructure::model::{HostModelResponse, ModelError, ModelProvider, ModelRequest, ModelResponse};
 use crate::domain::types::MessagePart;
 use crate::domain::types::{ChatMessage, MessageRole};
+use crate::infrastructure::model::{
+    HostModelResponse, ModelError, ModelProvider, ModelRequest, ModelResponse,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -541,7 +543,11 @@ mod tests {
     impl ModelProvider for MockProvider {
         async fn chat(&self, request: ModelRequest) -> Result<ModelResponse, ModelError> {
             Ok(ModelResponse::new(
-                format!("{}:{}", request.session_id.unwrap_or_default(), self.response),
+                format!(
+                    "{}:{}",
+                    request.session_id.unwrap_or_default(),
+                    self.response
+                ),
                 None,
             ))
         }
@@ -582,21 +588,25 @@ mod tests {
             .await;
 
         assert_eq!(prepared.session_id, first.session_id);
-            assert!(prepared.model_request.messages.len() >= 3);
-            assert!(prepared
+        assert!(prepared.model_request.messages.len() >= 3);
+        assert!(
+            prepared
                 .model_request
                 .messages
                 .iter()
-                .any(|message| message.content() == "halo"));
-            assert!(prepared
+                .any(|message| message.content() == "halo")
+        );
+        assert!(
+            prepared
                 .model_request
                 .messages
                 .iter()
-                .any(|message| message.content().contains("siap")));
-            assert_eq!(
-                prepared.model_request.messages.last().unwrap().content(),
-                "lanjut"
-            );
+                .any(|message| message.content().contains("siap"))
+        );
+        assert_eq!(
+            prepared.model_request.messages.last().unwrap().content(),
+            "lanjut"
+        );
     }
 
     #[tokio::test]
@@ -640,19 +650,23 @@ mod tests {
             })
             .await;
 
-            assert!(follow_up
+        assert!(
+            follow_up
                 .model_request
                 .messages
                 .iter()
-                .any(|message| message.has_attachments() && message.content() == "lihat lampiran"));
-            assert!(follow_up
+                .any(|message| message.has_attachments() && message.content() == "lihat lampiran")
+        );
+        assert!(
+            follow_up
                 .model_request
                 .messages
                 .iter()
-                .any(|message| message.content() == "berhasil"));
-            assert_eq!(
-                follow_up.model_request.messages.last().unwrap().content(),
-                "cek riwayat"
-            );
+                .any(|message| message.content() == "berhasil")
+        );
+        assert_eq!(
+            follow_up.model_request.messages.last().unwrap().content(),
+            "cek riwayat"
+        );
     }
 }

@@ -6,7 +6,9 @@ pub mod generators;
 pub mod prompts;
 pub mod ui;
 
-use crate::config::postcard_config::{self, AppConfig as PostcardAppConfig, ModelConfig, PromptsConfig};
+use crate::config::postcard_config::{
+    self, AppConfig as PostcardAppConfig, ModelConfig, PromptsConfig,
+};
 use generators::client;
 use std::error::Error;
 
@@ -62,10 +64,13 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
             provider_type: provider_type_display.clone(),
             endpoint: endpoint.clone(),
             api_key: api_key_env,
-            models: models.iter().map(|(name, display)| postcard_config::ModelInfo {
-                name: name.clone(),
-                display_name: display.clone(),
-            }).collect(),
+            models: models
+                .iter()
+                .map(|(name, display)| postcard_config::ModelInfo {
+                    name: name.clone(),
+                    display_name: display.clone(),
+                })
+                .collect(),
         }],
         model: ModelConfig {
             default_provider: provider_id,
@@ -108,8 +113,8 @@ pub async fn run_setup_menu() -> Result<bool, Box<dyn Error>> {
 async fn manage_providers() -> Result<(), Box<dyn Error>> {
     ui::print_header("Manage Providers");
 
-    let config = postcard_config::load_config(None)
-        .map_err(|e| format!("Failed to load config: {}", e))?;
+    let config =
+        postcard_config::load_config(None).map_err(|e| format!("Failed to load config: {}", e))?;
 
     if config.providers.is_empty() {
         ui::print_warning("No providers configured.");
@@ -186,8 +191,8 @@ async fn manage_providers() -> Result<(), Box<dyn Error>> {
 async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
     ui::print_header("Manage Prompt Template");
 
-    let config = postcard_config::load_config(None)
-        .map_err(|e| format!("Failed to load config: {}", e))?;
+    let config =
+        postcard_config::load_config(None).map_err(|e| format!("Failed to load config: {}", e))?;
 
     ui::print_info("Current prompt template:");
     ui::print_divider();

@@ -147,14 +147,14 @@ impl McpTransport for HttpTransport {
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                self.start_sse_listener();
-                match self.resolve_endpoint().await {
-                    Ok(_) => TransportMode::Stateful,
-                    Err(e) => {
-                        tracing::warn!(server = %self.inner.config.name, %e, "SSE connection failed");
-                        return Err(e);
+                    self.start_sse_listener();
+                    match self.resolve_endpoint().await {
+                        Ok(_) => TransportMode::Stateful,
+                        Err(e) => {
+                            tracing::warn!(server = %self.inner.config.name, %e, "SSE connection failed");
+                            return Err(e);
+                        }
                     }
-                }
                 }
             }
             TransportMode::Stateless => {
@@ -171,21 +171,21 @@ impl McpTransport for HttpTransport {
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                info!(server = %self.inner.config.name, "Auto-detecting transport mode...");
-                self.start_sse_listener();
+                    info!(server = %self.inner.config.name, "Auto-detecting transport mode...");
+                    self.start_sse_listener();
 
-                match self.resolve_endpoint().await {
-                    Ok(_) => {
-                        info!(server = %self.inner.config.name, "Detected stateful mode (SSE endpoint received)");
-                        TransportMode::Stateful
+                    match self.resolve_endpoint().await {
+                        Ok(_) => {
+                            info!(server = %self.inner.config.name, "Detected stateful mode (SSE endpoint received)");
+                            TransportMode::Stateful
+                        }
+                        Err(_) => {
+                            info!(server = %self.inner.config.name, "SSE timeout - falling back to stateless mode");
+                            *self.inner.session_endpoint.lock().await =
+                                Some(self.inner.config.url.clone());
+                            TransportMode::Stateless
+                        }
                     }
-                    Err(_) => {
-                        info!(server = %self.inner.config.name, "SSE timeout - falling back to stateless mode");
-                        *self.inner.session_endpoint.lock().await =
-                            Some(self.inner.config.url.clone());
-                        TransportMode::Stateless
-                    }
-                }
                 }
             }
         };

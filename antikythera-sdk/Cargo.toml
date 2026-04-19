@@ -34,6 +34,11 @@ sdk-core = ["dep:antikythera-core", "dep:antikythera-session"]
 # Host imports (call_llm_sync, etc.) are declared in wit/antikythera.wit.
 component = ["dep:wit-bindgen-rt"]
 
+# Compatibility alias for CI jobs that still use `--features wasm`.
+# Keep this minimal and independent from `component` because many jobs target
+# `wasm32-unknown-unknown`, while component builds use `wasm32-wasip1`.
+wasm = []
+
 # WASM configuration binary format (postcard serialization)
 wasm-config = []
 

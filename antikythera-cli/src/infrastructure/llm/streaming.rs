@@ -21,8 +21,7 @@ pub enum StreamEvent {
 
 pub type StreamEventSink = Arc<dyn Fn(&StreamEvent) + Send + Sync + 'static>;
 
-static STREAM_SINK: LazyLock<Mutex<Option<StreamEventSink>>> =
-    LazyLock::new(|| Mutex::new(None));
+static STREAM_SINK: LazyLock<Mutex<Option<StreamEventSink>>> = LazyLock::new(|| Mutex::new(None));
 
 pub fn set_stream_event_sink(sink: StreamEventSink) {
     if let Ok(mut guard) = STREAM_SINK.lock() {

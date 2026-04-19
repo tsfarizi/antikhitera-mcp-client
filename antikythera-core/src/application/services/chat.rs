@@ -1,8 +1,8 @@
 use crate::application::agent::{Agent, AgentOptions, AgentStep};
 use crate::application::client::{ChatRequest, McpClient, McpError};
-use crate::infrastructure::model::ModelProvider;
 use crate::domain::types::MessagePart;
-use serde_json::{json, Value};
+use crate::infrastructure::model::ModelProvider;
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -37,7 +37,7 @@ impl<P: ModelProvider> ChatService<P> {
         if agent_enabled {
             let provider = self.client.default_provider().to_string();
             let model = self.client.default_model().to_string();
-            
+
             self.run_agent(
                 prompt,
                 attachments,
@@ -50,14 +50,8 @@ impl<P: ModelProvider> ChatService<P> {
             )
             .await
         } else {
-            self.run_raw_chat(
-                prompt,
-                attachments,
-                system_prompt,
-                session_id,
-                debug_mode,
-            )
-            .await
+            self.run_raw_chat(prompt, attachments, system_prompt, session_id, debug_mode)
+                .await
         }
     }
 
@@ -191,8 +185,8 @@ impl<P: ModelProvider> ChatService<P> {
 mod tests {
     use super::*;
     use crate::application::client::ClientConfig;
-    use crate::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
     use crate::domain::types::ChatMessage;
+    use crate::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
     use async_trait::async_trait;
 
     struct MockModelProvider {
@@ -204,7 +198,10 @@ mod tests {
     impl ModelProvider for MockModelProvider {
         async fn chat(&self, _request: ModelRequest) -> Result<ModelResponse, ModelError> {
             Ok(ModelResponse {
-                message: ChatMessage::new(crate::domain::types::MessageRole::Assistant, self.response_content.clone()),
+                message: ChatMessage::new(
+                    crate::domain::types::MessageRole::Assistant,
+                    self.response_content.clone(),
+                ),
                 session_id: None,
             })
         }

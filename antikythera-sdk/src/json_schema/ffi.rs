@@ -2,10 +2,10 @@
 //!
 //! Expose JSON schema definition, validation, and schema management via FFI.
 
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::collections::HashMap;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
 use super::types::{JsonSchema, ValidationError};
 use super::validator::{JsonValidator, RetryManager};
@@ -308,7 +308,10 @@ pub fn mcp_json_retry_record_error(
                 ("exhausted", serde_json::json!(manager.is_exhausted())),
             ])
         }
-        None => error_response(&format!("Retry manager not found for session '{}'", session_str)),
+        None => error_response(&format!(
+            "Retry manager not found for session '{}'",
+            session_str
+        )),
     }
 }
 
@@ -349,7 +352,10 @@ pub fn mcp_json_retry_prompt(
             let retry_prompt = manager.retry_prompt(&schema_prompt, &last_str);
             to_c_string(&retry_prompt)
         }
-        (None, _) => error_response(&format!("Retry manager not found for session '{}'", session_str)),
+        (None, _) => error_response(&format!(
+            "Retry manager not found for session '{}'",
+            session_str
+        )),
         (_, None) => error_response(&format!("Schema '{}' not found", name_str)),
     }
 }
@@ -372,7 +378,9 @@ pub fn mcp_json_retry_is_exhausted(session_id: *const c_char) -> *mut c_char {
             ("exhausted", serde_json::json!(manager.is_exhausted())),
             ("attempts", serde_json::json!(manager.current_attempt)),
         ]),
-        None => error_response(&format!("Retry manager not found for session '{}'", session_str)),
+        None => error_response(&format!(
+            "Retry manager not found for session '{}'",
+            session_str
+        )),
     }
 }
-

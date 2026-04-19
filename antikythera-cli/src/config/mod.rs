@@ -14,15 +14,8 @@
 // Re-export the unified config types from core so the rest of the CLI crate and
 // the `antikythera-config` binary can import them from a single place.
 pub use antikythera_core::config::postcard_config::{
-    AgentConfig,
-    AppConfig,
-    DocServerConfig,
-    ModelConfig,
-    ModelInfo,
-    PromptsConfig,
-    ProviderConfig,
-    ServerConfig,
-    CONFIG_PATH,
+    AgentConfig, AppConfig, CONFIG_PATH, DocServerConfig, ModelConfig, ModelInfo, PromptsConfig,
+    ProviderConfig, ServerConfig,
 };
 
 /// Type alias kept for backward compatibility within the CLI crate.
@@ -53,8 +46,7 @@ pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
     if !config_path.exists() {
         return Err(format!("Config not found: {}", config_path.display()));
     }
-    let data =
-        std::fs::read(config_path).map_err(|e| format!("Read error: {}", e))?;
+    let data = std::fs::read(config_path).map_err(|e| format!("Read error: {}", e))?;
     config_from_postcard(&data)
 }
 
@@ -62,8 +54,7 @@ pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
 pub fn save_config(config: &AppConfig, path: Option<&Path>) -> Result<(), String> {
     let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
     if let Some(parent) = config_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Create dir error: {}", e))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("Create dir error: {}", e))?;
     }
     let data = config_to_postcard(config)?;
     std::fs::write(config_path, &data).map_err(|e| format!("Write error: {}", e))
@@ -80,4 +71,3 @@ pub fn init_default_config() -> Result<AppConfig, String> {
     save_config(&config, None)?;
     Ok(config)
 }
-

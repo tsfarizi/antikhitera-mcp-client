@@ -7,30 +7,35 @@ mod ffi;
 
 // Re-export FFI functions
 pub use ffi::{
-    // Session management
-    mcp_session_create, mcp_session_get, mcp_session_list,
-    mcp_session_add_message, mcp_session_get_history,
-    mcp_session_export, mcp_session_import,
-    mcp_session_delete, mcp_session_clear,
-    mcp_batch_export, mcp_batch_import,
-    // Session log integration
-    mcp_session_export_logs, mcp_session_import_logs,
-    mcp_session_get_logs, mcp_session_batch_export_logs,
+    mcp_batch_export,
+    mcp_batch_import,
+    mcp_session_add_message,
+    mcp_session_batch_export_logs,
     mcp_session_batch_import_logs,
+    mcp_session_clear,
+    // Session management
+    mcp_session_create,
+    mcp_session_delete,
+    mcp_session_export,
+    // Session log integration
+    mcp_session_export_logs,
+    mcp_session_get,
+    mcp_session_get_history,
+    mcp_session_get_logs,
+    mcp_session_import,
+    mcp_session_import_logs,
+    mcp_session_list,
 };
 
 // Re-export session types from antikythera-session
-pub use antikythera_session::{
-    Session, SessionSummary,
-    SessionExport, BatchExport,
-};
+pub use antikythera_session::{BatchExport, Session, SessionExport, SessionSummary};
 
 /// Message types for session
 pub use antikythera_session::Message;
 pub use antikythera_session::MessageRole;
 
 /// Session log export types from antikythera-log
-pub use antikythera_log::{SessionLogExport, BatchLogExport};
+pub use antikythera_log::{BatchLogExport, SessionLogExport};
 
 /// Thread-safe session manager for SDK usage
 pub struct SdkSessionManager {

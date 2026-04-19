@@ -21,7 +21,9 @@ impl MessageAdapter {
             MessagePart::Image { mime_type, data } => json!({
                 "inline_data": { "mime_type": mime_type, "data": data }
             }),
-            MessagePart::File { mime_type, data, .. } => json!({
+            MessagePart::File {
+                mime_type, data, ..
+            } => json!({
                 "inline_data": { "mime_type": mime_type, "data": data }
             }),
         }
@@ -34,7 +36,9 @@ impl MessageAdapter {
                 "type": "image_url",
                 "image_url": { "url": format!("data:{};base64,{}", mime_type, data) }
             }),
-            MessagePart::File { mime_type, data, .. } => json!({
+            MessagePart::File {
+                mime_type, data, ..
+            } => json!({
                 "type": "image_url",
                 "image_url": { "url": format!("data:{};base64,{}", mime_type, data) }
             }),

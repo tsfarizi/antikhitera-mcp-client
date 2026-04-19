@@ -1,4 +1,4 @@
-﻿//! WASM Agent Processor
+//! WASM Agent Processor
 //!
 //! Processes LLM responses and determines next action.
 //! WASM does NOT call LLM APIs - host handles that.
@@ -33,7 +33,7 @@ pub fn process_llm_response(
         Err(_) => {
             return Ok(AgentAction::Final {
                 response: serde_json::Value::String(llm_response_content.to_string()),
-            })
+            });
         }
     };
 
@@ -48,11 +48,9 @@ pub fn process_llm_response(
         });
     }
 
-    Err(
-        "Could not derive action from LLM response. \
+    Err("Could not derive action from LLM response. \
          Host must normalize provider-native output to the framework generic JSON format."
-            .to_string(),
-    )
+        .to_string())
 }
 
 fn parse_generic_tool_action(parsed: &serde_json::Value) -> Result<Option<AgentAction>, String> {
@@ -172,7 +170,10 @@ pub fn build_llm_messages(system_prompt: &str, state: &AgentState) -> Vec<HashMa
             ("role".to_string(), "system".to_string()),
             (
                 "content".to_string(),
-                format!("Conversation summary v{}: {}", summary.version, summary.text),
+                format!(
+                    "Conversation summary v{}: {}",
+                    summary.version, summary.text
+                ),
             ),
         ]));
     }
@@ -201,7 +202,10 @@ pub fn build_llm_messages(system_prompt: &str, state: &AgentState) -> Vec<HashMa
 // ============================================================================
 
 /// Validate JSON against schema
-pub fn validate_json_schema(schema: &serde_json::Value, data: &serde_json::Value) -> Result<(), String> {
+pub fn validate_json_schema(
+    schema: &serde_json::Value,
+    data: &serde_json::Value,
+) -> Result<(), String> {
     if data.is_null() {
         return Err("JSON is null".to_string());
     }

@@ -86,10 +86,8 @@ impl ComponentHealth {
     pub fn record_success(&mut self, latency_ms: u64) {
         self.total_calls += 1;
         self.successful_calls += 1;
-        self.avg_latency_ms =
-            ema(self.avg_latency_ms, latency_ms as f64, self.total_calls);
-        self.error_rate =
-            1.0 - (self.successful_calls as f64 / self.total_calls as f64);
+        self.avg_latency_ms = ema(self.avg_latency_ms, latency_ms as f64, self.total_calls);
+        self.error_rate = 1.0 - (self.successful_calls as f64 / self.total_calls as f64);
         self.status = HealthStatus::from_error_rate(self.error_rate);
     }
 
@@ -97,8 +95,7 @@ impl ComponentHealth {
     pub fn record_failure(&mut self, error: impl Into<String>) {
         self.total_calls += 1;
         self.last_error = Some(error.into());
-        self.error_rate =
-            1.0 - (self.successful_calls as f64 / self.total_calls as f64);
+        self.error_rate = 1.0 - (self.successful_calls as f64 / self.total_calls as f64);
         self.status = HealthStatus::from_error_rate(self.error_rate);
     }
 }

@@ -7,10 +7,11 @@
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
 /// Server output format registry (true = JSON, false = Markdown/Text)
-static OUTPUT_FORMATS: LazyLock<Mutex<HashMap<u32, bool>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static OUTPUT_FORMATS: LazyLock<Mutex<HashMap<u32, bool>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn to_c_string(s: &str) -> *mut c_char {
     match CString::new(s) {
@@ -89,7 +90,8 @@ pub fn mcp_format_response(
     };
 
     // Get format setting (true = JSON, false = Markdown/Text)
-    let format_is_json = OUTPUT_FORMATS.lock()
+    let format_is_json = OUTPUT_FORMATS
+        .lock()
         .ok()
         .and_then(|formats| formats.get(&server_id).copied())
         .unwrap_or(true); // Default to JSON
@@ -97,7 +99,10 @@ pub fn mcp_format_response(
     let formatted = if format_is_json {
         // JSON format
         let mut obj = serde_json::Map::new();
-        obj.insert("content".to_string(), serde_json::Value::String(content_str));
+        obj.insert(
+            "content".to_string(),
+            serde_json::Value::String(content_str),
+        );
         if let Some(data) = data_value {
             obj.insert("data".to_string(), data);
         }
@@ -119,4 +124,3 @@ pub fn mcp_format_response(
 
     to_c_string(&formatted)
 }
-

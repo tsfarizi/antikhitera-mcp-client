@@ -63,7 +63,11 @@ impl HttpClientBase {
     }
 
     /// POST JSON with bearer auth and return raw response body as text.
-    pub async fn post_with_bearer_text<Req>(&self, url: &str, body: &Req) -> Result<String, ModelError>
+    pub async fn post_with_bearer_text<Req>(
+        &self,
+        url: &str,
+        body: &Req,
+    ) -> Result<String, ModelError>
     where
         Req: Serialize,
     {

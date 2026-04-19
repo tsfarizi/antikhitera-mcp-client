@@ -59,6 +59,8 @@ pub fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
     }
     (0..hex.len())
         .step_by(2)
-        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| format!("Hex decode error: {}", e)))
+        .map(|i| {
+            u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| format!("Hex decode error: {}", e))
+        })
         .collect()
 }

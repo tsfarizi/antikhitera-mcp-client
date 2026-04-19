@@ -244,7 +244,11 @@ mod tests {
         let b = OrchestratorBudget::new().with_max_total_steps(100);
         let b2 = b.clone();
         b.record_steps(30);
-        assert_eq!(b2.consumed_steps(), 30, "clone must observe parent mutations");
+        assert_eq!(
+            b2.consumed_steps(),
+            30,
+            "clone must observe parent mutations"
+        );
     }
 
     #[test]

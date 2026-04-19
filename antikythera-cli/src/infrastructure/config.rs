@@ -17,7 +17,10 @@ pub fn load_cli_config(path: Option<&Path>) -> Result<AppConfig, Box<dyn Error +
 /// Create an [`LlmProvider`] box from the active provider in `config`.
 pub fn create_llm_provider(
     config: &AppConfig,
-) -> Result<Box<dyn crate::domain::use_cases::chat_use_case::LlmProvider>, Box<dyn Error + Send + Sync>> {
+) -> Result<
+    Box<dyn crate::domain::use_cases::chat_use_case::LlmProvider>,
+    Box<dyn Error + Send + Sync>,
+> {
     let provider = config
         .providers
         .iter()
@@ -49,8 +52,11 @@ pub fn create_provider_config(
         id: provider.id.clone(),
         provider_type,
         endpoint: provider.endpoint.clone(),
-        api_key: if provider.api_key.is_empty() { None } else { Some(provider.api_key.clone()) },
+        api_key: if provider.api_key.is_empty() {
+            None
+        } else {
+            Some(provider.api_key.clone())
+        },
         model: config.model.model.clone(),
     })
 }
-

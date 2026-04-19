@@ -6,7 +6,7 @@ use std::os::raw::c_char;
 
 use super::helpers::*;
 use antikythera_core::logging::get_latest_logs;
-use antikythera_log::{SessionLogExport, BatchLogExport};
+use antikythera_log::{BatchLogExport, SessionLogExport};
 
 /// Get logs for a specific session
 ///
@@ -41,7 +41,10 @@ pub fn mcp_session_export_logs(session_id: *const c_char) -> *mut c_char {
 
     match export.to_postcard() {
         Ok(data) => {
-            let hex_str = data.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+            let hex_str = data
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>();
             success_with(&[
                 ("session_id", serde_json::json!(id_str)),
                 ("export_data", serde_json::json!(hex_str)),
@@ -98,10 +101,16 @@ pub fn mcp_session_batch_export_logs() -> *mut c_char {
 
     match batch.to_postcard() {
         Ok(data) => {
-            let hex_str = data.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+            let hex_str = data
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>();
             success_with(&[
                 ("session_count", serde_json::json!(batch.session_count())),
-                ("total_log_count", serde_json::json!(batch.total_log_count())),
+                (
+                    "total_log_count",
+                    serde_json::json!(batch.total_log_count()),
+                ),
                 ("export_data", serde_json::json!(hex_str)),
                 ("size", serde_json::json!(data.len())),
             ])
@@ -125,10 +134,12 @@ pub fn mcp_session_batch_import_logs(export_data: *const c_char) -> *mut c_char 
     match BatchLogExport::from_postcard(&data) {
         Ok(batch) => success_with(&[
             ("session_count", serde_json::json!(batch.session_count())),
-            ("total_log_count", serde_json::json!(batch.total_log_count())),
+            (
+                "total_log_count",
+                serde_json::json!(batch.total_log_count()),
+            ),
             ("imported", serde_json::json!(true)),
         ]),
         Err(e) => error_response(&e),
     }
 }
-

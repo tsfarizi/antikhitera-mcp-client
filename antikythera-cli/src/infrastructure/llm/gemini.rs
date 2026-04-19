@@ -15,10 +15,7 @@ pub struct GeminiProvider {
 
 impl GeminiProvider {
     pub fn new(api_key: String, model: String) -> Self {
-        Self {
-            api_key,
-            model,
-        }
+        Self { api_key, model }
     }
 }
 
@@ -36,4 +33,3 @@ impl LlmProvider for GeminiProvider {
         .into())
     }
 }
-

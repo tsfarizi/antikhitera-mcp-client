@@ -18,9 +18,9 @@
 //! 3. Validate LLM response
 //! 4. Auto-retry with error feedback on failure
 
+pub mod ffi;
 pub mod types;
 pub mod validator;
-pub mod ffi;
 
 // Re-export main types for convenience
 pub use types::{JsonSchema, ValidationError};

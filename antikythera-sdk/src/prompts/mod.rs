@@ -125,4 +125,3 @@ pub fn mcp_get_all_prompts() -> *mut c_char {
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
 }
-

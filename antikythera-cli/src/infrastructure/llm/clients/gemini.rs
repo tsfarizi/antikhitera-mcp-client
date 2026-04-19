@@ -61,8 +61,7 @@ impl ModelClient for GeminiClient {
         }
 
         if request.force_json {
-            payload["generationConfig"] =
-                json!({ "responseMimeType": "application/json" });
+            payload["generationConfig"] = json!({ "responseMimeType": "application/json" });
         }
 
         info!(

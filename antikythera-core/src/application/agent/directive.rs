@@ -10,10 +10,7 @@ pub enum AgentDirective {
     /// Final response to user
     Final { response: String },
     /// Call a single tool
-    CallTool {
-        tool: String,
-        input: Value,
-    },
+    CallTool { tool: String, input: Value },
     /// Call multiple tools in parallel (reserved for future use)
     #[allow(dead_code)]
     CallTools(Vec<(String, Value)>),

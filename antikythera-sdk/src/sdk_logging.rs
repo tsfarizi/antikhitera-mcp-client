@@ -3,7 +3,7 @@
 //! Unified logging for all SDK operations with automatic source module tracking.
 //! Captures all FFI interactions and SDK functionality.
 
-use antikythera_log::{LogEntry, LogLevel, LogFilter, LogBatch, Logger};
+use antikythera_log::{LogBatch, LogEntry, LogFilter, LogLevel, Logger};
 use std::sync::{Arc, LazyLock, Mutex};
 
 // ============================================================================
@@ -48,27 +48,41 @@ impl ConfigFfiLogger {
 
     pub fn ffi_call(&self, function: &str, args: &str) {
         let context = format!("{{\"function\": \"{}\", \"args\": {}}}", function, args);
-        self.logger.log_with_context(LogLevel::Debug, format!("FFI call: {}", function), context);
+        self.logger
+            .log_with_context(LogLevel::Debug, format!("FFI call: {}", function), context);
     }
 
     pub fn ffi_result(&self, function: &str, success: bool, result_size: usize) {
-        let context = format!("{{\"function\": \"{}\", \"success\": {}, \"result_size\": {}}}", function, success, result_size);
-        self.logger.log_with_context(LogLevel::Debug, format!("FFI result: {}", function), context);
+        let context = format!(
+            "{{\"function\": \"{}\", \"success\": {}, \"result_size\": {}}}",
+            function, success, result_size
+        );
+        self.logger.log_with_context(
+            LogLevel::Debug,
+            format!("FFI result: {}", function),
+            context,
+        );
     }
 
     pub fn ffi_error(&self, function: &str, error: &str) {
-        let context = format!("{{\"function\": \"{}\", \"error\": \"{}\"}}", function, error);
-        self.logger.log_with_context(LogLevel::Error, format!("FFI error: {}", function), context);
+        let context = format!(
+            "{{\"function\": \"{}\", \"error\": \"{}\"}}",
+            function, error
+        );
+        self.logger
+            .log_with_context(LogLevel::Error, format!("FFI error: {}", function), context);
     }
 
     pub fn config_loaded(&self, source: &str, size: usize) {
         let context = format!("{{\"source\": \"{}\", \"size\": {}}}", source, size);
-        self.logger.log_with_context(LogLevel::Info, "Config loaded", context);
+        self.logger
+            .log_with_context(LogLevel::Info, "Config loaded", context);
     }
 
     pub fn config_saved(&self, path: &str, size: usize) {
         let context = format!("{{\"path\": \"{}\", \"size\": {}}}", path, size);
-        self.logger.log_with_context(LogLevel::Info, "Config saved", context);
+        self.logger
+            .log_with_context(LogLevel::Info, "Config saved", context);
     }
 
     pub fn provider_added(&self, provider_id: &str) {
@@ -97,7 +111,8 @@ impl ConfigFfiLogger {
 
     pub fn agent_config_changed(&self, field: &str, value: &str) {
         let context = format!("{{\"field\": \"{}\", \"value\": \"{}\"}}", field, value);
-        self.logger.log_with_context(LogLevel::Info, "Agent config changed", context);
+        self.logger
+            .log_with_context(LogLevel::Info, "Agent config changed", context);
     }
 }
 
@@ -115,7 +130,8 @@ impl ServerLogger {
 
     pub fn server_created(&self, server_id: u32, addr: &str) {
         let context = format!("{{\"server_id\": {}, \"addr\": \"{}\"}}", server_id, addr);
-        self.logger.log_with_context(LogLevel::Info, "Server created", context);
+        self.logger
+            .log_with_context(LogLevel::Info, "Server created", context);
     }
 
     pub fn server_stopped(&self, server_id: u32) {
@@ -136,7 +152,8 @@ impl ServerLogger {
 
     pub fn server_error(&self, server_id: u32, error: &str) {
         let context = format!("{{\"server_id\": {}, \"error\": \"{}\"}}", server_id, error);
-        self.logger.log_with_context(LogLevel::Error, "Server error", context);
+        self.logger
+            .log_with_context(LogLevel::Error, "Server error", context);
     }
 }
 
@@ -153,8 +170,12 @@ impl AgentLogger {
     }
 
     pub fn agent_registered(&self, agent_id: &str, agent_type: &str) {
-        let context = format!("{{\"agent_id\": \"{}\", \"type\": \"{}\"}}", agent_id, agent_type);
-        self.logger.log_with_context(LogLevel::Info, "Agent registered", context);
+        let context = format!(
+            "{{\"agent_id\": \"{}\", \"type\": \"{}\"}}",
+            agent_id, agent_type
+        );
+        self.logger
+            .log_with_context(LogLevel::Info, "Agent registered", context);
     }
 
     pub fn agent_unregistered(&self, agent_id: &str) {
@@ -232,13 +253,21 @@ impl ResponseLogger {
     }
 
     pub fn format_set(&self, server_id: u32, format_is_json: bool) {
-        let context = format!("{{\"server_id\": {}, \"format_is_json\": {}}}", server_id, format_is_json);
-        self.logger.log_with_context(LogLevel::Info, "Response format set", context);
+        let context = format!(
+            "{{\"server_id\": {}, \"format_is_json\": {}}}",
+            server_id, format_is_json
+        );
+        self.logger
+            .log_with_context(LogLevel::Info, "Response format set", context);
     }
 
     pub fn response_formatted(&self, server_id: u32, output_size: usize) {
-        let context = format!("{{\"server_id\": {}, \"output_size\": {}}}", server_id, output_size);
-        self.logger.log_with_context(LogLevel::Debug, "Response formatted", context);
+        let context = format!(
+            "{{\"server_id\": {}, \"output_size\": {}}}",
+            server_id, output_size
+        );
+        self.logger
+            .log_with_context(LogLevel::Debug, "Response formatted", context);
     }
 }
 
@@ -255,13 +284,21 @@ impl WasmAgentLogger {
     }
 
     pub fn llm_response_processed(&self, session_id: &str, action: &str) {
-        let context = format!("{{\"session_id\": \"{}\", \"action\": \"{}\"}}", session_id, action);
-        self.logger.log_with_context(LogLevel::Debug, "LLM response processed", context);
+        let context = format!(
+            "{{\"session_id\": \"{}\", \"action\": \"{}\"}}",
+            session_id, action
+        );
+        self.logger
+            .log_with_context(LogLevel::Debug, "LLM response processed", context);
     }
 
     pub fn tool_result_processed(&self, session_id: &str, tool_name: &str) {
-        let context = format!("{{\"session_id\": \"{}\", \"tool\": \"{}\"}}", session_id, tool_name);
-        self.logger.log_with_context(LogLevel::Debug, "Tool result processed", context);
+        let context = format!(
+            "{{\"session_id\": \"{}\", \"tool\": \"{}\"}}",
+            session_id, tool_name
+        );
+        self.logger
+            .log_with_context(LogLevel::Debug, "Tool result processed", context);
     }
 
     pub fn state_retrieved(&self, session_id: &str) {
@@ -314,7 +351,11 @@ pub fn get_sdk_logs_json(session_id: &str, filter: &LogFilter) -> Result<String,
 
 /// Subscribe to real-time SDK log stream
 pub fn subscribe_sdk_logs(session_id: &str) -> Option<antikythera_log::LogSubscriber> {
-    SDK_LOGGERS.lock().unwrap().get(session_id).map(|l| l.subscribe())
+    SDK_LOGGERS
+        .lock()
+        .unwrap()
+        .get(session_id)
+        .map(|l| l.subscribe())
 }
 
 /// Clear SDK logs

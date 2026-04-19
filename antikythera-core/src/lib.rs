@@ -17,14 +17,13 @@ pub mod logging;
 pub use application::agent::{Agent, AgentOptions, AgentOutcome, ToolDescriptor};
 
 // Re-export resilience module at crate root
+pub use application::client::{ChatRequest, ChatResult, ClientConfig, McpClient, PreparedChatTurn};
 pub use application::resilience;
 pub use application::resilience::{
-    ResilienceConfig, ResilienceManager, RetryPolicy, TimeoutPolicy,
-    ContextWindowPolicy, TokenEstimator, prune_messages,
-    HealthStatus, ComponentHealth, HealthTracker,
-    with_retry, with_retry_if,
+    ComponentHealth, ContextWindowPolicy, HealthStatus, HealthTracker, ResilienceConfig,
+    ResilienceManager, RetryPolicy, TimeoutPolicy, TokenEstimator, prune_messages, with_retry,
+    with_retry_if,
 };
-pub use application::client::{ChatRequest, ChatResult, ClientConfig, McpClient, PreparedChatTurn};
 pub use config::AppConfig;
 pub use infrastructure::model::{
     DynamicModelProvider, HostModelClient, HostModelResponse, HostModelTransport, ModelProvider,
@@ -36,12 +35,9 @@ pub use cli::{Cli, RunMode};
 
 /// Re-export logging for easy access
 pub use logging::{
-    get_logger, clear_all_loggers, logger_count,
-    ConfigLogger, AgentLogger, TransportLogger, ProviderLogger,
-    query_logs, get_latest_logs, get_logs_json, subscribe_logs, clear_logs,
+    AgentLogger, ConfigLogger, ProviderLogger, TransportLogger, clear_all_loggers, clear_logs,
+    get_latest_logs, get_logger, get_logs_json, logger_count, query_logs, subscribe_logs,
 };
 
 /// Crate version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-

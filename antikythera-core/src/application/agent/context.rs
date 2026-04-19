@@ -1,7 +1,6 @@
 use serde::Serialize;
 use serde_json::Value;
 
-
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct ToolContext {
     #[serde(skip_serializing_if = "Vec::is_empty")]

@@ -65,10 +65,7 @@ pub struct HostModelClient {
 }
 
 impl HostModelClient {
-    pub fn new(
-        provider_id: impl Into<String>,
-        transport: Arc<dyn HostModelTransport>,
-    ) -> Self {
+    pub fn new(provider_id: impl Into<String>, transport: Arc<dyn HostModelTransport>) -> Self {
         Self {
             provider_id: provider_id.into(),
             transport,
@@ -114,10 +111,7 @@ mod tests {
             text: None,
             message: Some(ChatMessage::with_parts(
                 MessageRole::Assistant,
-                vec![
-                    MessagePart::text("ringkasan: "),
-                    MessagePart::text("siap"),
-                ],
+                vec![MessagePart::text("ringkasan: "), MessagePart::text("siap")],
             )),
             session_id: Some("sess-2".to_string()),
             raw_response_json: Some("{\"id\":\"abc\"}".to_string()),

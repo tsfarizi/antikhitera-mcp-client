@@ -8,9 +8,9 @@
 //! inter-agent communication are handled at the orchestrator layer (outside
 //! this module).
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use serde::{Deserialize, Serialize};
 
 /// Agent profile descriptor.
 ///
@@ -72,7 +72,9 @@ pub struct MemoryConfig {
 pub struct ContextId(String);
 
 impl ContextId {
-    pub fn new(id: String) -> Self { Self(id) }
+    pub fn new(id: String) -> Self {
+        Self(id)
+    }
 }
 
 /// Agent Registry - manages multiple agent profiles with sandboxing
@@ -118,5 +120,7 @@ impl<P> AgentRegistry<P> {
 }
 
 impl<P> Default for AgentRegistry<P> {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

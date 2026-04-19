@@ -80,10 +80,16 @@ impl AgentRouter for DirectRouter {
         profiles.iter().copied().find(|p| p.id == id)
     }
 
-    fn name(&self) -> &str { "direct" }
+    fn name(&self) -> &str {
+        "direct"
+    }
 
     fn routing_reason(&self, task: &AgentTask, profile: &AgentProfile) -> Option<String> {
-        Some(format!("explicit agent_id='{}' matched profile id='{}'" , task.agent_id.as_deref().unwrap_or(""), profile.id))
+        Some(format!(
+            "explicit agent_id='{}' matched profile id='{}'",
+            task.agent_id.as_deref().unwrap_or(""),
+            profile.id
+        ))
     }
 }
 
@@ -104,7 +110,9 @@ pub struct RoundRobinRouter {
 
 impl RoundRobinRouter {
     pub fn new() -> Self {
-        Self { counter: AtomicUsize::new(0) }
+        Self {
+            counter: AtomicUsize::new(0),
+        }
     }
 }
 
@@ -121,7 +129,9 @@ impl AgentRouter for RoundRobinRouter {
         Some(profiles[idx])
     }
 
-    fn name(&self) -> &str { "round-robin" }
+    fn name(&self) -> &str {
+        "round-robin"
+    }
 
     fn routing_reason(&self, _task: &AgentTask, profile: &AgentProfile) -> Option<String> {
         Some(format!("round-robin selected agent_id='{}'", profile.id))
@@ -148,10 +158,15 @@ impl AgentRouter for FirstAvailableRouter {
         profiles.first().copied()
     }
 
-    fn name(&self) -> &str { "first-available" }
+    fn name(&self) -> &str {
+        "first-available"
+    }
 
     fn routing_reason(&self, _task: &AgentTask, profile: &AgentProfile) -> Option<String> {
-        Some(format!("selected first available agent_id='{}'", profile.id))
+        Some(format!(
+            "selected first available agent_id='{}'",
+            profile.id
+        ))
     }
 }
 
@@ -175,7 +190,9 @@ pub struct RoleRouter {
 
 impl RoleRouter {
     pub fn new(metadata_key: impl Into<String>) -> Self {
-        Self { metadata_key: metadata_key.into() }
+        Self {
+            metadata_key: metadata_key.into(),
+        }
     }
 
     /// Convenience: route on the `"role"` metadata key.
@@ -197,7 +214,9 @@ impl AgentRouter for RoleRouter {
         profiles.iter().copied().find(|p| p.role == desired_role)
     }
 
-    fn name(&self) -> &str { "role" }
+    fn name(&self) -> &str {
+        "role"
+    }
 
     fn routing_reason(&self, task: &AgentTask, profile: &AgentProfile) -> Option<String> {
         let role = task

@@ -125,11 +125,7 @@ impl LogEntry {
 
         format!(
             "{} {} {} {} - {}",
-            self.timestamp,
-            self.level,
-            session,
-            source,
-            self.message
+            self.timestamp, self.level, session, source, self.message
         )
     }
 
@@ -170,7 +166,9 @@ pub struct LogFilter {
 }
 
 impl LogFilter {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn min_level(mut self, level: LogLevel) -> Self {
         self.min_level = Some(level);
@@ -238,7 +236,11 @@ pub struct LogBatch {
 
 impl LogBatch {
     pub fn new(entries: Vec<LogEntry>, total_count: usize, has_more: bool) -> Self {
-        Self { entries, total_count, has_more }
+        Self {
+            entries,
+            total_count,
+            has_more,
+        }
     }
 
     /// Serialize to JSON

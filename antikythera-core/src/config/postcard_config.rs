@@ -215,14 +215,12 @@ pub const CONFIG_PATH: &str = "app.pc";
 
 /// Serialize configuration to Postcard binary
 pub fn config_to_postcard(config: &AppConfig) -> Result<Vec<u8>, String> {
-    postcard::to_allocvec(config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))
+    postcard::to_allocvec(config).map_err(|e| format!("Failed to serialize config: {}", e))
 }
 
 /// Deserialize configuration from Postcard binary
 pub fn config_from_postcard(data: &[u8]) -> Result<AppConfig, String> {
-    postcard::from_bytes(data)
-        .map_err(|e| format!("Failed to deserialize config: {}", e))
+    postcard::from_bytes(data).map_err(|e| format!("Failed to deserialize config: {}", e))
 }
 
 /// Load configuration from file
@@ -233,8 +231,8 @@ pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
         return Err(format!("Config file not found: {}", config_path.display()));
     }
 
-    let data = std::fs::read(config_path)
-        .map_err(|e| format!("Failed to read config file: {}", e))?;
+    let data =
+        std::fs::read(config_path).map_err(|e| format!("Failed to read config file: {}", e))?;
 
     config_from_postcard(&data)
 }

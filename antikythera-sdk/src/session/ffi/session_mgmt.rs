@@ -85,4 +85,3 @@ pub fn mcp_session_clear(session_id: *const c_char) -> *mut c_char {
         Err(e) => error_response(&e),
     }
 }
-

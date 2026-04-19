@@ -3,8 +3,8 @@
 //! External services: LLM providers, MCP clients, config loading.
 //! Implements the domain ports (interfaces).
 
-pub mod llm;
 pub mod config;
+pub mod llm;
 
-pub use llm::*;
 pub use config::*;
+pub use llm::*;

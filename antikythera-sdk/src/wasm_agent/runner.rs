@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use super::processor::{build_llm_messages, process_llm_response, process_tool_result};
 use super::types::{
-    AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary,
-    StreamEvent, StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolResult,
+    AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary, StreamEvent,
+    StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolResult,
     TruncationStrategy,
 };
 
@@ -123,11 +123,13 @@ struct AgentRunnerRuntime {
 
 impl AgentRunnerRuntime {
     fn ensure_session(&mut self, session_id: &str) -> &mut SessionRuntime {
-        self.sessions.entry(session_id.to_string()).or_insert_with(|| {
-            let mut config = self.default_config.clone();
-            config.session_id = session_id.to_string();
-            SessionRuntime::new(config)
-        })
+        self.sessions
+            .entry(session_id.to_string())
+            .or_insert_with(|| {
+                let mut config = self.default_config.clone();
+                config.session_id = session_id.to_string();
+                SessionRuntime::new(config)
+            })
     }
 
     fn resolve_policy(&self, request: &PrepareUserTurnInput) -> ContextPolicy {
@@ -138,8 +140,8 @@ impl AgentRunnerRuntime {
     }
 
     fn configure(&mut self, config_json: &str) -> Result<String, String> {
-        let input: RunnerConfigInput = serde_json::from_str(config_json)
-            .map_err(|e| format!("Invalid config-json: {e}"))?;
+        let input: RunnerConfigInput =
+            serde_json::from_str(config_json).map_err(|e| format!("Invalid config-json: {e}"))?;
 
         if let Some(value) = input.max_steps {
             self.default_config.max_steps = value;
@@ -174,7 +176,10 @@ impl AgentRunnerRuntime {
         Ok(true)
     }
 
-    fn maybe_update_summary(state: &mut AgentState, policy: &ContextPolicy) -> Option<ContextSummary> {
+    fn maybe_update_summary(
+        state: &mut AgentState,
+        policy: &ContextPolicy,
+    ) -> Option<ContextSummary> {
         if state.message_history.len() <= policy.summarize_after_messages {
             return None;
         }
@@ -240,8 +245,8 @@ impl AgentRunnerRuntime {
 
     fn prepare_user_turn(&mut self, request_json: &str) -> Result<String, String> {
         let started = Instant::now();
-        let input: PrepareUserTurnInput = serde_json::from_str(request_json)
-            .map_err(|e| format!("Invalid request-json: {e}"))?;
+        let input: PrepareUserTurnInput =
+            serde_json::from_str(request_json).map_err(|e| format!("Invalid request-json: {e}"))?;
 
         let session_id = input.session_id.clone().unwrap_or_else(new_session_id);
         let policy = self.resolve_policy(&input);
@@ -293,7 +298,12 @@ impl AgentRunnerRuntime {
         serde_json::to_string(&prepared).map_err(|e| format!("Failed to encode prepared turn: {e}"))
     }
 
-    fn append_llm_chunk(&mut self, session_id: &str, chunk: &str, correlation_id: Option<String>) -> Result<bool, String> {
+    fn append_llm_chunk(
+        &mut self,
+        session_id: &str,
+        chunk: &str,
+        correlation_id: Option<String>,
+    ) -> Result<bool, String> {
         let runtime = self.ensure_session(session_id);
         runtime.pending_llm_chunks.push(chunk.to_string());
         runtime.telemetry.counters.llm_chunks += 1;
@@ -413,13 +423,21 @@ impl AgentRunnerRuntime {
         self.commit_llm_response(prepared_turn_json, &payload)
     }
 
-    fn process_llm_response(&mut self, session_id: &str, llm_response_json: &str) -> Result<String, String> {
+    fn process_llm_response(
+        &mut self,
+        session_id: &str,
+        llm_response_json: &str,
+    ) -> Result<String, String> {
         let runtime = self.ensure_session(session_id);
         let action = process_llm_response(&mut runtime.state, llm_response_json)?;
         serde_json::to_string(&action).map_err(|e| format!("Failed to encode action: {e}"))
     }
 
-    fn process_tool_result(&mut self, session_id: &str, tool_result_json: &str) -> Result<String, String> {
+    fn process_tool_result(
+        &mut self,
+        session_id: &str,
+        tool_result_json: &str,
+    ) -> Result<String, String> {
         let input: ToolResultInput = serde_json::from_str(tool_result_json)
             .map_err(|e| format!("Invalid tool-result-json: {e}"))?;
 
@@ -485,7 +503,9 @@ fn runtime() -> &'static Mutex<AgentRunnerRuntime> {
     RUNTIME.get_or_init(|| Mutex::new(AgentRunnerRuntime::default()))
 }
 
-fn with_runtime<T>(f: impl FnOnce(&mut AgentRunnerRuntime) -> Result<T, String>) -> Result<T, String> {
+fn with_runtime<T>(
+    f: impl FnOnce(&mut AgentRunnerRuntime) -> Result<T, String>,
+) -> Result<T, String> {
     let mut guard = runtime()
         .lock()
         .map_err(|_| "AgentRunner runtime lock poisoned".to_string())?;
@@ -508,11 +528,18 @@ pub fn prepare_user_turn(request_json: &str) -> Result<String, String> {
     with_runtime(|rt| rt.prepare_user_turn(request_json))
 }
 
-pub fn append_llm_chunk(session_id: &str, chunk: &str, correlation_id: Option<&str>) -> Result<bool, String> {
+pub fn append_llm_chunk(
+    session_id: &str,
+    chunk: &str,
+    correlation_id: Option<&str>,
+) -> Result<bool, String> {
     with_runtime(|rt| rt.append_llm_chunk(session_id, chunk, correlation_id.map(|v| v.to_string())))
 }
 
-pub fn commit_llm_response(prepared_turn_json: &str, llm_response_json: &str) -> Result<String, String> {
+pub fn commit_llm_response(
+    prepared_turn_json: &str,
+    llm_response_json: &str,
+) -> Result<String, String> {
     with_runtime(|rt| rt.commit_llm_response(prepared_turn_json, llm_response_json))
 }
 
@@ -520,11 +547,17 @@ pub fn commit_llm_stream(prepared_turn_json: &str) -> Result<String, String> {
     with_runtime(|rt| rt.commit_llm_stream(prepared_turn_json))
 }
 
-pub fn process_llm_response_for_session(session_id: &str, llm_response_json: &str) -> Result<String, String> {
+pub fn process_llm_response_for_session(
+    session_id: &str,
+    llm_response_json: &str,
+) -> Result<String, String> {
     with_runtime(|rt| rt.process_llm_response(session_id, llm_response_json))
 }
 
-pub fn process_tool_result_for_session(session_id: &str, tool_result_json: &str) -> Result<String, String> {
+pub fn process_tool_result_for_session(
+    session_id: &str,
+    tool_result_json: &str,
+) -> Result<String, String> {
     with_runtime(|rt| rt.process_tool_result(session_id, tool_result_json))
 }
 
@@ -549,4 +582,3 @@ pub fn get_state(session_id: &str) -> Result<String, String> {
 pub fn reset_session(session_id: &str) -> Result<bool, String> {
     with_runtime(|rt| Ok(rt.sessions.remove(session_id).is_some()))
 }
-

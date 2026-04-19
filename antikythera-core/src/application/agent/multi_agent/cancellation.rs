@@ -82,7 +82,9 @@ pub struct CancellationSnapshot {
 
 impl From<&CancellationToken> for CancellationSnapshot {
     fn from(t: &CancellationToken) -> Self {
-        Self { was_cancelled: t.is_cancelled() }
+        Self {
+            was_cancelled: t.is_cancelled(),
+        }
     }
 }
 
@@ -113,7 +115,10 @@ mod tests {
         let child = root.child_token();
         assert!(!child.is_cancelled());
         root.cancel();
-        assert!(child.is_cancelled(), "child must observe parent cancellation");
+        assert!(
+            child.is_cancelled(),
+            "child must observe parent cancellation"
+        );
     }
 
     #[test]

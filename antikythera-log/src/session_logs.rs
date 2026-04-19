@@ -62,8 +62,8 @@ impl SessionLogExport {
 
     /// Deserialize from Postcard binary
     pub fn from_postcard(data: &[u8]) -> Result<Self, String> {
-        let export: SessionLogExport = postcard::from_bytes(data)
-            .map_err(|e| format!("Deserialize error: {}", e))?;
+        let export: SessionLogExport =
+            postcard::from_bytes(data).map_err(|e| format!("Deserialize error: {}", e))?;
 
         // Validate version
         if export.version != Self::VERSION {
@@ -159,8 +159,8 @@ impl BatchLogExport {
 
     /// Deserialize from Postcard binary
     pub fn from_postcard(data: &[u8]) -> Result<Self, String> {
-        let export: BatchLogExport = postcard::from_bytes(data)
-            .map_err(|e| format!("Deserialize error: {}", e))?;
+        let export: BatchLogExport =
+            postcard::from_bytes(data).map_err(|e| format!("Deserialize error: {}", e))?;
 
         // Validate version
         if export.version != Self::VERSION {

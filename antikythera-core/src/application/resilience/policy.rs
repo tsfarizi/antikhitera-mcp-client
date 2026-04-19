@@ -49,8 +49,7 @@ impl RetryPolicy {
     /// For `attempt = 0` the result is `initial_delay_ms`; each subsequent
     /// attempt multiplies by `backoff_factor`, capped at `max_delay_ms`.
     pub fn delay_for_attempt(&self, attempt: u32) -> Duration {
-        let ms =
-            (self.initial_delay_ms as f64 * self.backoff_factor.powi(attempt as i32)) as u64;
+        let ms = (self.initial_delay_ms as f64 * self.backoff_factor.powi(attempt as i32)) as u64;
         Duration::from_millis(ms.min(self.max_delay_ms))
     }
 
@@ -174,9 +173,6 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let parsed: ResilienceConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.retry.max_attempts, config.retry.max_attempts);
-        assert_eq!(
-            parsed.timeout.llm_timeout_ms,
-            config.timeout.llm_timeout_ms
-        );
+        assert_eq!(parsed.timeout.llm_timeout_ms, config.timeout.llm_timeout_ms);
     }
 }

@@ -205,9 +205,13 @@ mod tests {
 
     #[test]
     fn telemetry_event_serialization() {
-        let event = TelemetryEvent::new("agent_step", Some("corr-123".to_string()), Some("sess-456".to_string()))
-            .with_attribute("agent_id".to_string(), serde_json::json!("agent-001"))
-            .with_attribute("step_count".to_string(), serde_json::json!(5));
+        let event = TelemetryEvent::new(
+            "agent_step",
+            Some("corr-123".to_string()),
+            Some("sess-456".to_string()),
+        )
+        .with_attribute("agent_id".to_string(), serde_json::json!("agent-001"))
+        .with_attribute("step_count".to_string(), serde_json::json!(5));
 
         let json = event.to_json().unwrap();
         assert!(json.contains("agent_step"));

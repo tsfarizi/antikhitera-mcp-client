@@ -129,8 +129,10 @@ impl TaskScheduler {
                         let exec = executor.clone();
                         let sem = sem.clone();
                         tokio::spawn(async move {
-                            let _permit =
-                                sem.acquire_owned().await.expect("scheduler semaphore closed");
+                            let _permit = sem
+                                .acquire_owned()
+                                .await
+                                .expect("scheduler semaphore closed");
                             exec(t).await
                         })
                     })

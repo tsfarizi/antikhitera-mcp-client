@@ -14,7 +14,7 @@ use tracing::{debug, info};
 use super::super::adapter::MessageAdapter;
 use super::super::factory::resolve_api_key;
 use super::super::http_client::HttpClientBase;
-use super::super::streaming::{emit_stream_event, StreamEvent};
+use super::super::streaming::{StreamEvent, emit_stream_event};
 
 /// OpenAI-compatible client.
 #[derive(Clone)]
@@ -67,19 +67,19 @@ impl ModelClient for OpenAIClient {
             self.base.id.as_str(),
             request.session_id.as_deref(),
         )
-            .or_else(|| {
-                serde_json::from_str::<OpenAIResponse>(&raw)
-                    .ok()
-                    .and_then(|response| {
-                        response
-                            .choices
-                            .into_iter()
-                            .next()
-                            .and_then(|c| c.message)
-                            .map(|m| m.content)
-                    })
-            })
-            .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing content"))?;
+        .or_else(|| {
+            serde_json::from_str::<OpenAIResponse>(&raw)
+                .ok()
+                .and_then(|response| {
+                    response
+                        .choices
+                        .into_iter()
+                        .next()
+                        .and_then(|c| c.message)
+                        .map(|m| m.content)
+                })
+        })
+        .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing content"))?;
 
         Ok(ModelResponse::new(content, request.session_id))
     }

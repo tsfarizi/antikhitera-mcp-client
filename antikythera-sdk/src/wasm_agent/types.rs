@@ -20,13 +20,9 @@ pub enum AgentAction {
         input: serde_json::Value,
     },
     /// Final response to user
-    Final {
-        response: serde_json::Value,
-    },
+    Final { response: serde_json::Value },
     /// Retry with error
-    Retry {
-        error: String,
-    },
+    Retry { error: String },
 }
 
 // ============================================================================

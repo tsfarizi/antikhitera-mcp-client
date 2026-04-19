@@ -137,7 +137,10 @@ pub trait MemoryProvider: Send + Sync {
     async fn save_state(&self, state: AgentStateSnapshot) -> Result<(), MemoryError>;
 
     /// Load agent state by context ID
-    async fn load_state(&self, context_id: &ContextId) -> Result<Option<AgentStateSnapshot>, MemoryError>;
+    async fn load_state(
+        &self,
+        context_id: &ContextId,
+    ) -> Result<Option<AgentStateSnapshot>, MemoryError>;
 
     /// Update existing state
     async fn update_state(&self, state: AgentStateSnapshot) -> Result<(), MemoryError>;

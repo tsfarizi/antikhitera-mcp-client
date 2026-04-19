@@ -46,8 +46,8 @@ use super::registry::{AgentProfile, AgentRegistry};
 use super::router::{AgentRouter, FirstAvailableRouter};
 use super::scheduler::TaskScheduler;
 use super::task::{
-    AgentTask, ErrorKind, PipelineResult, RoutingDecision, RetryCondition,
-    TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
+    AgentTask, ErrorKind, PipelineResult, RetryCondition, RoutingDecision, TaskExecutionMetadata,
+    TaskResult, TaskRetryPolicy,
 };
 use crate::application::agent::{Agent, AgentOptions};
 use crate::application::client::McpClient;
@@ -82,7 +82,10 @@ async fn execute_task<P: ModelProvider>(
 ) -> TaskResult {
     let started = Instant::now();
     let max_steps = task.max_steps.or(profile.max_steps).unwrap_or(8);
-    let budgeted_max_steps = task.budget_steps.map(|b| b.min(max_steps)).unwrap_or(max_steps);
+    let budgeted_max_steps = task
+        .budget_steps
+        .map(|b| b.min(max_steps))
+        .unwrap_or(max_steps);
     let retry_policy = task.retry_policy.clone().unwrap_or_default();
 
     // ---- deadline pre-check ------------------------------------------------
@@ -275,7 +278,8 @@ async fn execute_task<P: ModelProvider>(
         break;
     }
 
-    let (error_msg, error_kind) = last_error.unwrap_or_else(|| ("Task failed".to_string(), ErrorKind::Permanent));
+    let (error_msg, error_kind) =
+        last_error.unwrap_or_else(|| ("Task failed".to_string(), ErrorKind::Permanent));
     let metadata = TaskExecutionMetadata {
         attempt_count: attempt,
         duration_ms: started.elapsed().as_millis() as u64,
@@ -512,7 +516,10 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             return TaskResult::failure_with_kind(
                 task.task_id.clone(),
                 task.agent_id.clone().unwrap_or_default(),
-                format!("Orchestrator task budget exhausted (dispatched {})", dispatch_count),
+                format!(
+                    "Orchestrator task budget exhausted (dispatched {})",
+                    dispatch_count
+                ),
                 ErrorKind::BudgetExhausted,
             )
             .with_metadata(meta);
@@ -563,7 +570,12 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         // ---- concurrency slot (optional semaphore) -------------------------
         let concurrency_wait_start = Instant::now();
         let _permit = if let Some(sem) = &self.concurrency_sem {
-            Some(sem.clone().acquire_owned().await.expect("orchestrator semaphore closed"))
+            Some(
+                sem.clone()
+                    .acquire_owned()
+                    .await
+                    .expect("orchestrator semaphore closed"),
+            )
         } else {
             None
         };
@@ -632,7 +644,8 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let concurrency_sem = self.concurrency_sem.clone();
         let default_retry_condition = self.default_retry_condition.clone();
 
-        let results = self.scheduler
+        let results = self
+            .scheduler
             .run(prepared, move |(task, profile, routing_decision)| {
                 let client = client.clone();
                 let execution_mode = execution_mode.clone();
@@ -663,15 +676,24 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                         return TaskResult::failure_with_kind(
                             task.task_id.clone(),
                             task.agent_id.clone().unwrap_or_default(),
-                            format!("Orchestrator task budget exhausted (dispatched {})", dispatch_count),
+                            format!(
+                                "Orchestrator task budget exhausted (dispatched {})",
+                                dispatch_count
+                            ),
                             ErrorKind::BudgetExhausted,
-                        ).with_metadata(meta);
+                        )
+                        .with_metadata(meta);
                     }
 
                     // Concurrency slot
                     let concurrency_wait_start = Instant::now();
                     let _permit = if let Some(sem) = &concurrency_sem {
-                        Some(sem.clone().acquire_owned().await.expect("orchestrator semaphore closed"))
+                        Some(
+                            sem.clone()
+                                .acquire_owned()
+                                .await
+                                .expect("orchestrator semaphore closed"),
+                        )
                     } else {
                         None
                     };

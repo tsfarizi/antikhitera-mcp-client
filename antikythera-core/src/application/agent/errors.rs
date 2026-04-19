@@ -1,6 +1,6 @@
+use super::memory::MemoryError;
 use crate::application::client::McpError;
 use crate::application::tooling::ToolInvokeError;
-use super::memory::MemoryError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -25,14 +25,15 @@ impl AgentError {
             AgentError::Client(err) => err.user_message(),
             AgentError::Tool(err) => err.user_message(),
             AgentError::InvalidResponse(msg) => {
-                format!("AI memberikan respons yang tidak dapat dipahami. Coba ulangi instruksi Anda. Error: {}", msg)
+                format!(
+                    "AI memberikan respons yang tidak dapat dipahami. Coba ulangi instruksi Anda. Error: {}",
+                    msg
+                )
             }
             AgentError::MaxStepsExceeded => {
                 "Langkah maksimum terlampaui. Proses dihentikan.".to_string()
             }
-            AgentError::Timeout => {
-                "Operasi timeout. Silakan coba lagi.".to_string()
-            }
+            AgentError::Timeout => "Operasi timeout. Silakan coba lagi.".to_string(),
             AgentError::MemoryError(err) => {
                 format!("Error penyimpanan state: {}", err)
             }

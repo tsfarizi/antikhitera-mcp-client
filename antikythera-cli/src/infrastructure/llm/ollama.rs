@@ -21,10 +21,7 @@ impl OllamaProvider {
     }
 
     fn with_endpoint_inner(model: String, endpoint: String) -> Self {
-        Self {
-            model,
-            endpoint,
-        }
+        Self { model, endpoint }
     }
 
     /// Override the Ollama server URL (e.g. for a remote instance).
@@ -48,4 +45,3 @@ impl LlmProvider for OllamaProvider {
         .into())
     }
 }
-

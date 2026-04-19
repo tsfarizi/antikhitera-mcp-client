@@ -73,7 +73,10 @@ impl JsonValidator {
                     if retry_count > self.max_retries {
                         return ValidationResult {
                             valid: false,
-                            error: Some(format!("Failed after {} retries: {}", self.max_retries, e)),
+                            error: Some(format!(
+                                "Failed after {} retries: {}",
+                                self.max_retries, e
+                            )),
                             retry_count,
                             json: None,
                         };
@@ -156,7 +159,9 @@ impl RetryManager {
 
     /// Generate retry prompt
     pub fn retry_prompt(&self, schema_prompt: &str, last_response: &str) -> String {
-        let errors_summary = self.error_history.iter()
+        let errors_summary = self
+            .error_history
+            .iter()
             .enumerate()
             .map(|(i, e)| format!("Attempt {}: {}", i + 1, e))
             .collect::<Vec<_>>()
@@ -171,10 +176,7 @@ impl RetryManager {
              {}\n\
              ```\n\n\
              {}",
-            self.current_attempt,
-            errors_summary,
-            last_response,
-            schema_prompt
+            self.current_attempt, errors_summary, last_response, schema_prompt
         )
     }
 }

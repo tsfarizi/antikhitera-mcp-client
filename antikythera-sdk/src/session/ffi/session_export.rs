@@ -6,7 +6,7 @@ use std::os::raw::c_char;
 
 use super::helpers::*;
 use super::session_mgmt::SESSION_MANAGER;
-use antikythera_session::{SessionExport, BatchExport};
+use antikythera_session::{BatchExport, SessionExport};
 
 /// Export a session to Postcard binary (returned as hex string)
 ///
@@ -23,7 +23,10 @@ pub fn mcp_session_export(session_id: *const c_char) -> *mut c_char {
             let export = SessionExport::from_session(session);
             match export.to_postcard() {
                 Ok(data) => {
-                    let hex_str = data.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+                    let hex_str = data
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<String>();
                     success_with(&[
                         ("session_id", serde_json::json!(id_str)),
                         ("export_data", serde_json::json!(hex_str)),
@@ -82,7 +85,10 @@ pub fn mcp_batch_export() -> *mut c_char {
 
     match batch.to_postcard() {
         Ok(data) => {
-            let hex_str = data.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+            let hex_str = data
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>();
             success_with(&[
                 ("session_count", serde_json::json!(batch.session_count())),
                 ("export_data", serde_json::json!(hex_str)),
@@ -113,4 +119,3 @@ pub fn mcp_batch_import(export_data: *const c_char) -> *mut c_char {
         Err(e) => error_response(&e),
     }
 }
-

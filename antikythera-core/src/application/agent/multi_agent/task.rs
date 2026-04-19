@@ -393,7 +393,10 @@ impl PipelineResult {
     pub fn from_results(results: Vec<TaskResult>) -> Self {
         let total_steps = results.iter().map(|r| r.steps_used).sum();
         let success = results.iter().all(|r| r.success);
-        let final_output = results.last().map(|r| r.output.clone()).unwrap_or(Value::Null);
+        let final_output = results
+            .last()
+            .map(|r| r.output.clone())
+            .unwrap_or(Value::Null);
         let error = if !success {
             results
                 .iter()

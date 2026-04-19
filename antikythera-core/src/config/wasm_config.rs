@@ -74,7 +74,8 @@ impl Default for PromptConfig {
             tool_guidance: "You have access to tools. Use them only when necessary.".to_string(),
             fallback_guidance: "If request is outside tool scope, apologize politely.".to_string(),
             json_retry_message: "Invalid JSON. Output ONLY valid JSON object.".to_string(),
-            tool_result_instruction: "Tool complete. Process result and respond with valid JSON.".to_string(),
+            tool_result_instruction: "Tool complete. Process result and respond with valid JSON."
+                .to_string(),
             agent_instructions: "You are an autonomous assistant that calls tools.".to_string(),
             ui_instructions: "Follow UI hydration rules for data display.".to_string(),
             language_instructions: "Detect user language and respond in same language.".to_string(),
@@ -158,8 +159,7 @@ pub fn load(path: Option<&Path>) -> Result<WasmAgentConfig, String> {
     if !config_path.exists() {
         return Err(format!("Config not found: {}", config_path.display()));
     }
-    let data = std::fs::read(config_path)
-        .map_err(|e| format!("Read error: {}", e))?;
+    let data = std::fs::read(config_path).map_err(|e| format!("Read error: {}", e))?;
     from_postcard(&data)
 }
 
@@ -167,12 +167,10 @@ pub fn load(path: Option<&Path>) -> Result<WasmAgentConfig, String> {
 pub fn save(config: &WasmAgentConfig, path: Option<&Path>) -> Result<(), String> {
     let config_path = path.unwrap_or(Path::new(WASM_CONFIG_PATH));
     if let Some(parent) = config_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Create dir error: {}", e))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("Create dir error: {}", e))?;
     }
     let data = to_postcard(config)?;
-    std::fs::write(config_path, data)
-        .map_err(|e| format!("Write error: {}", e))
+    std::fs::write(config_path, data).map_err(|e| format!("Write error: {}", e))
 }
 
 /// Check if config exists

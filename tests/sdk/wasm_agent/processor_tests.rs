@@ -5,9 +5,7 @@
 //! Anthropic) are intentionally **not** tested here — that parsing is the
 //! host's responsibility via FFI.
 
-use antikythera_sdk::{
-    process_llm_response, AgentAction, AgentState, WasmAgentConfig,
-};
+use antikythera_sdk::{AgentAction, AgentState, WasmAgentConfig, process_llm_response};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -182,5 +180,8 @@ fn step_counter_increments_on_tool_call_not_final() {
 
     let final_resp = serde_json::json!({ "response": "done" }).to_string();
     process_llm_response(&mut state, &final_resp).unwrap();
-    assert_eq!(state.current_step, 1, "step must NOT increment on final response");
+    assert_eq!(
+        state.current_step, 1,
+        "step must NOT increment on final response"
+    );
 }

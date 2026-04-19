@@ -63,10 +63,10 @@
 //! manager.import_session(session).unwrap();
 //! ```
 
-pub mod session;
-pub mod manager;
 pub mod export;
+pub mod manager;
+pub mod session;
 
-pub use session::*;
-pub use manager::*;
 pub use export::*;
+pub use manager::*;
+pub use session::*;

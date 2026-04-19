@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
 // ============================================================================
 // Types
@@ -145,7 +145,9 @@ pub struct TaskResultDetail {
 #[cfg(feature = "multi-agent")]
 impl OrchestratorOptions {
     /// Build a default task retry policy from options-level defaults.
-    pub fn default_task_retry_policy(&self) -> antikythera_core::application::agent::multi_agent::TaskRetryPolicy {
+    pub fn default_task_retry_policy(
+        &self,
+    ) -> antikythera_core::application::agent::multi_agent::TaskRetryPolicy {
         antikythera_core::application::agent::multi_agent::TaskRetryPolicy {
             max_retries: 0,
             backoff_ms: 0,
@@ -185,7 +187,7 @@ impl OrchestratorOptions {
 mod core_conversions {
     use super::*;
     use antikythera_core::application::agent::multi_agent::{
-        OrchestratorBudget, BudgetSnapshot, RetryCondition, TaskResult,
+        BudgetSnapshot, OrchestratorBudget, RetryCondition, TaskResult,
     };
 
     impl From<&OrchestratorOptions> for OrchestratorBudget {
@@ -225,10 +227,12 @@ mod core_conversions {
                 max_total_steps: snap.max_total_steps,
                 max_total_tasks: snap.max_total_tasks,
                 max_concurrent_tasks: snap.max_concurrent_tasks,
-                    step_budget_exhausted: snap.max_total_steps
-                        .is_some_and(|max| snap.consumed_steps >= max),
-                    task_budget_exhausted: snap.max_total_tasks
-                        .is_some_and(|max| snap.dispatched_tasks >= max),
+                step_budget_exhausted: snap
+                    .max_total_steps
+                    .is_some_and(|max| snap.consumed_steps >= max),
+                task_budget_exhausted: snap
+                    .max_total_tasks
+                    .is_some_and(|max| snap.dispatched_tasks >= max),
                 cancelled: false, // caller merges cancellation state separately
             }
         }
@@ -246,12 +250,12 @@ mod core_conversions {
         fn from(result: &TaskResult) -> Self {
             let routing = result.metadata.routing_decision.as_ref();
             Self {
-                error_kind: result
-                    .error_kind
-                    .as_ref()
-                    .map(|k| serde_json::to_value(k).ok()
+                error_kind: result.error_kind.as_ref().map(|k| {
+                    serde_json::to_value(k)
+                        .ok()
                         .and_then(|v| v.as_str().map(str::to_owned))
-                        .unwrap_or_else(|| format!("{:?}", k))),
+                        .unwrap_or_else(|| format!("{:?}", k))
+                }),
                 is_transient: result.is_transient(),
                 router_name: routing.map(|r| r.router_name.clone()),
                 selected_agent_id: routing.map(|r| r.selected_agent_id.clone()),
@@ -307,8 +311,8 @@ fn with_hardening_runtime<T>(
 /// next orchestrator run starts from a clean control plane.
 #[cfg(feature = "multi-agent")]
 pub fn configure_hardening(options_json: &str) -> Result<bool, String> {
-    let options: OrchestratorOptions =
-        serde_json::from_str(options_json).map_err(|e| format!("Invalid OrchestratorOptions JSON: {e}"))?;
+    let options: OrchestratorOptions = serde_json::from_str(options_json)
+        .map_err(|e| format!("Invalid OrchestratorOptions JSON: {e}"))?;
 
     if options.max_concurrent_tasks == Some(0) {
         return Err("max_concurrent_tasks must be > 0 if set".to_string());
@@ -499,7 +503,10 @@ pub fn mcp_orchestrator_snapshot(
             let monitor = OrchestratorMonitorSnapshot::from(&snap).with_cancelled(cancelled);
             serialize_result(&monitor)
         }
-        Err(e) => to_c_string(&format!(r#"{{"error":"Invalid BudgetSnapshot JSON: {}"}}"#, e)),
+        Err(e) => to_c_string(&format!(
+            r#"{{"error":"Invalid BudgetSnapshot JSON: {}"}}"#,
+            e
+        )),
     }
 }
 
@@ -630,8 +637,15 @@ impl AgentConfig {
         if self.id.is_empty() {
             errors.push("Agent ID cannot be empty".to_string());
         }
-        if !self.id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-            errors.push("Agent ID can only contain alphanumeric characters, hyphens, and underscores".to_string());
+        if !self
+            .id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            errors.push(
+                "Agent ID can only contain alphanumeric characters, hyphens, and underscores"
+                    .to_string(),
+            );
         }
 
         // Name validation
@@ -672,10 +686,12 @@ impl AgentConfig {
 // ============================================================================
 
 /// Agent registry
-static AGENTS: LazyLock<Mutex<HashMap<String, AgentConfig>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static AGENTS: LazyLock<Mutex<HashMap<String, AgentConfig>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Agent status tracking
-static AGENT_STATUS: LazyLock<Mutex<HashMap<String, AgentStatus>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static AGENT_STATUS: LazyLock<Mutex<HashMap<String, AgentStatus>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Get mutable access to agent registry (for tests)
 #[allow(dead_code)]
@@ -726,20 +742,24 @@ fn serialize_result<T: serde::Serialize>(result: &T) -> *mut c_char {
 pub fn mcp_register_agent(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
-        Err(e) => return serialize_result(&AgentValidationResult {
-            valid: false,
-            errors: vec![format!("Invalid JSON: {}", e)],
-            agent_id: String::new(),
-        }),
+        Err(e) => {
+            return serialize_result(&AgentValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {}", e)],
+                agent_id: String::new(),
+            });
+        }
     };
 
     let config: AgentConfig = match serde_json::from_str(&json_str) {
         Ok(c) => c,
-        Err(e) => return serialize_result(&AgentValidationResult {
-            valid: false,
-            errors: vec![format!("Invalid JSON: {}", e)],
-            agent_id: String::new(),
-        }),
+        Err(e) => {
+            return serialize_result(&AgentValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {}", e)],
+                agent_id: String::new(),
+            });
+        }
     };
 
     let validation = config.validate();
@@ -849,20 +869,24 @@ pub fn mcp_get_agent_status() -> *mut c_char {
 pub fn mcp_validate_agent(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
-        Err(e) => return serialize_result(&AgentValidationResult {
-            valid: false,
-            errors: vec![format!("Invalid JSON: {}", e)],
-            agent_id: String::new(),
-        }),
+        Err(e) => {
+            return serialize_result(&AgentValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {}", e)],
+                agent_id: String::new(),
+            });
+        }
     };
 
     let config: AgentConfig = match serde_json::from_str(&json_str) {
         Ok(c) => c,
-        Err(e) => return serialize_result(&AgentValidationResult {
-            valid: false,
-            errors: vec![format!("Invalid JSON: {}", e)],
-            agent_id: String::new(),
-        }),
+        Err(e) => {
+            return serialize_result(&AgentValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {}", e)],
+                agent_id: String::new(),
+            });
+        }
     };
 
     serialize_result(&config.validate())
@@ -913,4 +937,3 @@ pub fn mcp_import_agents_config(config_json: *const c_char) -> *mut c_char {
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
 }
-
