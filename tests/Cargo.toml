@@ -68,6 +68,10 @@ path = "streaming/streaming_tests.rs"
 name = "resilience_tests"
 path = "resilience/resilience_tests.rs"
 
+[[test]]
+name = "observability_tests"
+path = "observability/observability_tests.rs"
+
 # ============================================================================
 # Dependencies
 # ============================================================================

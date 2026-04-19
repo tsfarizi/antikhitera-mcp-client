@@ -24,7 +24,10 @@ pub use application::hooks::{
     PolicyDecisionInput, PolicyTarget, TelemetryHook,
 };
 pub use application::observability::{
-    CallerContext, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent,
+    AuditCategory, AuditRecord, AuditTrail, CallerContext, InMemoryMetricsExporter,
+    InMemoryObservabilityHook, InMemoryTracingHook, LatencySummary, LatencyTracker, MetricKind,
+    MetricRecord, MetricsExporter, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent,
+    TraceSpanContext, TraceStatus, TracingHook,
 };
 pub use application::resilience;
 pub use application::resilience::{

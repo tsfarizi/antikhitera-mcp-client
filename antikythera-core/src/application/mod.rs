@@ -35,7 +35,12 @@ pub use hooks::{
     HostHookMiddleware, InMemoryTelemetryHook, PolicyDecision, PolicyDecisionHook,
     PolicyDecisionInput, PolicyTarget, TelemetryHook,
 };
-pub use observability::{CallerContext, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent};
+pub use observability::{
+    AuditCategory, AuditRecord, AuditTrail, CallerContext, InMemoryMetricsExporter,
+    InMemoryObservabilityHook, InMemoryTracingHook, LatencySummary, LatencyTracker, MetricKind,
+    MetricRecord, MetricsExporter, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent,
+    TraceSpanContext, TraceStatus, TracingHook,
+};
 pub use streaming::{
     AgentEvent, AgentEventStream, InMemoryStreamingResponse, StreamingMode, StreamingRequest,
     StreamingResponse, StreamingSnapshot, ToolEventPhase,

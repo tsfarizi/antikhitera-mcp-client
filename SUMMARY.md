@@ -20,6 +20,7 @@
 - [Logging](documentation/LOGGING.md)
 - [Servers and Agents](documentation/SERVERS_AND_AGENTS.md)
 - [Resilience](documentation/RESILIENCE.md)
+- [Observability](documentation/OBSERVABILITY.md)
 - [Context Management](documentation/CONTEXT_MANAGEMENT.md)
 - [Streaming](documentation/STREAMING.md)
 - [WASM Agent](documentation/WASM_AGENT.md)

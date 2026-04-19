@@ -114,11 +114,18 @@ Target: Production-grade observability, resilience, and enterprise deployment.
 #### 4 Feature set: v0.9.9
 
 **Priority 1: Observability & Metrics**
-- Advanced health tracking with SLA metrics (p50/p95/p99 latencies)
-- Metrics export hooks (Prometheus, CloudWatch, Datadog, etc.)
-- Structured audit trails for policy decisions and tool execution
-- Correlation ID propagation across agent/tool boundaries
-- Distributed tracing support (OpenTelemetry hooks)
+- ✅ **Module**: `antikythera-core::application::observability`
+- **Scope**:
+  - Advanced health tracking with SLA metrics (`p50` / `p95` / `p99`) via `LatencyTracker`
+  - Metrics export hooks via `MetricsExporter` + `MetricRecord` / `MetricKind`
+  - Structured audit trails via `AuditTrail` / `AuditRecord` / `AuditCategory`
+  - Correlation ID propagation helper via `CallerContext::ensure_correlation_id()`
+  - Distributed tracing hooks via `TracingHook` + `TraceSpanContext`
+  - Unit tests: 10+ covering metrics, audit, tracing lifecycle, and percentile handling ✅
+  - Integration tests: `tests/observability/observability_tests.rs` ✅
+  - Documentation: `documentation/OBSERVABILITY.md` ✅
+- **Backward compatibility**: Additive API only; existing hooks and telemetry remain valid
+- **Deliverables**: Code + tests + docs + clippy ✅
 
 **Priority 2: Transport Plugin Architecture**
 - `TransportPlugin` trait for custom MCP transports
