@@ -534,10 +534,10 @@ mod wit_from_rust {
         }
 
         // Don't forget last param
-        if !current_param.trim().is_empty() {
-            if let Some((name, typ)) = parse_single_param(&current_param) {
-                result.push((name, typ));
-            }
+        if !current_param.trim().is_empty()
+            && let Some((name, typ)) = parse_single_param(&current_param)
+        {
+            result.push((name, typ));
         }
 
         result

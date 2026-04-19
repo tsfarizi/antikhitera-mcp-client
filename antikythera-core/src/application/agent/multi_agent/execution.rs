@@ -30,7 +30,7 @@ use std::thread;
 /// "concurrent"    → ExecutionMode::Concurrent
 /// "parallel:4"    → ExecutionMode::Parallel { workers: 4 }
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum ExecutionMode {
     /// **Default.** Tasks are spawned as independent tokio tasks and run
@@ -38,6 +38,7 @@ pub enum ExecutionMode {
     /// used; on a single-thread runtime tasks are interleaved cooperatively.
     ///
     /// This is the right choice for most workloads.
+    #[default]
     Auto,
 
     /// Tasks are awaited one at a time in the order they were submitted.
@@ -153,12 +154,6 @@ impl ExecutionMode {
     /// OS threads on a multi-thread runtime).
     pub fn spawns_tasks(&self) -> bool {
         matches!(self, Self::Auto | Self::Parallel { .. })
-    }
-}
-
-impl Default for ExecutionMode {
-    fn default() -> Self {
-        Self::Auto
     }
 }
 

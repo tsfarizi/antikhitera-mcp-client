@@ -365,17 +365,17 @@ pub fn get_cors_origins() -> Result<Vec<String>, Box<dyn Error>> {
         if trimmed.starts_with("cors_origins") && trimmed.contains('[') {
             in_cors_array = true;
             // Handle inline array like: cors_origins = ["origin1", "origin2"]
-            if let Some(start) = trimmed.find('[') {
-                if let Some(end) = trimmed.find(']') {
-                    let array_content = &trimmed[start + 1..end];
-                    for item in array_content.split(',') {
-                        let cleaned = item.trim().trim_matches('"').trim_matches('\'');
-                        if !cleaned.is_empty() {
-                            origins.push(cleaned.to_string());
-                        }
+            if let Some(start) = trimmed.find('[')
+                && let Some(end) = trimmed.find(']')
+            {
+                let array_content = &trimmed[start + 1..end];
+                for item in array_content.split(',') {
+                    let cleaned = item.trim().trim_matches('"').trim_matches('\'');
+                    if !cleaned.is_empty() {
+                        origins.push(cleaned.to_string());
                     }
-                    in_cors_array = false;
                 }
+                in_cors_array = false;
             }
             continue;
         }

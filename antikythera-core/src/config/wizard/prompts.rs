@@ -47,10 +47,10 @@ pub fn prompt_password(label: &str, default: Option<&str>) -> Result<String, Box
     io::stdin().read_line(&mut input)?;
     let trimmed = input.trim();
 
-    if trimmed.is_empty() {
-        if let Some(d) = default {
-            return Ok(d.to_string());
-        }
+    if trimmed.is_empty()
+        && let Some(d) = default
+    {
+        return Ok(d.to_string());
     }
 
     Ok(trimmed.to_string())
@@ -78,33 +78,33 @@ pub fn prompt_select(label: &str, options: &[&str]) -> Result<String, Box<dyn Er
             }
         }
 
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Up => {
-                        if selected > 0 {
-                            selected -= 1;
-                        } else {
-                            selected = options.len() - 1;
-                        }
+        if let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Up => {
+                    if selected > 0 {
+                        selected -= 1;
+                    } else {
+                        selected = options.len() - 1;
                     }
-                    KeyCode::Down => {
-                        if selected < options.len() - 1 {
-                            selected += 1;
-                        } else {
-                            selected = 0;
-                        }
-                    }
-                    KeyCode::Enter => {
-                        break;
-                    }
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        disable_raw_mode()?;
-                        execute!(io::stdout(), cursor::Show)?;
-                        std::process::exit(0);
-                    }
-                    _ => {}
                 }
+                KeyCode::Down => {
+                    if selected < options.len() - 1 {
+                        selected += 1;
+                    } else {
+                        selected = 0;
+                    }
+                }
+                KeyCode::Enter => {
+                    break;
+                }
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    disable_raw_mode()?;
+                    execute!(io::stdout(), cursor::Show)?;
+                    std::process::exit(0);
+                }
+                _ => {}
             }
         }
 

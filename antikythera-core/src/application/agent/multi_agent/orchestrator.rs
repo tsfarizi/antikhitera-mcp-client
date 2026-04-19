@@ -94,25 +94,25 @@ async fn execute_task<P: ModelProvider>(
         .unwrap_or_else(|_| Duration::from_millis(0))
         .as_millis() as i64;
 
-    if let Some(deadline) = task.deadline_unix_ms {
-        if now_ms >= deadline {
-            let metadata = TaskExecutionMetadata {
-                deadline_exceeded: true,
-                execution_mode: Some(execution_mode),
-                correlation_id: task.correlation_id.clone(),
-                routing_decision: Some(routing_decision),
-                concurrency_wait_ms,
-                error_kind: Some(ErrorKind::DeadlineExceeded),
-                ..TaskExecutionMetadata::default()
-            };
-            return TaskResult::failure_with_kind(
-                task.task_id,
-                profile.id,
-                "Task deadline exceeded before execution".to_string(),
-                ErrorKind::DeadlineExceeded,
-            )
-            .with_metadata(metadata);
-        }
+    if let Some(deadline) = task.deadline_unix_ms
+        && now_ms >= deadline
+    {
+        let metadata = TaskExecutionMetadata {
+            deadline_exceeded: true,
+            execution_mode: Some(execution_mode),
+            correlation_id: task.correlation_id.clone(),
+            routing_decision: Some(routing_decision),
+            concurrency_wait_ms,
+            error_kind: Some(ErrorKind::DeadlineExceeded),
+            ..TaskExecutionMetadata::default()
+        };
+        return TaskResult::failure_with_kind(
+            task.task_id,
+            profile.id,
+            "Task deadline exceeded before execution".to_string(),
+            ErrorKind::DeadlineExceeded,
+        )
+        .with_metadata(metadata);
     }
 
     // ---- cancellation pre-check --------------------------------------------
@@ -644,7 +644,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let concurrency_sem = self.concurrency_sem.clone();
         let default_retry_condition = self.default_retry_condition.clone();
 
-        let results = self
+        self
             .scheduler
             .run(prepared, move |(task, profile, routing_decision)| {
                 let client = client.clone();
@@ -728,9 +728,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                     }
                 }
             })
-            .await;
-
-        results
+            .await
     }
 
     /// Execute tasks as a sequential pipeline.

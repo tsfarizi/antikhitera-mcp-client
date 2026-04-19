@@ -66,6 +66,7 @@ The architecture appears more complete than the real runtime behavior.
 
 There is more than one configuration path and shape across the workspace.
 
+
 **Changes made:**
 - `postcard_config::AppConfig` is now the single serialization format for all surfaces
 - Added `PostcardAppConfig` type alias with disambiguation documentation
