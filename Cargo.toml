@@ -12,7 +12,7 @@ members = [
 default-members = ["antikythera-cli"]
 
 [workspace.package]
-version = "0.9.7"
+version = "0.9.8"
 edition = "2024"
 authors = ["tsfarizi"]
 license = "MIT"
