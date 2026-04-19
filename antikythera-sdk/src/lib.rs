@@ -54,11 +54,30 @@ pub use antikythera_core::config::AppConfig;
 #[cfg(all(feature = "sdk-core", feature = "multi-agent"))]
 pub use antikythera_core::application::agent::multi_agent::{
     AgentRegistry, AgentProfile, AgentRole, MemoryProvider, MemoryConfig, ContextId,
+        // hardening — manipulation
+        CancellationToken,
+        OrchestratorBudget,
+        // hardening — monitoring
+        BudgetSnapshot,
+        RetryCondition,
+        ErrorKind,
+        RoutingDecision,
+        // task types
+    AgentTask, TaskRetryPolicy, TaskResult, TaskExecutionMetadata, PipelineResult,
 };
 
 // ============================================================================
 // Vertical Slice Features
 // ============================================================================
+
+/// Prompt Management feature slice
+/// Agent Management feature slice (config, validation, FFI, orchestration helpers)
+pub mod agents;
+
+#[cfg(feature = "multi-agent")]
+pub use agents::{
+    OrchestratorOptions, OrchestratorMonitorSnapshot, TaskResultDetail,
+};
 
 /// Prompt Management feature slice
 #[cfg(feature = "sdk-core")]

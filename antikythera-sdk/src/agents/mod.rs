@@ -31,6 +31,294 @@ pub enum SkillLevel {
     Expert,
 }
 
+// ============================================================================
+// Orchestrator hardening — SDK surface for manipulation and monitoring
+//
+// All fields are optional with sensible defaults so callers that do not need
+// these controls can ignore them entirely.  No behaviour changes for existing
+// code that does not opt in.
+// ============================================================================
+
+/// SDK-level orchestrator configuration options.
+///
+/// Pass this (optionally) when constructing a [`MultiAgentOrchestrator`] through
+/// the SDK to control concurrency limits, step budgets, and retry behaviour.
+///
+/// ## Defaults
+/// All fields are `None` / `Always` — meaning unlimited resources and retry on
+/// every failure, which preserves the original behaviour.
+///
+/// ## Example (JSON)
+/// ```json
+/// {
+///   "max_concurrent_tasks": 4,
+///   "max_total_steps": 200,
+///   "max_total_tasks": 50,
+///   "default_retry_condition": "on_transient"
+/// }
+/// ```
+///
+/// [`MultiAgentOrchestrator`]: antikythera_core::application::agent::multi_agent::MultiAgentOrchestrator
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OrchestratorOptions {
+    /// Maximum number of tasks that may execute concurrently (None = unlimited).
+    #[serde(default)]
+    pub max_concurrent_tasks: Option<usize>,
+    /// Global step budget across all dispatched tasks in a session (None = unlimited).
+    #[serde(default)]
+    pub max_total_steps: Option<usize>,
+    /// Maximum number of tasks that may be dispatched in a session (None = unlimited).
+    #[serde(default)]
+    pub max_total_tasks: Option<usize>,
+    /// Default retry condition for tasks that do not specify their own policy.
+    ///
+    /// Accepted values: `"always"` (default), `"on_transient"`, `"never"`.
+    #[serde(default)]
+    pub default_retry_condition: RetryConditionOption,
+}
+
+/// SDK-friendly mirror of [`RetryCondition`] with `Default = Always`.
+///
+/// [`RetryCondition`]: antikythera_core::application::agent::multi_agent::RetryCondition
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RetryConditionOption {
+    /// Retry on every failure (default).
+    #[default]
+    Always,
+    /// Only retry when the error is classified as transient.
+    OnTransient,
+    /// Never retry, regardless of `max_retries`.
+    Never,
+}
+
+/// Point-in-time monitoring snapshot for a running orchestrator.
+///
+/// Returned by [`mcp_orchestrator_snapshot`] and can be polled at any time to
+/// inspect resource consumption without interrupting execution.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OrchestratorMonitorSnapshot {
+    /// Steps consumed so far across all dispatched tasks.
+    pub consumed_steps: usize,
+    /// Tasks dispatched so far (including in-flight ones).
+    pub dispatched_tasks: usize,
+    /// Configured step ceiling (`None` = unlimited).
+    pub max_total_steps: Option<usize>,
+    /// Configured task ceiling (`None` = unlimited).
+    pub max_total_tasks: Option<usize>,
+    /// Configured concurrency ceiling (`None` = unlimited).
+    pub max_concurrent_tasks: Option<usize>,
+    /// Whether the step budget has been exhausted.
+    pub step_budget_exhausted: bool,
+    /// Whether the task budget has been exhausted.
+    pub task_budget_exhausted: bool,
+    /// Whether the orchestrator has been externally cancelled.
+    pub cancelled: bool,
+}
+
+/// Per-task introspection detail extracted from a [`TaskResult`].
+///
+/// Call [`mcp_task_result_detail`] with a serialized `TaskResult` JSON to
+/// decode this without needing a live orchestrator reference.
+///
+/// [`TaskResult`]: antikythera_core::application::agent::multi_agent::TaskResult
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TaskResultDetail {
+    /// Classified error kind (snake_case string) when the task failed, or `null`.
+    pub error_kind: Option<String>,
+    /// Whether the failure is transient (safe to retry).
+    pub is_transient: bool,
+    /// Name of the router that selected the agent (e.g. `"round-robin"`).
+    pub router_name: Option<String>,
+    /// Agent ID that was selected to handle the task.
+    pub selected_agent_id: Option<String>,
+    /// Number of candidate agents the router evaluated.
+    pub candidates_considered: Option<usize>,
+    /// Human-readable explanation of why the router chose this agent.
+    pub routing_reason: Option<String>,
+    /// Milliseconds the task waited for a concurrency slot before starting.
+    pub concurrency_wait_ms: u64,
+    /// Whether the task was rejected due to an exhausted budget.
+    pub budget_exhausted: bool,
+}
+
+// ============================================================================
+// Conversions between SDK types and core types
+// ============================================================================
+
+#[cfg(feature = "multi-agent")]
+mod core_conversions {
+    use super::*;
+    use antikythera_core::application::agent::multi_agent::{
+        OrchestratorBudget, BudgetSnapshot, RetryCondition, TaskResult,
+    };
+
+    impl From<&OrchestratorOptions> for OrchestratorBudget {
+        /// Build an [`OrchestratorBudget`] from SDK options.
+        ///
+        /// Fields that are `None` result in unlimited resources (the default).
+        fn from(opts: &OrchestratorOptions) -> Self {
+            let mut budget = OrchestratorBudget::new();
+            if let Some(steps) = opts.max_total_steps {
+                budget = budget.with_max_total_steps(steps);
+            }
+            if let Some(tasks) = opts.max_total_tasks {
+                budget = budget.with_max_total_tasks(tasks);
+            }
+            if let Some(concurrency) = opts.max_concurrent_tasks {
+                budget = budget.with_max_concurrent_tasks(concurrency);
+            }
+            budget
+        }
+    }
+
+    impl From<RetryConditionOption> for RetryCondition {
+        fn from(opt: RetryConditionOption) -> Self {
+            match opt {
+                RetryConditionOption::Always => RetryCondition::Always,
+                RetryConditionOption::OnTransient => RetryCondition::OnTransient,
+                RetryConditionOption::Never => RetryCondition::Never,
+            }
+        }
+    }
+
+    impl From<&BudgetSnapshot> for OrchestratorMonitorSnapshot {
+        fn from(snap: &BudgetSnapshot) -> Self {
+            Self {
+                consumed_steps: snap.consumed_steps,
+                dispatched_tasks: snap.dispatched_tasks,
+                max_total_steps: snap.max_total_steps,
+                max_total_tasks: snap.max_total_tasks,
+                max_concurrent_tasks: snap.max_concurrent_tasks,
+                    step_budget_exhausted: snap.max_total_steps
+                        .is_some_and(|max| snap.consumed_steps >= max),
+                    task_budget_exhausted: snap.max_total_tasks
+                        .is_some_and(|max| snap.dispatched_tasks >= max),
+                cancelled: false, // caller merges cancellation state separately
+            }
+        }
+    }
+
+    impl OrchestratorMonitorSnapshot {
+        /// Merge live cancellation state into an existing snapshot.
+        pub fn with_cancelled(mut self, cancelled: bool) -> Self {
+            self.cancelled = cancelled;
+            self
+        }
+    }
+
+    impl From<&TaskResult> for TaskResultDetail {
+        fn from(result: &TaskResult) -> Self {
+            let routing = result.metadata.routing_decision.as_ref();
+            Self {
+                error_kind: result
+                    .error_kind
+                    .as_ref()
+                    .map(|k| serde_json::to_value(k).ok()
+                        .and_then(|v| v.as_str().map(str::to_owned))
+                        .unwrap_or_else(|| format!("{:?}", k))),
+                is_transient: result.is_transient(),
+                router_name: routing.map(|r| r.router_name.clone()),
+                selected_agent_id: routing.map(|r| r.selected_agent_id.clone()),
+                candidates_considered: routing.map(|r| r.candidates_considered),
+                routing_reason: routing.and_then(|r| r.reason.clone()),
+                concurrency_wait_ms: result.metadata.concurrency_wait_ms,
+                budget_exhausted: result.metadata.budget_exhausted,
+            }
+        }
+    }
+}
+
+// ============================================================================
+// FFI — Orchestrator options, monitoring, and task introspection
+// ============================================================================
+
+/// Return the default [`OrchestratorOptions`] as a JSON string.
+///
+/// Use this to obtain the canonical default configuration, then modify fields
+/// as needed before passing to `mcp_build_orchestrator_budget`.
+#[unsafe(no_mangle)]
+pub extern "C" fn mcp_default_orchestrator_options() -> *mut c_char {
+    serialize_result(&OrchestratorOptions::default())
+}
+
+/// Validate an [`OrchestratorOptions`] JSON string.
+///
+/// Returns `{"valid": true}` or `{"valid": false, "error": "..."}`.
+#[unsafe(no_mangle)]
+pub extern "C" fn mcp_validate_orchestrator_options(options_json: *const c_char) -> *mut c_char {
+    let json_str = match from_c_string(options_json) {
+        Ok(s) => s,
+        Err(e) => return to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
+    };
+    match serde_json::from_str::<OrchestratorOptions>(&json_str) {
+        Ok(opts) => {
+            // Basic sanity checks
+            let mut errors: Vec<String> = Vec::new();
+            if opts.max_concurrent_tasks == Some(0) {
+                errors.push("max_concurrent_tasks must be > 0 if set".to_string());
+            }
+            if opts.max_total_steps == Some(0) {
+                errors.push("max_total_steps must be > 0 if set".to_string());
+            }
+            if opts.max_total_tasks == Some(0) {
+                errors.push("max_total_tasks must be > 0 if set".to_string());
+            }
+            if errors.is_empty() {
+                to_c_string(r#"{"valid":true}"#)
+            } else {
+                serialize_result(&serde_json::json!({"valid": false, "errors": errors}))
+            }
+        }
+        Err(e) => to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
+    }
+}
+
+/// Decode a serialized [`TaskResult`] JSON into a [`TaskResultDetail`] JSON
+/// for easy routing/error introspection without requiring a live orchestrator.
+///
+/// Returns `{"error": "..."}` if the input cannot be parsed.
+#[cfg(feature = "multi-agent")]
+#[unsafe(no_mangle)]
+pub extern "C" fn mcp_task_result_detail(task_result_json: *const c_char) -> *mut c_char {
+    use antikythera_core::application::agent::multi_agent::TaskResult;
+
+    let json_str = match from_c_string(task_result_json) {
+        Ok(s) => s,
+        Err(e) => return to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    match serde_json::from_str::<TaskResult>(&json_str) {
+        Ok(result) => serialize_result(&TaskResultDetail::from(&result)),
+        Err(e) => to_c_string(&format!(r#"{{"error":"Invalid TaskResult JSON: {}"}}"#, e)),
+    }
+}
+
+/// Build an [`OrchestratorMonitorSnapshot`] from a [`BudgetSnapshot`] JSON
+/// (obtained via `MultiAgentOrchestrator::budget_snapshot()`) and an optional
+/// `cancelled` boolean.
+///
+/// This is a pure decode helper — it performs no I/O.
+#[cfg(feature = "multi-agent")]
+#[unsafe(no_mangle)]
+pub extern "C" fn mcp_orchestrator_snapshot(
+    budget_snapshot_json: *const c_char,
+    cancelled: bool,
+) -> *mut c_char {
+    use antikythera_core::application::agent::multi_agent::BudgetSnapshot;
+
+    let json_str = match from_c_string(budget_snapshot_json) {
+        Ok(s) => s,
+        Err(e) => return to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    match serde_json::from_str::<BudgetSnapshot>(&json_str) {
+        Ok(snap) => {
+            let monitor = OrchestratorMonitorSnapshot::from(&snap).with_cancelled(cancelled);
+            serialize_result(&monitor)
+        }
+        Err(e) => to_c_string(&format!(r#"{{"error":"Invalid BudgetSnapshot JSON: {}"}}"#, e)),
+    }
+}
+
 /// Agent capability descriptor
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentCapability {
