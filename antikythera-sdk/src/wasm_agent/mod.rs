@@ -39,9 +39,16 @@ pub use types::{
     AgentState,
     AgentConfig as WasmAgentConfig,
     AgentMessage,
+    ContextPolicy,
+    ContextSummary,
+    ProviderPolicyKey,
+    PromptVariables,
+    StreamEvent,
+    StreamEventKind,
+    TelemetrySnapshot,
     ToolCall,
     ToolResult,
-    PromptVariables,
+    TruncationStrategy,
 };
 
 pub use processor::{
@@ -53,11 +60,16 @@ pub use processor::{
 };
 
 pub use runner::{
+    append_llm_chunk,
+    commit_llm_response,
+    commit_llm_stream,
+    drain_events,
+    get_state,
+    get_telemetry_snapshot,
     init,
     prepare_user_turn,
-    commit_llm_response,
     process_llm_response_for_session,
     process_tool_result_for_session,
-    get_state,
     reset_session,
+    set_context_policy,
 };

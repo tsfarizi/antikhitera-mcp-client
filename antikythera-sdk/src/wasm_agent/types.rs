@@ -30,6 +30,101 @@ pub enum AgentAction {
 }
 
 // ============================================================================
+// Advanced Context Management
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TruncationStrategy {
+    KeepNewest,
+    KeepBalanced,
+}
+
+impl Default for TruncationStrategy {
+    fn default() -> Self {
+        Self::KeepNewest
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ContextPolicy {
+    pub max_history_messages: usize,
+    pub summarize_after_messages: usize,
+    pub summary_max_chars: usize,
+    #[serde(default)]
+    pub truncation_strategy: TruncationStrategy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderPolicyKey {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+}
+
+impl ProviderPolicyKey {
+    pub fn as_map_key(&self) -> Option<String> {
+        match (&self.provider, &self.model) {
+            (Some(provider), Some(model)) => Some(format!("{}::{}", provider, model)),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ContextSummary {
+    pub version: u64,
+    pub text: String,
+    pub source_messages: usize,
+}
+
+// ============================================================================
+// Streaming and Telemetry
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StreamEventKind {
+    UserTurnPrepared,
+    LlmChunk,
+    LlmCommitted,
+    ToolRequested,
+    ToolResult,
+    FinalResponse,
+    SummaryUpdated,
+    Telemetry,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamEvent {
+    pub seq: u64,
+    pub session_id: String,
+    pub step: u32,
+    pub correlation_id: Option<String>,
+    pub kind: StreamEventKind,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TelemetryCounters {
+    pub turns_prepared: u64,
+    pub llm_chunks: u64,
+    pub llm_commits: u64,
+    pub tool_requests: u64,
+    pub tool_results: u64,
+    pub final_responses: u64,
+    pub context_summaries: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TelemetrySnapshot {
+    pub session_id: String,
+    pub correlation_id: Option<String>,
+    pub counters: TelemetryCounters,
+    pub total_prepare_latency_ms: u64,
+    pub total_commit_latency_ms: u64,
+}
+
+// ============================================================================
 // Agent State
 // ============================================================================
 
@@ -46,6 +141,9 @@ pub struct AgentState {
     pub tool_results: HashMap<String, serde_json::Value>,
     /// Agent configuration
     pub config: AgentConfig,
+    /// Rolling summary for long context
+    #[serde(default)]
+    pub rolling_summary: Option<ContextSummary>,
 }
 
 impl AgentState {
@@ -57,6 +155,7 @@ impl AgentState {
             message_history: Vec::new(),
             tool_results: HashMap::new(),
             config,
+            rolling_summary: None,
         }
     }
 
@@ -147,6 +246,9 @@ pub struct AgentConfig {
     pub session_timeout_secs: u32,
     /// Session ID
     pub session_id: String,
+    /// Default context policy
+    #[serde(default)]
+    pub context_policy: ContextPolicy,
 }
 
 impl Default for AgentConfig {
@@ -157,6 +259,12 @@ impl Default for AgentConfig {
             auto_execute_tools: true,
             session_timeout_secs: 300,
             session_id: format!("session-{}", chrono::Utc::now().timestamp_millis()),
+            context_policy: ContextPolicy {
+                max_history_messages: 24,
+                summarize_after_messages: 12,
+                summary_max_chars: 1200,
+                truncation_strategy: TruncationStrategy::KeepNewest,
+            },
         }
     }
 }

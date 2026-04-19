@@ -10,12 +10,18 @@ use std::collections::HashMap;
 // LLM Response Processing
 // ============================================================================
 
-/// Process LLM response and determine next action
+/// Process LLM response and determine next action.
+///
+/// This parser supports:
+/// - Framework-generic JSON format (`action`, `tool`, `input`)
+/// - OpenAI native tool-calling shape
+/// - Gemini native function-call shape
+/// - Anthropic native tool_use shape
+/// - Plain-text fallback
 pub fn process_llm_response(
     state: &mut AgentState,
     llm_response_content: &str,
 ) -> Result<AgentAction, String> {
-    // Check max steps
     if state.is_max_steps_exceeded() {
         return Err(format!(
             "Max steps exceeded: {} >= {}",
@@ -23,7 +29,6 @@ pub fn process_llm_response(
         ));
     }
 
-    // Parse LLM response as JSON
     let parsed: serde_json::Value = match serde_json::from_str(llm_response_content) {
         Ok(value) => value,
         Err(_) => {
@@ -33,48 +38,149 @@ pub fn process_llm_response(
         }
     };
 
-    // Determine action from response
+    if let Some(tool_action) = parse_generic_tool_action(&parsed)? {
+        state.current_step += 1;
+        return Ok(tool_action);
+    }
+
+    if let Some(tool_action) = parse_openai_tool_action(&parsed) {
+        state.current_step += 1;
+        return Ok(tool_action);
+    }
+
+    if let Some(tool_action) = parse_gemini_tool_action(&parsed) {
+        state.current_step += 1;
+        return Ok(tool_action);
+    }
+
+    if let Some(tool_action) = parse_anthropic_tool_action(&parsed) {
+        state.current_step += 1;
+        return Ok(tool_action);
+    }
+
+    if let Some(final_response) = parse_final_response(&parsed) {
+        return Ok(AgentAction::Final {
+            response: final_response,
+        });
+    }
+
+    Err("Could not derive action from LLM response".to_string())
+}
+
+fn parse_generic_tool_action(parsed: &serde_json::Value) -> Result<Option<AgentAction>, String> {
     let action = match parsed.get("action").and_then(|v| v.as_str()) {
         Some(action) => action,
-        None => {
-            if let Some(response) = parsed.get("response").or_else(|| parsed.get("content")) {
-                return Ok(AgentAction::Final {
-                    response: response.clone(),
-                });
-            }
-
-            return Err("Missing 'action' field in LLM response".to_string());
-        }
+        None => return Ok(None),
     };
 
     match action {
         "call_tool" => {
-            let tool = parsed.get("tool")
+            let tool = parsed
+                .get("tool")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing 'tool' field")?
                 .to_string();
 
-            let input = parsed.get("input")
+            let input = parsed
+                .get("input")
                 .or_else(|| parsed.get("arguments"))
                 .cloned()
                 .unwrap_or(serde_json::json!({}));
 
-            // Record step
-            state.current_step += 1;
-
-            Ok(AgentAction::CallTool { tool, input })
+            Ok(Some(AgentAction::CallTool { tool, input }))
         }
-
         "final" => {
-            let response = parsed.get("response")
+            let response = parsed
+                .get("response")
+                .or_else(|| parsed.get("content"))
                 .cloned()
                 .ok_or("Missing 'response' field")?;
-
-            Ok(AgentAction::Final { response })
+            Ok(Some(AgentAction::Final { response }))
         }
-
+        "retry" => {
+            let error = parsed
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("retry requested")
+                .to_string();
+            Ok(Some(AgentAction::Retry { error }))
+        }
         _ => Err(format!("Unknown action: {}", action)),
     }
+}
+
+fn parse_openai_tool_action(parsed: &serde_json::Value) -> Option<AgentAction> {
+    let message = parsed
+        .get("choices")?
+        .as_array()?
+        .first()?
+        .get("message")?;
+
+    let tool_call = message.get("tool_calls")?.as_array()?.first()?;
+    let function = tool_call.get("function")?;
+    let tool = function.get("name")?.as_str()?.to_string();
+    let arguments_raw = function.get("arguments")?.as_str().unwrap_or("{}");
+
+    let input = serde_json::from_str(arguments_raw).unwrap_or_else(|_| serde_json::json!({}));
+    Some(AgentAction::CallTool { tool, input })
+}
+
+fn parse_gemini_tool_action(parsed: &serde_json::Value) -> Option<AgentAction> {
+    let parts = parsed
+        .get("candidates")?
+        .as_array()?
+        .first()?
+        .get("content")?
+        .get("parts")?
+        .as_array()?;
+
+    for part in parts {
+        if let Some(function_call) = part.get("functionCall") {
+            let tool = function_call.get("name")?.as_str()?.to_string();
+            let input = function_call
+                .get("args")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+            return Some(AgentAction::CallTool { tool, input });
+        }
+    }
+
+    None
+}
+
+fn parse_anthropic_tool_action(parsed: &serde_json::Value) -> Option<AgentAction> {
+    let content = parsed.get("content")?.as_array()?;
+    for entry in content {
+        if entry.get("type")?.as_str()? == "tool_use" {
+            let tool = entry.get("name")?.as_str()?.to_string();
+            let input = entry
+                .get("input")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+            return Some(AgentAction::CallTool { tool, input });
+        }
+    }
+
+    None
+}
+
+fn parse_final_response(parsed: &serde_json::Value) -> Option<serde_json::Value> {
+    if let Some(response) = parsed.get("response").or_else(|| parsed.get("content")) {
+        return Some(response.clone());
+    }
+
+    let openai_content = parsed
+        .get("choices")?
+        .as_array()?
+        .first()?
+        .get("message")?
+        .get("content")?;
+
+    if !openai_content.is_null() {
+        return Some(openai_content.clone());
+    }
+
+    None
 }
 
 // ============================================================================
@@ -89,7 +195,6 @@ pub fn process_tool_result(
     output: serde_json::Value,
     error: Option<String>,
 ) -> Result<String, String> {
-    // Record result
     let result = if success {
         output.clone()
     } else {
@@ -99,7 +204,6 @@ pub fn process_tool_result(
 
     state.record_tool_result(tool_name.to_string(), result);
 
-    // Build tool result message for next LLM call
     let message = if success {
         format!(
             "Tool '{}' executed successfully.\nResult: {}",
@@ -108,14 +212,9 @@ pub fn process_tool_result(
         )
     } else {
         let err_msg = error.clone().unwrap_or_else(|| "Unknown error".to_string());
-        format!(
-            "Tool '{}' failed.\nError: {}",
-            tool_name,
-            err_msg
-        )
+        format!("Tool '{}' failed.\nError: {}", tool_name, err_msg)
     };
 
-    // Add to message history
     state.add_message(AgentMessage {
         role: "tool".to_string(),
         content: message.clone(),
@@ -137,27 +236,29 @@ pub fn process_tool_result(
 // ============================================================================
 
 /// Build system prompt for LLM
-pub fn build_system_prompt(
-    template: &str,
-    variables: &PromptVariables,
-) -> String {
+pub fn build_system_prompt(template: &str, variables: &PromptVariables) -> String {
     variables.render(template)
 }
 
 /// Build messages for LLM API (for host to use)
-pub fn build_llm_messages(
-    system_prompt: &str,
-    state: &AgentState,
-) -> Vec<HashMap<String, String>> {
+pub fn build_llm_messages(system_prompt: &str, state: &AgentState) -> Vec<HashMap<String, String>> {
     let mut messages = Vec::new();
 
-    // System message
     messages.push(HashMap::from([
         ("role".to_string(), "system".to_string()),
         ("content".to_string(), system_prompt.to_string()),
     ]));
 
-    // Conversation history
+    if let Some(summary) = &state.rolling_summary {
+        messages.push(HashMap::from([
+            ("role".to_string(), "system".to_string()),
+            (
+                "content".to_string(),
+                format!("Conversation summary v{}: {}", summary.version, summary.text),
+            ),
+        ]));
+    }
+
     for msg in &state.message_history {
         let mut message = HashMap::from([
             ("role".to_string(), msg.role.clone()),
@@ -182,16 +283,11 @@ pub fn build_llm_messages(
 // ============================================================================
 
 /// Validate JSON against schema
-pub fn validate_json_schema(
-    schema: &serde_json::Value,
-    data: &serde_json::Value,
-) -> Result<(), String> {
-    // Basic validation - check if data is valid JSON
+pub fn validate_json_schema(schema: &serde_json::Value, data: &serde_json::Value) -> Result<(), String> {
     if data.is_null() {
         return Err("JSON is null".to_string());
     }
 
-    // If schema specifies required fields, check them
     if let Some(required) = schema.get("required").and_then(|v| v.as_array()) {
         if let Some(obj) = data.as_object() {
             for field in required {
@@ -205,4 +301,61 @@ pub fn validate_json_schema(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_openai_native_tool_call() {
+        let mut state = AgentState::new(AgentConfig::default());
+        let response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "function": {
+                            "name": "weather.get",
+                            "arguments": "{\"city\":\"Jakarta\"}"
+                        }
+                    }]
+                }
+            }]
+        })
+        .to_string();
+
+        let action = process_llm_response(&mut state, &response).unwrap();
+        match action {
+            AgentAction::CallTool { tool, input } => {
+                assert_eq!(tool, "weather.get");
+                assert_eq!(input["city"], "Jakarta");
+            }
+            _ => panic!("expected call tool"),
+        }
+    }
+
+    #[test]
+    fn parses_anthropic_native_tool_use() {
+        let mut state = AgentState::new(AgentConfig::default());
+        let response = serde_json::json!({
+            "content": [
+                {
+                    "type": "tool_use",
+                    "name": "math.sum",
+                    "input": {"a": 3, "b": 5}
+                }
+            ]
+        })
+        .to_string();
+
+        let action = process_llm_response(&mut state, &response).unwrap();
+        match action {
+            AgentAction::CallTool { tool, input } => {
+                assert_eq!(tool, "math.sum");
+                assert_eq!(input["a"], 3);
+                assert_eq!(input["b"], 5);
+            }
+            _ => panic!("expected call tool"),
+        }
+    }
 }

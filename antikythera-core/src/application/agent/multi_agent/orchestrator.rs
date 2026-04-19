@@ -33,14 +33,18 @@
 //! ```
 
 use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use tokio::time::sleep;
 use tracing::{info, warn};
 
 use super::execution::ExecutionMode;
 use super::registry::{AgentProfile, AgentRegistry};
 use super::router::{AgentRouter, FirstAvailableRouter};
 use super::scheduler::TaskScheduler;
-use super::task::{AgentTask, PipelineResult, TaskResult};
+use super::task::{
+    AgentTask, PipelineResult, TaskExecutionMetadata, TaskResult,
+};
 use crate::application::agent::{Agent, AgentOptions};
 use crate::application::client::McpClient;
 use crate::infrastructure::model::ModelProvider;
@@ -57,39 +61,151 @@ async fn execute_task<P: ModelProvider>(
     client: Arc<McpClient<P>>,
     task: AgentTask,
     profile: AgentProfile,
+    routed_by: Option<String>,
+    execution_mode: String,
 ) -> TaskResult {
-    let agent = Agent::new(client);
+    let started = Instant::now();
     let max_steps = task.max_steps.or(profile.max_steps).unwrap_or(8);
+    let budgeted_max_steps = task.budget_steps.map(|b| b.min(max_steps)).unwrap_or(max_steps);
+    let retry_policy = task.retry_policy.clone().unwrap_or_default();
 
-    let options = AgentOptions {
-        system_prompt: profile.system_prompt.clone(),
-        session_id: task.session_id.clone(),
-        max_steps,
-        attachments: Vec::new(),
-    };
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_millis(0))
+        .as_millis() as i64;
 
-    info!(
-        task_id = %task.task_id,
-        agent_id = %profile.id,
-        "Dispatching task to agent"
-    );
-
-    match agent.run(task.input.clone(), options).await {
-        Ok(outcome) => {
-            info!(task_id = %task.task_id, agent_id = %profile.id, "Task completed");
-            TaskResult::success(
+    if let Some(deadline) = task.deadline_unix_ms {
+        if now_ms >= deadline {
+            let metadata = TaskExecutionMetadata {
+                deadline_exceeded: true,
+                routed_by,
+                execution_mode: Some(execution_mode),
+                correlation_id: task.correlation_id.clone(),
+                ..TaskExecutionMetadata::default()
+            };
+            return TaskResult::failure(
                 task.task_id,
                 profile.id,
-                outcome.response,
-                outcome.steps.len(),
-                outcome.session_id,
+                "Task deadline exceeded before execution".to_string(),
             )
-        }
-        Err(e) => {
-            warn!(task_id = %task.task_id, agent_id = %profile.id, error = %e, "Task failed");
-            TaskResult::failure(task.task_id, profile.id, e.to_string())
+            .with_metadata(metadata);
         }
     }
+
+    let mut attempt: u8 = 0;
+    let mut last_error: Option<String> = None;
+
+    loop {
+        attempt = attempt.saturating_add(1);
+        let agent = Agent::new(client.clone());
+        let options = AgentOptions {
+            system_prompt: profile.system_prompt.clone(),
+            session_id: task.session_id.clone(),
+            max_steps: budgeted_max_steps,
+            attachments: Vec::new(),
+        };
+
+        info!(
+            task_id = %task.task_id,
+            agent_id = %profile.id,
+            attempt = attempt,
+            "Dispatching task to agent"
+        );
+
+        let run_future = agent.run(task.input.clone(), options);
+        let run_result = if let Some(timeout_ms) = task.timeout_ms {
+            match tokio::time::timeout(Duration::from_millis(timeout_ms), run_future).await {
+                Ok(result) => result,
+                Err(_) => {
+                    let metadata = TaskExecutionMetadata {
+                        attempt_count: attempt,
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        timed_out: true,
+                        retry_applied: attempt > 1,
+                        routed_by: routed_by.clone(),
+                        execution_mode: Some(execution_mode.clone()),
+                        correlation_id: task.correlation_id.clone(),
+                        ..TaskExecutionMetadata::default()
+                    };
+
+                    if attempt <= retry_policy.max_retries {
+                        if retry_policy.backoff_ms > 0 {
+                            sleep(Duration::from_millis(retry_policy.backoff_ms)).await;
+                        }
+                        continue;
+                    }
+
+                    return TaskResult::failure(
+                        task.task_id,
+                        profile.id,
+                        format!("Task timed out after {} ms", timeout_ms),
+                    )
+                    .with_metadata(metadata);
+                }
+            }
+        } else {
+            run_future.await
+        };
+
+        match run_result {
+            Ok(outcome) => {
+                info!(task_id = %task.task_id, agent_id = %profile.id, "Task completed");
+                let metadata = TaskExecutionMetadata {
+                    attempt_count: attempt,
+                    duration_ms: started.elapsed().as_millis() as u64,
+                    retry_applied: attempt > 1,
+                    routed_by,
+                    execution_mode: Some(execution_mode),
+                    correlation_id: task.correlation_id,
+                    ..TaskExecutionMetadata::default()
+                };
+                return TaskResult::success(
+                    task.task_id,
+                    profile.id,
+                    outcome.response,
+                    outcome.steps.len(),
+                    outcome.session_id,
+                )
+                .with_metadata(metadata);
+            }
+            Err(e) => {
+                warn!(
+                    task_id = %task.task_id,
+                    agent_id = %profile.id,
+                    error = %e,
+                    attempt = attempt,
+                    "Task failed"
+                );
+                last_error = Some(e.to_string());
+
+                if attempt <= retry_policy.max_retries {
+                    if retry_policy.backoff_ms > 0 {
+                        sleep(Duration::from_millis(retry_policy.backoff_ms)).await;
+                    }
+                    continue;
+                }
+            }
+        }
+
+        break;
+    }
+
+    let metadata = TaskExecutionMetadata {
+        attempt_count: attempt,
+        duration_ms: started.elapsed().as_millis() as u64,
+        retry_applied: attempt > 1,
+        routed_by,
+        execution_mode: Some(execution_mode),
+        correlation_id: task.correlation_id,
+        ..TaskExecutionMetadata::default()
+    };
+
+    TaskResult::failure(
+        task.task_id,
+        profile.id,
+        last_error.unwrap_or_else(|| "Task failed".to_string()),
+    )
+    .with_metadata(metadata)
 }
 
 // ============================================================================
@@ -212,7 +328,14 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                 );
             }
         };
-        execute_task(self.client.clone(), task, profile).await
+        execute_task(
+            self.client.clone(),
+            task,
+            profile,
+            Some("router".to_string()),
+            self.execution_mode().to_string(),
+        )
+        .await
     }
 
     /// Dispatch multiple tasks and collect all results.
@@ -239,18 +362,35 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             .collect();
 
         let client = self.client.clone();
+        let execution_mode = self.execution_mode().to_string();
 
         self.scheduler
             .run(prepared, move |(task, profile)| {
                 let client = client.clone();
+                let execution_mode = execution_mode.clone();
                 async move {
                     match profile {
                         None => TaskResult::failure(
                             task.task_id.clone(),
                             task.agent_id.clone().unwrap_or_default(),
                             "No agent profile found for this task".to_string(),
-                        ),
-                        Some(p) => execute_task(client, task, p).await,
+                        )
+                        .with_metadata(TaskExecutionMetadata {
+                            routed_by: Some("router".to_string()),
+                            execution_mode: Some(execution_mode),
+                            correlation_id: task.correlation_id,
+                            ..TaskExecutionMetadata::default()
+                        }),
+                        Some(p) => {
+                            execute_task(
+                                client,
+                                task,
+                                p,
+                                Some("router".to_string()),
+                                execution_mode,
+                            )
+                            .await
+                        }
                     }
                 }
             })

@@ -136,7 +136,9 @@ pub mod wasm_agent;
 pub use wasm_agent::{
     // Types
     AgentAction, AgentState, WasmAgentConfig,
-    AgentMessage, ToolCall, ToolResult, PromptVariables,
+    AgentMessage, ContextPolicy, ContextSummary, ProviderPolicyKey,
+    PromptVariables, StreamEvent, StreamEventKind, TelemetrySnapshot,
+    ToolCall, ToolResult, TruncationStrategy,
     // Processor
     process_llm_response,
     process_tool_result,
@@ -144,11 +146,16 @@ pub use wasm_agent::{
     build_llm_messages,
     validate_json_schema,
     // Runner contract
+    append_llm_chunk,
+    commit_llm_response,
+    commit_llm_stream,
+    drain_events,
+    get_telemetry_snapshot,
     init as init_agent_runner,
     prepare_user_turn,
-    commit_llm_response,
     process_llm_response_for_session,
     process_tool_result_for_session,
+    set_context_policy,
     get_state as get_agent_state,
     reset_session as reset_agent_session,
 };

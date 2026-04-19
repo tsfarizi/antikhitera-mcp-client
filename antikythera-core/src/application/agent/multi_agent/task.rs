@@ -50,6 +50,26 @@ pub struct AgentTask {
     #[serde(default)]
     pub max_steps: Option<usize>,
 
+    /// Hard timeout for this task in milliseconds.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+
+    /// Optional absolute deadline in unix milliseconds.
+    #[serde(default)]
+    pub deadline_unix_ms: Option<i64>,
+
+    /// Optional retry policy for transient failures.
+    #[serde(default)]
+    pub retry_policy: Option<TaskRetryPolicy>,
+
+    /// Optional budget cap for steps (guardrail).
+    #[serde(default)]
+    pub budget_steps: Option<usize>,
+
+    /// Correlation ID propagated through task execution metadata.
+    #[serde(default)]
+    pub correlation_id: Option<String>,
+
     /// Arbitrary key-value metadata attached to the task.
     ///
     /// Useful for passing routing hints, correlation IDs, or tracing
@@ -67,6 +87,11 @@ impl AgentTask {
             input: input.into(),
             session_id: None,
             max_steps: None,
+            timeout_ms: None,
+            deadline_unix_ms: None,
+            retry_policy: None,
+            budget_steps: None,
+            correlation_id: None,
             metadata: HashMap::new(),
         }
     }
@@ -89,6 +114,30 @@ impl AgentTask {
         self
     }
 
+    /// Set a task timeout in milliseconds.
+    pub fn with_timeout_ms(mut self, timeout_ms: u64) -> Self {
+        self.timeout_ms = Some(timeout_ms);
+        self
+    }
+
+    /// Set a retry policy.
+    pub fn with_retry_policy(mut self, retry_policy: TaskRetryPolicy) -> Self {
+        self.retry_policy = Some(retry_policy);
+        self
+    }
+
+    /// Set a step budget guardrail.
+    pub fn with_budget_steps(mut self, budget_steps: usize) -> Self {
+        self.budget_steps = Some(budget_steps);
+        self
+    }
+
+    /// Set task correlation ID.
+    pub fn with_correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
+        self.correlation_id = Some(correlation_id.into());
+        self
+    }
+
     /// Attach arbitrary metadata.
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Serialize) -> Self {
         self.metadata.insert(
@@ -97,6 +146,38 @@ impl AgentTask {
         );
         self
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TaskRetryPolicy {
+    /// Additional attempts after the first execution.
+    #[serde(default)]
+    pub max_retries: u8,
+    /// Base backoff in milliseconds between retries.
+    #[serde(default)]
+    pub backoff_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TaskExecutionMetadata {
+    #[serde(default)]
+    pub attempt_count: u8,
+    #[serde(default)]
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub timed_out: bool,
+    #[serde(default)]
+    pub deadline_exceeded: bool,
+    #[serde(default)]
+    pub cancelled: bool,
+    #[serde(default)]
+    pub retry_applied: bool,
+    #[serde(default)]
+    pub routed_by: Option<String>,
+    #[serde(default)]
+    pub execution_mode: Option<String>,
+    #[serde(default)]
+    pub correlation_id: Option<String>,
 }
 
 // ============================================================================
@@ -127,6 +208,10 @@ pub struct TaskResult {
 
     /// Session ID used for this task.
     pub session_id: String,
+
+    /// Production introspection metadata for this task execution.
+    #[serde(default)]
+    pub metadata: TaskExecutionMetadata,
 }
 
 impl TaskResult {
@@ -146,6 +231,7 @@ impl TaskResult {
             error: None,
             steps_used,
             session_id,
+            metadata: TaskExecutionMetadata::default(),
         }
     }
 
@@ -159,7 +245,13 @@ impl TaskResult {
             error: Some(error),
             steps_used: 0,
             session_id: String::new(),
+            metadata: TaskExecutionMetadata::default(),
         }
+    }
+
+    pub fn with_metadata(mut self, metadata: TaskExecutionMetadata) -> Self {
+        self.metadata = metadata;
+        self
     }
 }
 

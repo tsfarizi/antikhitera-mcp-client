@@ -62,4 +62,6 @@ pub use orchestrator::MultiAgentOrchestrator;
 pub use registry::{AgentProfile, AgentRegistry, AgentRole, ContextId, MemoryConfig, MemoryProvider};
 pub use router::{AgentRouter, DirectRouter, FirstAvailableRouter, RoleRouter, RoundRobinRouter};
 pub use scheduler::TaskScheduler;
-pub use task::{AgentTask, PipelineResult, TaskResult};
+pub use task::{
+    AgentTask, PipelineResult, TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
+};
