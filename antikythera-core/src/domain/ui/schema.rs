@@ -58,7 +58,7 @@ impl ComponentSchema {
 }
 
 /// Root config structure for ui.toml.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct UiSchemaConfig {
     /// Component definitions keyed by name
     #[serde(default)]
@@ -84,13 +84,5 @@ impl UiSchemaConfig {
     /// List all component names.
     pub fn component_names(&self) -> impl Iterator<Item = &str> {
         self.components.keys().map(String::as_str)
-    }
-}
-
-impl Default for UiSchemaConfig {
-    fn default() -> Self {
-        Self {
-            components: HashMap::new(),
-        }
     }
 }

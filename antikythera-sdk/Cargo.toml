@@ -8,7 +8,9 @@ description = "High-level API wrapper with FFI and WASM bindings"
 
 [lib]
 # rlib:   required for native Rust builds, server-side WASM component, and tests.
-crate-type = ["rlib"]
+# cdylib: required for wasm32-unknown-unknown jobs that expect
+#         target/.../antikythera_sdk.wasm output artifact.
+crate-type = ["rlib", "cdylib"]
 
 [package.metadata.component]
 package = "antikythera:mcp-framework"

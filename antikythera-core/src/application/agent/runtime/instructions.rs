@@ -53,12 +53,11 @@ impl ToolRuntime {
             "prompt": prompt,
         });
 
-        if !context.is_empty() {
-            if let Some(map) = payload.as_object_mut() {
-                if let Ok(value) = serde_json::to_value(context) {
-                    map.insert("tool_context".to_string(), value);
-                }
-            }
+        if !context.is_empty()
+            && let Some(map) = payload.as_object_mut()
+            && let Ok(value) = serde_json::to_value(context)
+        {
+            map.insert("tool_context".to_string(), value);
         }
 
         payload.to_string()

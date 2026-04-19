@@ -282,21 +282,20 @@ impl<P: ModelProvider> Agent<P> {
             Value::String(s) => {
                 // 1. Check if the entire string is just a step reference (e.g., "step_0")
                 // In this case, we replace the whole string with the actual data object/array
-                if (s.starts_with("step_") || s.starts_with("result_")) && !s.contains(' ') {
-                    if let Some(step_idx) = s
+                if (s.starts_with("step_") || s.starts_with("result_"))
+                    && !s.contains(' ')
+                    && let Some(step_idx) = s
                         .strip_prefix("step_")
                         .or_else(|| s.strip_prefix("result_"))
+                    && let Ok(idx) = step_idx.parse::<usize>()
+                {
+                    // Try 0-based index first, then 1-based index (if idx > 0)
+                    if let Some(step) = steps.get(idx) {
+                        return self.extract_result_data(&step.output);
+                    } else if idx > 0
+                        && let Some(step) = steps.get(idx - 1)
                     {
-                        if let Ok(idx) = step_idx.parse::<usize>() {
-                            // Try 0-based index first, then 1-based index (if idx > 0)
-                            if let Some(step) = steps.get(idx) {
-                                return self.extract_result_data(&step.output);
-                            } else if idx > 0 {
-                                if let Some(step) = steps.get(idx - 1) {
-                                    return self.extract_result_data(&step.output);
-                                }
-                            }
-                        }
+                        return self.extract_result_data(&step.output);
                     }
                 }
 
@@ -378,21 +377,18 @@ impl<P: ModelProvider> Agent<P> {
             }
 
             // Handle MCP content format: {"content": [{"type": "text", "text": "..."}]}
-            if let Some(content_arr) = obj.get("content").and_then(|c| c.as_array()) {
-                if content_arr.len() == 1 {
-                    if let Some(block) = content_arr[0].as_object() {
-                        if block.get("type").and_then(|t| t.as_str()) == Some("text") {
-                            if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
-                                // Try to parse the text as JSON
-                                if let Ok(parsed) = serde_json::from_str::<Value>(text) {
-                                    return parsed;
-                                }
-                                // If not JSON, return the text as a string
-                                return Value::String(text.to_string());
-                            }
-                        }
-                    }
+            if let Some(content_arr) = obj.get("content").and_then(|c| c.as_array())
+                && content_arr.len() == 1
+                && let Some(block) = content_arr[0].as_object()
+                && block.get("type").and_then(|t| t.as_str()) == Some("text")
+                && let Some(text) = block.get("text").and_then(|t| t.as_str())
+            {
+                // Try to parse the text as JSON
+                if let Ok(parsed) = serde_json::from_str::<Value>(text) {
+                    return parsed;
                 }
+                // If not JSON, return the text as a string
+                return Value::String(text.to_string());
             }
         }
 

@@ -48,7 +48,7 @@ impl StartupDiscoveryResult {
 /// # Arguments
 ///
 /// * `servers_folder` - Optional custom path to the servers folder.
-///                      If None, uses DEFAULT_SERVERS_FOLDER ("servers")
+///   If None, uses DEFAULT_SERVERS_FOLDER ("servers")
 ///
 /// # Returns
 ///

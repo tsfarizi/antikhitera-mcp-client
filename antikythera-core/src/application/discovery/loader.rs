@@ -34,7 +34,7 @@ use super::types::{DiscoveredServer, DiscoverySummary, LoadStatus};
 use crate::application::tooling::spawn_and_list_tools;
 use crate::config::ServerConfig;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use tracing::{debug, error, info, warn};
 
 /// Load all discovered servers and fetch their tools.
@@ -169,11 +169,11 @@ use crate::config::TransportType;
 /// # Returns
 ///
 /// A `ServerConfig` ready for use with `spawn_and_list_tools`
-fn create_server_config(name: &str, binary_path: &PathBuf) -> ServerConfig {
+fn create_server_config(name: &str, binary_path: &Path) -> ServerConfig {
     ServerConfig {
         name: name.to_string(),
         transport: TransportType::Stdio,
-        command: Some(binary_path.clone()),
+        command: Some(binary_path.to_path_buf()),
         args: Vec::new(),
         env: HashMap::new(),
         workdir: None,
@@ -225,6 +225,7 @@ pub async fn scan_and_load(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_create_server_config() {

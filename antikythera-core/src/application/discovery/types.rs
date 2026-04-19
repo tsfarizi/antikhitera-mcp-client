@@ -111,8 +111,10 @@ pub struct DiscoverySummary {
 impl DiscoverySummary {
     /// Create a summary from a list of discovered servers.
     pub fn from_servers(servers: &[DiscoveredServer]) -> Self {
-        let mut summary = Self::default();
-        summary.total_found = servers.len();
+        let mut summary = Self {
+            total_found: servers.len(),
+            ..Self::default()
+        };
 
         for server in servers {
             match &server.load_status {

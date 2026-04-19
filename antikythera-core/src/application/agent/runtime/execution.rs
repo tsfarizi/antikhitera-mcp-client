@@ -19,7 +19,7 @@ impl ToolRuntime {
     ) -> Result<ToolExecution, ToolError> {
         if tool_name.eq_ignore_ascii_case("list_tools") {
             let manifest = self.build_context(None).await;
-            let output = serde_json::to_value(&manifest).unwrap_or_else(|_| Value::Null);
+            let output = serde_json::to_value(&manifest).unwrap_or(Value::Null);
             debug!("Agent requested tool catalogue via list_tools");
             let execution = ToolExecution {
                 tool: "list_tools".to_string(),
@@ -113,8 +113,8 @@ impl ToolRuntime {
                 })?;
 
                 // Track execution wait and process times individually
-                let result = runtime.execute(&tool_name, input).await;
-                result
+
+                runtime.execute(&tool_name, input).await
             });
         }
 
@@ -135,25 +135,23 @@ fn extract_tool_message(result: &Value) -> Option<String> {
                 .and_then(Value::as_str)
                 .map(|value| value.eq_ignore_ascii_case("text"))
                 .unwrap_or(false)
+                && let Some(text) = block.get("text").and_then(Value::as_str)
             {
-                if let Some(text) = block.get("text").and_then(Value::as_str) {
-                    let trimmed = text.trim();
-                    if !trimmed.is_empty() {
-                        return Some(trimmed.to_string());
-                    }
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
                 }
             }
         }
     }
 
-    if let Some(structured) = result.get("structuredContent").and_then(Value::as_object) {
-        if let Some(error) = structured.get("error").and_then(Value::as_object) {
-            if let Some(message) = error.get("message").and_then(Value::as_str) {
-                let trimmed = message.trim();
-                if !trimmed.is_empty() {
-                    return Some(trimmed.to_string());
-                }
-            }
+    if let Some(structured) = result.get("structuredContent").and_then(Value::as_object)
+        && let Some(error) = structured.get("error").and_then(Value::as_object)
+        && let Some(message) = error.get("message").and_then(Value::as_str)
+    {
+        let trimmed = message.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
         }
     }
 

@@ -83,12 +83,12 @@ fn extract_json(content: &str) -> Option<Value> {
         }
     }
 
-    if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}')) {
-        if start < end {
-            let candidate = &trimmed[start..=end];
-            if let Ok(value) = serde_json::from_str::<Value>(candidate) {
-                return Some(value);
-            }
+    if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}'))
+        && start < end
+    {
+        let candidate = &trimmed[start..=end];
+        if let Ok(value) = serde_json::from_str::<Value>(candidate) {
+            return Some(value);
         }
     }
 

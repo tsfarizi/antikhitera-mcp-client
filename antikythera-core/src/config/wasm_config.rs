@@ -112,7 +112,7 @@ pub struct JsonSchemaConfig {
 // ============================================================================
 
 /// Complete WASM agent configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WasmAgentConfig {
     /// Agent settings
     pub agent: AgentConfig,
@@ -123,17 +123,6 @@ pub struct WasmAgentConfig {
     /// Custom key-value pairs
     #[serde(default)]
     pub custom: HashMap<String, String>,
-}
-
-impl Default for WasmAgentConfig {
-    fn default() -> Self {
-        Self {
-            agent: AgentConfig::default(),
-            prompts: PromptConfig::default(),
-            schemas: Vec::new(),
-            custom: HashMap::new(),
-        }
-    }
 }
 
 // ============================================================================

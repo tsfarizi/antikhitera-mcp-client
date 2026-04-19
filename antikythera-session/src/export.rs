@@ -6,7 +6,7 @@ use crate::session::Session;
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
-/// Export Format
+// Export Format
 // ============================================================================
 
 /// Session export data with versioning for consistency
@@ -81,7 +81,7 @@ impl SessionExport {
 }
 
 // ============================================================================
-/// Batch Export/Import
+// Batch Export/Import
 // ============================================================================
 
 /// Multiple sessions export

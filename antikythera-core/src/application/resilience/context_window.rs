@@ -2,12 +2,12 @@
 //!
 //! Provides:
 //!
-//! - [`TokenEstimator`]      — lightweight heuristic token counter (no tokenizer
-//!                             dependency).
+//! - [`TokenEstimator`] — lightweight heuristic token counter (no tokenizer
+//!   dependency).
 //! - [`ContextWindowPolicy`] — configurable token budget with a response
-//!                             reservation.
-//! - [`prune_messages`]      — removes the oldest non-system messages until the
-//!                             message list fits within the policy budget.
+//!   reservation.
+//! - [`prune_messages`] — removes the oldest non-system messages until the
+//!   message list fits within the policy budget.
 //!
 //! # Token estimation accuracy
 //!

@@ -139,7 +139,7 @@ async fn handle_command<P: ModelProvider>(
     client: &McpClient<P>,
     stdout: &mut io::Stdout,
 ) -> Result<LoopControl, StdioError> {
-    let command = input.trim_start_matches(|c| c == '/' || c == ':');
+    let command = input.trim_start_matches(['/', ':']);
     let mut parts = command.split_whitespace();
     let name = parts.next().unwrap_or("").to_ascii_lowercase();
     let args: Vec<String> = parts.map(|part| part.to_string()).collect();
@@ -290,8 +290,10 @@ async fn handle_prompt<P: ModelProvider + 'static>(
 ) -> Result<(), StdioError> {
     if state.agent_mode {
         info!("Processing interactive STDIO request in agent mode");
-        let mut options = AgentOptions::default();
-        options.session_id = state.session_id.clone();
+        let options = AgentOptions {
+            session_id: state.session_id.clone(),
+            ..AgentOptions::default()
+        };
         run_agent_interaction(client, state, message, stdout, options).await?;
     } else {
         info!("Processing interactive STDIO chat request");
@@ -360,7 +362,7 @@ async fn handle_prompt<P: ModelProvider + 'static>(
     Ok(())
 }
 
-async fn run_agent_interaction<P: ModelProvider>(
+async fn run_agent_interaction<P>(
     client: Arc<McpClient<P>>,
     state: &mut SessionState,
     prompt: String,
@@ -685,12 +687,12 @@ fn looks_like_tool_call(content: &str) -> bool {
                 }
             }
         }
-        if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}')) {
-            if start < end {
-                let slice = &trimmed[start..=end];
-                if let Ok(value) = serde_json::from_str::<Value>(slice) {
-                    return Some(value);
-                }
+        if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}'))
+            && start < end
+        {
+            let slice = &trimmed[start..=end];
+            if let Ok(value) = serde_json::from_str::<Value>(slice) {
+                return Some(value);
             }
         }
         None
@@ -699,18 +701,19 @@ fn looks_like_tool_call(content: &str) -> bool {
     fn matches_tool_signature(value: &Value) -> bool {
         match value {
             Value::Object(map) => {
-                if let Some(action) = map.get("action").and_then(Value::as_str) {
-                    if action.eq_ignore_ascii_case("call_tool") {
-                        return true;
-                    }
+                if let Some(action) = map.get("action").and_then(Value::as_str)
+                    && action.eq_ignore_ascii_case("call_tool")
+                {
+                    return true;
                 }
                 if map.contains_key("tool_code") {
                     return true;
                 }
-                if let Some(tool) = map.get("tool") {
-                    if tool.is_string() && !map.contains_key("response") {
-                        return true;
-                    }
+                if let Some(tool) = map.get("tool")
+                    && tool.is_string()
+                    && !map.contains_key("response")
+                {
+                    return true;
                 }
                 if let Some(tool_calls) = map.get("tool_calls") {
                     return matches_tool_signature(tool_calls);

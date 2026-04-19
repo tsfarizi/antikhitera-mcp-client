@@ -257,18 +257,15 @@ impl McpProcessInner {
 
         if let Some(sender) = responder {
             if value.get("error").is_some() {
-                let error = value
-                    .get("error")
-                    .and_then(Value::as_object)
-                    .and_then(|err| {
-                        Some((
-                            err.get("code").and_then(Value::as_i64).unwrap_or(-32000),
-                            err.get("message")
-                                .and_then(Value::as_str)
-                                .unwrap_or("unknown error")
-                                .to_string(),
-                        ))
-                    });
+                let error = value.get("error").and_then(Value::as_object).map(|err| {
+                    (
+                        err.get("code").and_then(Value::as_i64).unwrap_or(-32000),
+                        err.get("message")
+                            .and_then(Value::as_str)
+                            .unwrap_or("unknown error")
+                            .to_string(),
+                    )
+                });
                 let rpc_error = match error {
                     Some((code, message)) => ToolInvokeError::Rpc {
                         server: self.server.name.clone(),
@@ -345,14 +342,14 @@ impl McpProcessInner {
                 method,
                 "received notification from server"
             );
-            if method == "notifications/tools/list_changed" {
-                if let Err(err) = self.refresh_tools().await {
-                    warn!(
-                        server = %self.server.name,
-                        %err,
-                        "failed to refresh tool catalogue"
-                    );
-                }
+            if method == "notifications/tools/list_changed"
+                && let Err(err) = self.refresh_tools().await
+            {
+                warn!(
+                    server = %self.server.name,
+                    %err,
+                    "failed to refresh tool catalogue"
+                );
             }
         }
     }

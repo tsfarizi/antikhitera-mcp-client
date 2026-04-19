@@ -18,20 +18,15 @@ pub enum TransportCapability {
 }
 
 /// Transport mode for HTTP MCP servers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TransportMode {
     /// Stateful mode using SSE for session management
     Stateful,
     /// Stateless mode using direct HTTP POST (no SSE)
     Stateless,
     /// Auto-detect mode - tries SSE first, falls back to stateless
+    #[default]
     Auto,
-}
-
-impl Default for TransportMode {
-    fn default() -> Self {
-        TransportMode::Auto
-    }
 }
 
 /// HTTP Transport configuration.

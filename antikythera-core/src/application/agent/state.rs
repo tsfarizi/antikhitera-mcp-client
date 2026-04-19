@@ -259,6 +259,21 @@ impl AgentState {
     }
 }
 
+impl std::fmt::Display for AgentState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AgentState::Idle => write!(f, "Idle"),
+            AgentState::ParsingDirective => write!(f, "ParsingDirective"),
+            AgentState::ExecutingTool { .. } => write!(f, "ExecutingTool"),
+            AgentState::WaitingForContext => write!(f, "WaitingForContext"),
+            AgentState::RecoveringError { .. } => write!(f, "RecoveringError"),
+            AgentState::FinalizingResponse => write!(f, "FinalizingResponse"),
+            AgentState::FinalMessage { .. } => write!(f, "FinalMessage"),
+            AgentState::Terminated { .. } => write!(f, "Terminated"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,20 +492,5 @@ mod tests {
                 reason: TerminationReason::Success
             }
         ));
-    }
-}
-
-impl std::fmt::Display for AgentState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AgentState::Idle => write!(f, "Idle"),
-            AgentState::ParsingDirective => write!(f, "ParsingDirective"),
-            AgentState::ExecutingTool { .. } => write!(f, "ExecutingTool"),
-            AgentState::WaitingForContext => write!(f, "WaitingForContext"),
-            AgentState::RecoveringError { .. } => write!(f, "RecoveringError"),
-            AgentState::FinalizingResponse => write!(f, "FinalizingResponse"),
-            AgentState::FinalMessage { .. } => write!(f, "FinalMessage"),
-            AgentState::Terminated { .. } => write!(f, "Terminated"),
-        }
     }
 }

@@ -64,7 +64,7 @@ impl UiAssembler {
             let index = parse_step_index(source)?;
             let step = tool_steps
                 .get(index)
-                .ok_or_else(|| AssemblerError::IndexOutOfBounds(index, tool_steps.len()))?;
+                .ok_or(AssemblerError::IndexOutOfBounds(index, tool_steps.len()))?;
 
             let schema = self
                 .schema

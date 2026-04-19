@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -17,12 +18,20 @@ impl MessageRole {
         }
     }
 
-    pub fn from_str(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::from_str(value).ok()
+    }
+}
+
+impl FromStr for MessageRole {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
-            "system" => Some(MessageRole::System),
-            "user" => Some(MessageRole::User),
-            "assistant" => Some(MessageRole::Assistant),
-            _ => None,
+            "system" => Ok(MessageRole::System),
+            "user" => Ok(MessageRole::User),
+            "assistant" => Ok(MessageRole::Assistant),
+            _ => Err(()),
         }
     }
 }

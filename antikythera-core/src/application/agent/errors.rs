@@ -69,7 +69,7 @@ impl ToolError {
             ToolError::Execution { tool, source } => {
                 format!(
                     "Eksekusi tool \"{tool}\" gagal: {message}",
-                    message = source.to_string()
+                    message = source
                 )
             }
         }

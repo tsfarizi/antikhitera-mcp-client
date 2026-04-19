@@ -42,9 +42,9 @@ pub fn load_config(path: Option<&Path>) -> Result<super::AppConfig, ConfigError>
 
     // Log successful load
     let logger = ConfigLogger::new("config");
-    logger.info(&format!("Config loaded from: {}", config_path.display()));
-    logger.debug(&format!("  Providers: {}", config.providers.len()));
-    logger.debug(&format!(
+    logger.info(format!("Config loaded from: {}", config_path.display()));
+    logger.debug(format!("  Providers: {}", config.providers.len()));
+    logger.debug(format!(
         "  Default: {}/{}",
         config.model.default_provider, config.model.model
     ));
@@ -60,13 +60,13 @@ pub fn save_config(config: &super::AppConfig, path: Option<&Path>) -> Result<(),
     let data = postcard_config::config_to_postcard(&pc_config)
         .map_err(|e| ConfigError::CacheError(format!("Postcard serialize error: {}", e)))?;
 
-    if let Some(parent) = config_path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent).map_err(|e| ConfigError::Io {
-                path: config_path.to_path_buf(),
-                source: e,
-            })?;
-        }
+    if let Some(parent) = config_path.parent()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent).map_err(|e| ConfigError::Io {
+            path: config_path.to_path_buf(),
+            source: e,
+        })?;
     }
 
     std::fs::write(config_path, &data).map_err(|e| ConfigError::Io {
@@ -76,8 +76,8 @@ pub fn save_config(config: &super::AppConfig, path: Option<&Path>) -> Result<(),
 
     // Log successful save
     let logger = ConfigLogger::new("config");
-    logger.info(&format!("Config saved to: {}", config_path.display()));
-    logger.debug(&format!("  Size: {} bytes", data.len()));
+    logger.info(format!("Config saved to: {}", config_path.display()));
+    logger.debug(format!("  Size: {} bytes", data.len()));
 
     Ok(())
 }

@@ -14,8 +14,8 @@
 //! - `traits`  — `ModelProvider`, `ModelClient` traits (always compiled)
 //! - `host`    — host-delegating `ModelClient` implementation
 //! - `provider` — `DynamicModelProvider` routing layer (always compiled;
-//!                `from_configs` remains only as a compatibility shim that now
-//!                returns an unsupported-operation error)
+//!   `from_configs` remains only as a compatibility shim that now
+//!   returns an unsupported-operation error)
 
 // ── Always-available modules ────────────────────────────────────────────────
 pub mod host;

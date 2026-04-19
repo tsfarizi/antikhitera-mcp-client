@@ -7,7 +7,7 @@ use antikythera_log::{LogBatch, LogEntry, LogFilter, LogLevel, Logger};
 use std::sync::{Arc, LazyLock};
 
 // ============================================================================
-/// Global Logger Registry
+// Global Logger Registry
 // ============================================================================
 
 /// Global logger storage
@@ -37,7 +37,7 @@ pub fn logger_count() -> usize {
 }
 
 // ============================================================================
-/// Module Loggers (with automatic source tracking)
+// Module Loggers (with automatic source tracking)
 // ============================================================================
 
 /// Config module logger
@@ -276,7 +276,7 @@ impl ProviderLogger {
 }
 
 // ============================================================================
-/// Log Query API
+// Log Query API
 // ============================================================================
 
 /// Query logs across all modules

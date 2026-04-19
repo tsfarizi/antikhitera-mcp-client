@@ -56,10 +56,10 @@ pub fn parse_step_output(output: &Value) -> ParsedOutput {
                     if let Some(text) = &content_item.text {
                         parsed.texts.push(text.clone());
                     }
-                } else if content_item.is_resource() {
-                    if let Some(file) = content_item.to_file_content() {
-                        parsed.files.push(file);
-                    }
+                } else if content_item.is_resource()
+                    && let Some(file) = content_item.to_file_content()
+                {
+                    parsed.files.push(file);
                 }
             }
         }

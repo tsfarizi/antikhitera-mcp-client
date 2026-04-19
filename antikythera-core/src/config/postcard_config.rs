@@ -32,7 +32,7 @@ use std::path::{Path, PathBuf};
 // ============================================================================
 
 /// Complete application configuration (single Postcard blob)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     /// REST server settings
     pub server: ServerConfig,
@@ -47,19 +47,6 @@ pub struct AppConfig {
     /// Custom key-value pairs for extensibility
     #[serde(default)]
     pub custom: HashMap<String, String>,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            providers: Vec::new(),
-            model: ModelConfig::default(),
-            prompts: PromptsConfig::default(),
-            agent: AgentConfig::default(),
-            custom: HashMap::new(),
-        }
-    }
 }
 
 // ============================================================================

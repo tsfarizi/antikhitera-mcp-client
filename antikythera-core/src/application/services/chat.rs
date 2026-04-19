@@ -24,6 +24,7 @@ impl<P: ModelProvider> ChatService<P> {
         Self { client }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn process_request(
         &self,
         prompt: String,
@@ -55,6 +56,7 @@ impl<P: ModelProvider> ChatService<P> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run_agent(
         &self,
         prompt: String,
@@ -66,10 +68,12 @@ impl<P: ModelProvider> ChatService<P> {
         provider: String,
         model: String,
     ) -> Result<ChatServiceOutcome, String> {
-        let mut options = AgentOptions::default();
-        options.system_prompt = system_prompt;
-        options.session_id = session_id;
-        options.attachments = attachments;
+        let mut options = AgentOptions {
+            system_prompt,
+            session_id,
+            attachments,
+            ..AgentOptions::default()
+        };
         if let Some(max_steps) = max_tool_steps {
             options.max_steps = max_steps;
         }
@@ -149,6 +153,7 @@ impl<P: ModelProvider> ChatService<P> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn construct_outcome(
         &self,
         debug: bool,

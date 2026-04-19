@@ -38,10 +38,10 @@ pub fn start_sse_listener(
 
         // Add custom headers
         for (key, value) in &headers {
-            if key.eq_ignore_ascii_case("Authorization") {
-                if value.trim().is_empty() || value.trim().eq_ignore_ascii_case("Bearer") {
-                    continue;
-                }
+            if key.eq_ignore_ascii_case("Authorization")
+                && (value.trim().is_empty() || value.trim().eq_ignore_ascii_case("Bearer"))
+            {
+                continue;
             }
             request = request.header(key, value);
         }
