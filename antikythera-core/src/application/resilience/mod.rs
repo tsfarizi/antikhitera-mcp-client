@@ -40,11 +40,15 @@
 pub mod context_window;
 pub mod health;
 pub mod policy;
+pub mod policy_audit;
 pub mod retry;
 
 pub use context_window::{prune_messages, ContextWindowPolicy, TokenEstimator};
 pub use health::{ComponentHealth, HealthStatus, HealthTracker};
 pub use policy::{ResilienceConfig, RetryPolicy, TimeoutPolicy};
+pub use policy_audit::{
+    InMemoryAuditSink, NoOpAuditSink, PolicyAuditEvent, PolicyAuditSink, PolicyEventType,
+};
 pub use retry::{with_retry, with_retry_if};
 
 use serde_json;

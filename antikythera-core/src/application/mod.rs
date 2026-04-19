@@ -10,13 +10,18 @@
 //! - [`stdio`] - Standard input/output interface for command-line interaction
 //! - [`tooling`] - Tool server management and MCP server integration
 //! - [`ui`] - Schema-driven UI assembler for dynamic component layout
+//! - [`resilience`] - Retry, timeout, context management, and health tracking
+//! - [`observability`] - Caller context, telemetry events, and tracing hooks
 
 pub mod agent;
 pub mod client;
 pub mod discovery;
+pub mod observability;
 pub mod resilience;
 pub mod services;
 #[cfg(feature = "native-transport")]
 pub mod stdio;
 pub mod tooling;
 pub mod ui;
+
+pub use observability::{CallerContext, NoOpObservabilityHook, ObservabilityHook, TelemetryEvent};
