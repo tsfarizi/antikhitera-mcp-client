@@ -243,12 +243,12 @@ pub unsafe fn run_agent_with_host(
 ) -> *mut std::os::raw::c_char {
     use std::ffi::{CStr, CString};
 
-    let prompt = CStr::from_ptr(prompt_ptr)
+    let prompt = unsafe { CStr::from_ptr(prompt_ptr) }
         .to_str()
         .unwrap_or("")
         .to_string();
 
-    let system_prompt = CStr::from_ptr(system_prompt_ptr)
+    let system_prompt = unsafe { CStr::from_ptr(system_prompt_ptr) }
         .to_str()
         .unwrap_or("")
         .to_string();
@@ -256,7 +256,7 @@ pub unsafe fn run_agent_with_host(
     let session_id = if session_id_ptr.is_null() {
         None
     } else {
-        CStr::from_ptr(session_id_ptr)
+        unsafe { CStr::from_ptr(session_id_ptr) }
             .to_str()
             .ok()
             .map(String::from)
