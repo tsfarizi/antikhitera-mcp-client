@@ -6,7 +6,7 @@ use crate::entries::*;
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
-/// Session Log Export
+// Session Log Export
 // ============================================================================
 
 /// Logs exported for a specific session
@@ -76,13 +76,13 @@ impl SessionLogExport {
 
         // Validate session_id consistency
         for entry in &export.logs {
-            if let Some(entry_session) = &entry.session_id {
-                if entry_session != &export.session_id {
-                    return Err(format!(
-                        "Session ID mismatch: export has '{}', log has '{}'",
-                        export.session_id, entry_session
-                    ));
-                }
+            if let Some(entry_session) = &entry.session_id
+                && entry_session != &export.session_id
+            {
+                return Err(format!(
+                    "Session ID mismatch: export has '{}', log has '{}'",
+                    export.session_id, entry_session
+                ));
             }
         }
 
@@ -101,7 +101,7 @@ impl SessionLogExport {
 }
 
 // ============================================================================
-/// Batch Session Log Export
+// Batch Session Log Export
 // ============================================================================
 
 /// Multiple session logs exported together

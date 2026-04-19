@@ -31,7 +31,7 @@ impl LogLevel {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_label(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "DEBUG" => Some(LogLevel::Debug),
             "INFO" => Some(LogLevel::Info),
@@ -42,6 +42,14 @@ impl LogLevel {
     }
 }
 
+impl std::str::FromStr for LogLevel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        LogLevel::parse_label(s).ok_or_else(|| format!("invalid log level: {s}"))
+    }
+}
+
 impl fmt::Display for LogLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
@@ -49,7 +57,7 @@ impl fmt::Display for LogLevel {
 }
 
 // ============================================================================
-/// Log Entry
+// Log Entry
 // ============================================================================
 
 /// A single log entry with metadata
@@ -147,7 +155,7 @@ impl fmt::Display for LogEntry {
 }
 
 // ============================================================================
-/// Log Filter
+// Log Filter
 // ============================================================================
 
 /// Filter for querying logs
@@ -197,22 +205,22 @@ impl LogFilter {
 
     /// Check if a log entry matches this filter
     pub fn matches(&self, entry: &LogEntry) -> bool {
-        if let Some(min_level) = self.min_level {
-            if entry.level < min_level {
-                return false;
-            }
+        if let Some(min_level) = self.min_level
+            && entry.level < min_level
+        {
+            return false;
         }
 
-        if let Some(session_id) = &self.session_id {
-            if entry.session_id.as_ref() != Some(session_id) {
-                return false;
-            }
+        if let Some(session_id) = &self.session_id
+            && entry.session_id.as_ref() != Some(session_id)
+        {
+            return false;
         }
 
-        if let Some(source) = &self.source {
-            if entry.source.as_ref() != Some(source) {
-                return false;
-            }
+        if let Some(source) = &self.source
+            && entry.source.as_ref() != Some(source)
+        {
+            return false;
         }
 
         true
@@ -220,7 +228,7 @@ impl LogFilter {
 }
 
 // ============================================================================
-/// Log Batch (for efficient transfer)
+// Log Batch (for efficient transfer)
 // ============================================================================
 
 /// Batch of log entries for efficient transfer

@@ -7,7 +7,7 @@ use crate::logger::Logger;
 use crossbeam_channel::{Receiver, Sender};
 
 // ============================================================================
-/// Subscriber Types
+// Subscriber Types
 // ============================================================================
 
 /// Sender side (held by Logger)
@@ -77,7 +77,7 @@ impl Iterator for LogSubscriber {
 }
 
 // ============================================================================
-/// Log Stream (for WASM/FFI compatibility)
+// Log Stream (for WASM/FFI compatibility)
 // ============================================================================
 
 /// Log stream for WASM environments (no threads)
