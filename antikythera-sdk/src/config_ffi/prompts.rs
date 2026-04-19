@@ -13,8 +13,7 @@ use super::helpers::*;
 ///
 /// # Returns
 /// JSON with `name` and `value` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_get_prompt(name: *const c_char) -> *mut c_char {
+pub fn mcp_config_get_prompt(name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(name) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -42,8 +41,7 @@ pub extern "C" fn mcp_config_get_prompt(name: *const c_char) -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success` and `name` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_set_prompt(name: *const c_char, value: *const c_char) -> *mut c_char {
+pub fn mcp_config_set_prompt(name: *const c_char, value: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(name) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -75,8 +73,7 @@ pub extern "C" fn mcp_config_set_prompt(name: *const c_char, value: *const c_cha
 ///
 /// # Returns
 /// JSON array of prompt names
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_list_prompts() -> *mut c_char {
+pub fn mcp_config_list_prompts() -> *mut c_char {
     serialize_result(&vec![
         "template", "tool_guidance", "fallback_guidance",
         "json_retry_message", "tool_result_instruction",
@@ -122,3 +119,4 @@ pub fn set_prompt_value(prompts: &mut config::PromptsConfig, name: &str, value: 
     }
     Ok(())
 }
+

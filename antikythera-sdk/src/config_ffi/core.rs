@@ -11,8 +11,7 @@ use crate::sdk_logging::ConfigFfiLogger;
 ///
 /// # Returns
 /// JSON with `success`, `path`, and `size_bytes` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_init() -> *mut c_char {
+pub fn mcp_config_init() -> *mut c_char {
     let logger = ConfigFfiLogger::new("ffi-config");
     logger.ffi_call("mcp_config_init", "{}");
 
@@ -42,8 +41,7 @@ pub extern "C" fn mcp_config_init() -> *mut c_char {
 ///
 /// # Returns
 /// 1 if exists, 0 if not
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_exists() -> i32 {
+pub fn mcp_config_exists() -> i32 {
     if config::config_exists() { 1 } else { 0 }
 }
 
@@ -51,8 +49,7 @@ pub extern "C" fn mcp_config_exists() -> i32 {
 ///
 /// # Returns
 /// JSON with `size_bytes` and `path` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_size() -> *mut c_char {
+pub fn mcp_config_size() -> *mut c_char {
     match config::config_size(None) {
         Ok(size) => serialize_result(&serde_json::json!({
             "size_bytes": size,
@@ -66,8 +63,7 @@ pub extern "C" fn mcp_config_size() -> *mut c_char {
 ///
 /// # Returns
 /// Full AppConfig serialized as JSON
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_get_all() -> *mut c_char {
+pub fn mcp_config_get_all() -> *mut c_char {
     match config::load_config(None) {
         Ok(cfg) => serialize_result(&cfg),
         Err(e) => error_response(&e),
@@ -81,8 +77,7 @@ pub extern "C" fn mcp_config_get_all() -> *mut c_char {
 ///
 /// # Returns
 /// `{"success": true}` or error
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_set_all(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_config_set_all(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -103,8 +98,7 @@ pub extern "C" fn mcp_config_set_all(config_json: *const c_char) -> *mut c_char 
 ///
 /// # Returns
 /// Formatted JSON string of entire config
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_export() -> *mut c_char {
+pub fn mcp_config_export() -> *mut c_char {
     let logger = ConfigFfiLogger::new("ffi-config");
     logger.ffi_call("mcp_config_export", "{}");
 
@@ -129,8 +123,7 @@ pub extern "C" fn mcp_config_export() -> *mut c_char {
 ///
 /// # Returns
 /// `{"success": true}` or error
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_import(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_config_import(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -164,8 +157,7 @@ pub extern "C" fn mcp_config_import(config_json: *const c_char) -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success`, `path`, and `size_bytes` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_reset() -> *mut c_char {
+pub fn mcp_config_reset() -> *mut c_char {
     let logger = ConfigFfiLogger::new("ffi-config");
     logger.ffi_call("mcp_config_reset", "{}");
 
@@ -196,8 +188,7 @@ pub extern "C" fn mcp_config_reset() -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success`, `source`, `destination`, and `size_bytes` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_use_from(source_path: *const c_char) -> *mut c_char {
+pub fn mcp_config_use_from(source_path: *const c_char) -> *mut c_char {
     let source_str = match from_c_string(source_path) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -249,8 +240,7 @@ pub extern "C" fn mcp_config_use_from(source_path: *const c_char) -> *mut c_char
 ///
 /// # Returns
 /// JSON with `success`, `path`, and `size_bytes` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_backup_to(dest_path: *const c_char) -> *mut c_char {
+pub fn mcp_config_backup_to(dest_path: *const c_char) -> *mut c_char {
     let dest_str = match from_c_string(dest_path) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -277,3 +267,4 @@ pub extern "C" fn mcp_config_backup_to(dest_path: *const c_char) -> *mut c_char 
         Err(e) => error_response(&e),
     }
 }
+

@@ -12,8 +12,7 @@ use antikythera_session::{SessionExport, BatchExport};
 ///
 /// # Returns
 /// JSON with `session_id`, `export_data` (hex), `size` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_export(session_id: *const c_char) -> *mut c_char {
+pub fn mcp_session_export(session_id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(session_id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -42,8 +41,7 @@ pub extern "C" fn mcp_session_export(session_id: *const c_char) -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success` and `session_id` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_import(export_data: *const c_char) -> *mut c_char {
+pub fn mcp_session_import(export_data: *const c_char) -> *mut c_char {
     let data_str = match from_c_string(export_data) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -73,8 +71,7 @@ pub extern "C" fn mcp_session_import(export_data: *const c_char) -> *mut c_char 
 ///
 /// # Returns
 /// JSON with `session_count`, `export_data` (hex), `size` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_batch_export() -> *mut c_char {
+pub fn mcp_batch_export() -> *mut c_char {
     let sessions: Vec<_> = SESSION_MANAGER
         .list_sessions()
         .iter()
@@ -97,8 +94,7 @@ pub extern "C" fn mcp_batch_export() -> *mut c_char {
 }
 
 /// Import batch of sessions
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_batch_import(export_data: *const c_char) -> *mut c_char {
+pub fn mcp_batch_import(export_data: *const c_char) -> *mut c_char {
     let data_str = match from_c_string(export_data) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -117,3 +113,4 @@ pub extern "C" fn mcp_batch_import(export_data: *const c_char) -> *mut c_char {
         Err(e) => error_response(&e),
     }
 }
+

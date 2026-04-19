@@ -12,8 +12,7 @@ use antikythera_session::Message;
 ///
 /// # Returns
 /// JSON with `success` and `message_count` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_add_message(
+pub fn mcp_session_add_message(
     session_id: *const c_char,
     role: *const c_char,
     content: *const c_char,
@@ -57,8 +56,7 @@ pub extern "C" fn mcp_session_add_message(
 ///
 /// # Returns
 /// JSON array of Message objects
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_get_history(session_id: *const c_char) -> *mut c_char {
+pub fn mcp_session_get_history(session_id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(session_id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -69,3 +67,4 @@ pub extern "C" fn mcp_session_get_history(session_id: *const c_char) -> *mut c_c
         Err(e) => error_response(&e),
     }
 }
+

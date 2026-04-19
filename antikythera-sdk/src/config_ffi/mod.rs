@@ -18,8 +18,7 @@
 //!
 //! ## Usage
 //!
-//! All functions are exposed via `#[unsafe(no_mangle)]` extern "C" functions.
-//! Strings returned from FFI functions must be freed using `mcp_string_free()`.
+//! Functions are exposed as Rust APIs and can be wrapped by host-specific bindings.
 
 // Internal modules
 mod helpers;

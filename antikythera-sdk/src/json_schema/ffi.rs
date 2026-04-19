@@ -80,8 +80,7 @@ fn success_with(fields: &[(&str, serde_json::Value)]) -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success`, `schema_name`, and `prompt_instruction` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_schema_register(
+pub fn mcp_json_schema_register(
     schema_name: *const c_char,
     schema_json: *const c_char,
 ) -> *mut c_char {
@@ -121,8 +120,7 @@ pub extern "C" fn mcp_json_schema_register(
 ///
 /// # Returns
 /// JSON schema definition or error
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_schema_get(schema_name: *const c_char) -> *mut c_char {
+pub fn mcp_json_schema_get(schema_name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(schema_name) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -143,8 +141,7 @@ pub extern "C" fn mcp_json_schema_get(schema_name: *const c_char) -> *mut c_char
 ///
 /// # Returns
 /// JSON array of schema names
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_schema_list() -> *mut c_char {
+pub fn mcp_json_schema_list() -> *mut c_char {
     let registry = match SCHEMA_REGISTRY.lock() {
         Ok(r) => r,
         Err(e) => return error_response(&format!("Failed to lock registry: {}", e)),
@@ -155,8 +152,7 @@ pub extern "C" fn mcp_json_schema_list() -> *mut c_char {
 }
 
 /// Remove a schema by name
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_schema_remove(schema_name: *const c_char) -> *mut c_char {
+pub fn mcp_json_schema_remove(schema_name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(schema_name) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -175,8 +171,7 @@ pub extern "C" fn mcp_json_schema_remove(schema_name: *const c_char) -> *mut c_c
 }
 
 /// Generate example JSON from a registered schema
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_schema_example(schema_name: *const c_char) -> *mut c_char {
+pub fn mcp_json_schema_example(schema_name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(schema_name) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -206,8 +201,7 @@ pub extern "C" fn mcp_json_schema_example(schema_name: *const c_char) -> *mut c_
 ///
 /// # Returns
 /// JSON with `valid`, `error`, `retry_count`, and `json` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_validate(
+pub fn mcp_json_validate(
     schema_name: *const c_char,
     json_response: *const c_char,
     max_retries: u32,
@@ -238,8 +232,7 @@ pub extern "C" fn mcp_json_validate(
 }
 
 /// Get schema prompt instruction to append to LLM prompt
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_schema_prompt(schema_name: *const c_char) -> *mut c_char {
+pub fn mcp_json_schema_prompt(schema_name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(schema_name) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -265,8 +258,7 @@ pub extern "C" fn mcp_json_schema_prompt(schema_name: *const c_char) -> *mut c_c
 /// # Parameters
 /// - `session_id`: Unique session identifier
 /// - `max_retries`: Maximum retry attempts
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_retry_init(session_id: *const c_char, max_retries: u32) -> *mut c_char {
+pub fn mcp_json_retry_init(session_id: *const c_char, max_retries: u32) -> *mut c_char {
     let session_str = match from_c_string(session_id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -286,8 +278,7 @@ pub extern "C" fn mcp_json_retry_init(session_id: *const c_char, max_retries: u3
 }
 
 /// Record a validation error for retry tracking
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_retry_record_error(
+pub fn mcp_json_retry_record_error(
     session_id: *const c_char,
     error_message: *const c_char,
 ) -> *mut c_char {
@@ -322,8 +313,7 @@ pub extern "C" fn mcp_json_retry_record_error(
 }
 
 /// Generate retry prompt for LLM
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_retry_prompt(
+pub fn mcp_json_retry_prompt(
     session_id: *const c_char,
     schema_name: *const c_char,
     last_response: *const c_char,
@@ -365,8 +355,7 @@ pub extern "C" fn mcp_json_retry_prompt(
 }
 
 /// Check if retries are exhausted for a session
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_json_retry_is_exhausted(session_id: *const c_char) -> *mut c_char {
+pub fn mcp_json_retry_is_exhausted(session_id: *const c_char) -> *mut c_char {
     let session_str = match from_c_string(session_id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -386,3 +375,4 @@ pub extern "C" fn mcp_json_retry_is_exhausted(session_id: *const c_char) -> *mut
         None => error_response(&format!("Retry manager not found for session '{}'", session_str)),
     }
 }
+

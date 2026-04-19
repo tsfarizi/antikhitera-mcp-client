@@ -47,7 +47,7 @@ use super::router::{AgentRouter, FirstAvailableRouter};
 use super::scheduler::TaskScheduler;
 use super::task::{
     AgentTask, ErrorKind, PipelineResult, RoutingDecision, RetryCondition,
-    TaskExecutionMetadata, TaskResult,
+    TaskExecutionMetadata, TaskResult, TaskRetryPolicy,
 };
 use crate::application::agent::{Agent, AgentOptions};
 use crate::application::client::McpClient;
@@ -359,6 +359,8 @@ pub struct MultiAgentOrchestrator<P: ModelProvider> {
     budget: OrchestratorBudget,
     /// Optional semaphore enforcing `budget.max_concurrent_tasks`.
     concurrency_sem: Option<Arc<Semaphore>>,
+    /// Default retry condition for tasks without explicit retry policy.
+    default_retry_condition: RetryCondition,
 }
 
 impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
@@ -376,6 +378,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             cancel_token: CancellationToken::new(),
             budget: OrchestratorBudget::new(),
             concurrency_sem: None,
+            default_retry_condition: RetryCondition::Always,
         }
     }
 
@@ -419,6 +422,14 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             .max_concurrent_tasks
             .map(|n| Arc::new(Semaphore::new(n.max(1))));
         self.budget = budget;
+        self
+    }
+
+    /// Set orchestrator-level default retry condition.
+    ///
+    /// Applied only when a task does not define its own retry policy.
+    pub fn with_default_retry_condition(mut self, condition: RetryCondition) -> Self {
+        self.default_retry_condition = condition;
         self
     }
 
@@ -479,6 +490,15 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
     /// The router is called to resolve the target agent.  If the router
     /// returns `None` a [`TaskResult::failure`] is returned immediately.
     pub async fn dispatch(&self, task: AgentTask) -> TaskResult {
+        let mut task = task;
+        if task.retry_policy.is_none() {
+            task.retry_policy = Some(TaskRetryPolicy {
+                max_retries: 0,
+                backoff_ms: 0,
+                condition: self.default_retry_condition.clone(),
+            });
+        }
+
         // ---- budget guard -----------------------------------------------
         let dispatch_count = self.budget.record_task_dispatch();
         if self.budget.is_task_budget_exhausted() {
@@ -610,6 +630,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let cancel_token = self.cancel_token.clone();
         let budget = self.budget.clone();
         let concurrency_sem = self.concurrency_sem.clone();
+        let default_retry_condition = self.default_retry_condition.clone();
 
         let results = self.scheduler
             .run(prepared, move |(task, profile, routing_decision)| {
@@ -618,7 +639,17 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                 let cancel_token = cancel_token.clone();
                 let budget = budget.clone();
                 let concurrency_sem = concurrency_sem.clone();
+                let default_retry_condition = default_retry_condition.clone();
                 async move {
+                    let mut task = task;
+                    if task.retry_policy.is_none() {
+                        task.retry_policy = Some(TaskRetryPolicy {
+                            max_retries: 0,
+                            backoff_ms: 0,
+                            condition: default_retry_condition,
+                        });
+                    }
+
                     // Budget guard per-task inside batch
                     let dispatch_count = budget.record_task_dispatch();
                     if budget.is_task_budget_exhausted() {

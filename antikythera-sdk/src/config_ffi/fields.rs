@@ -25,8 +25,7 @@ use super::helpers::*;
 /// - `agent.session_timeout_secs`
 /// - `prompts.<name>` (all prompt fields)
 /// - `providers` (all providers as JSON array)
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_get(field: *const c_char) -> *mut c_char {
+pub fn mcp_config_get(field: *const c_char) -> *mut c_char {
     let field_str = match from_c_string(field) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -54,8 +53,7 @@ pub extern "C" fn mcp_config_get(field: *const c_char) -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success`, `field`, and `value` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_set(field: *const c_char, value: *const c_char) -> *mut c_char {
+pub fn mcp_config_set(field: *const c_char, value: *const c_char) -> *mut c_char {
     let field_str = match from_c_string(field) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -186,3 +184,4 @@ fn set_prompt_value(prompts: &mut config::PromptsConfig, name: &str, value: &str
     }
     Ok(())
 }
+

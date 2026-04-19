@@ -218,8 +218,7 @@ impl<H: HostImports> DelegatingAgent<H> {
 }
 
 /// FFI entry point for running agent with host delegation
-#[unsafe(no_mangle)]
-pub extern "C" fn run_agent_with_host(
+pub fn run_agent_with_host(
     prompt_ptr: *const std::os::raw::c_char,
     system_prompt_ptr: *const std::os::raw::c_char,
     session_id_ptr: *const std::os::raw::c_char,
@@ -259,3 +258,4 @@ pub extern "C" fn run_agent_with_host(
 
     CString::new(result).unwrap().into_raw()
 }
+

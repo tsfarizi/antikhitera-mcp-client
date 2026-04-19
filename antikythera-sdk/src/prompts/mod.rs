@@ -34,8 +34,7 @@ fn save_config(config: &postcard_config::AppConfig) -> Result<(), String> {
 }
 
 /// Get the main system prompt template
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_template() -> *mut c_char {
+pub fn mcp_get_template() -> *mut c_char {
     match load_config() {
         Ok(config) => to_c_string(&config.prompts.template),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -43,8 +42,7 @@ pub extern "C" fn mcp_get_template() -> *mut c_char {
 }
 
 /// Update the main system prompt template
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_update_template(template: *const c_char) -> *mut c_char {
+pub fn mcp_update_template(template: *const c_char) -> *mut c_char {
     let template_str = match from_c_string(template) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -64,8 +62,7 @@ pub extern "C" fn mcp_update_template(template: *const c_char) -> *mut c_char {
 }
 
 /// Reset the main template to default
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_reset_template() -> *mut c_char {
+pub fn mcp_reset_template() -> *mut c_char {
     let mut config = match load_config() {
         Ok(c) => c,
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -80,8 +77,7 @@ pub extern "C" fn mcp_reset_template() -> *mut c_char {
 }
 
 /// Get tool guidance prompt
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_tool_guidance() -> *mut c_char {
+pub fn mcp_get_tool_guidance() -> *mut c_char {
     match load_config() {
         Ok(config) => to_c_string(&config.prompts.tool_guidance),
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -89,8 +85,7 @@ pub extern "C" fn mcp_get_tool_guidance() -> *mut c_char {
 }
 
 /// Update tool guidance prompt
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_update_tool_guidance(guidance: *const c_char) -> *mut c_char {
+pub fn mcp_update_tool_guidance(guidance: *const c_char) -> *mut c_char {
     let guidance_str = match from_c_string(guidance) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -110,8 +105,7 @@ pub extern "C" fn mcp_update_tool_guidance(guidance: *const c_char) -> *mut c_ch
 }
 
 /// Get all prompts as JSON object
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_all_prompts() -> *mut c_char {
+pub fn mcp_get_all_prompts() -> *mut c_char {
     match load_config() {
         Ok(config) => {
             let json = serde_json::json!({
@@ -131,3 +125,4 @@ pub extern "C" fn mcp_get_all_prompts() -> *mut c_char {
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
 }
+

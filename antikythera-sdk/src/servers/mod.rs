@@ -172,8 +172,7 @@ fn serialize_result<T: serde::Serialize>(result: &T) -> *mut c_char {
 }
 
 /// Add a new MCP server configuration
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"valid":false,"errors":["{}"],"server_name":""}}"#, e)),
@@ -224,8 +223,7 @@ pub extern "C" fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
 }
 
 /// Remove an MCP server by name
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_remove_server(name: *const c_char) -> *mut c_char {
+pub fn mcp_remove_server(name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(name) {
         Ok(s) => s,
         Err(e) => return serialize_result(&ServerOperationResult {
@@ -264,8 +262,7 @@ pub extern "C" fn mcp_remove_server(name: *const c_char) -> *mut c_char {
 }
 
 /// List all configured MCP servers
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_list_servers() -> *mut c_char {
+pub fn mcp_list_servers() -> *mut c_char {
     match SERVERS.lock() {
         Ok(servers) => {
             let configs: Vec<&McpServerConfig> = servers.values().collect();
@@ -276,8 +273,7 @@ pub extern "C" fn mcp_list_servers() -> *mut c_char {
 }
 
 /// Get configuration for a specific server
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_server(name: *const c_char) -> *mut c_char {
+pub fn mcp_get_server(name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(name) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -296,8 +292,7 @@ pub extern "C" fn mcp_get_server(name: *const c_char) -> *mut c_char {
 }
 
 /// Validate server configuration without adding
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_validate_server(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_validate_server(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return serialize_result(&ServerValidationResult {
@@ -320,8 +315,7 @@ pub extern "C" fn mcp_validate_server(config_json: *const c_char) -> *mut c_char
 }
 
 /// Export all servers configuration as JSON
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_export_servers_config() -> *mut c_char {
+pub fn mcp_export_servers_config() -> *mut c_char {
     match SERVERS.lock() {
         Ok(servers) => {
             let configs: Vec<&McpServerConfig> = servers.values().collect();
@@ -332,8 +326,7 @@ pub extern "C" fn mcp_export_servers_config() -> *mut c_char {
 }
 
 /// Import servers configuration from JSON
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return serialize_result(&ServerOperationResult {
@@ -376,3 +369,4 @@ pub extern "C" fn mcp_import_servers_config(config_json: *const c_char) -> *mut 
         }),
     }
 }
+

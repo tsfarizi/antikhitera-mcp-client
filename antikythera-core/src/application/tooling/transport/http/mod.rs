@@ -312,6 +312,7 @@ mod tests {
             url: "https://example.com/mcp".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
         let transport = HttpTransport::new(config);
 
@@ -341,6 +342,7 @@ mod tests {
             url: "https://example.com/mcp".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
         let transport = HttpTransport::new(config);
         transport.inner.connected.store(true, Ordering::SeqCst);

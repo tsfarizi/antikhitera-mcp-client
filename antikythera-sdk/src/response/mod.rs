@@ -36,8 +36,7 @@ fn from_c_string(ptr: *const c_char) -> Result<String, String> {
 /// # Parameters
 /// - `server_id`: Server ID
 /// - `format_is_json`: true for JSON format, false for Markdown/Text format
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_set_output_format(server_id: u32, format_is_json: i32) -> i32 {
+pub fn mcp_set_output_format(server_id: u32, format_is_json: i32) -> i32 {
     match OUTPUT_FORMATS.lock() {
         Ok(mut formats) => {
             formats.insert(server_id, format_is_json != 0);
@@ -51,8 +50,7 @@ pub extern "C" fn mcp_set_output_format(server_id: u32, format_is_json: i32) -> 
 ///
 /// # Returns
 /// "true" if JSON format, "false" if Markdown/Text format
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_output_format(server_id: u32) -> *mut c_char {
+pub fn mcp_get_output_format(server_id: u32) -> *mut c_char {
     match OUTPUT_FORMATS.lock() {
         Ok(formats) => {
             let is_json = formats.get(&server_id).copied().unwrap_or(true);
@@ -71,8 +69,7 @@ pub extern "C" fn mcp_get_output_format(server_id: u32) -> *mut c_char {
 ///
 /// # Returns
 /// Formatted response string
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_format_response(
+pub fn mcp_format_response(
     server_id: u32,
     content: *const c_char,
     data_json: *const c_char,
@@ -122,3 +119,4 @@ pub extern "C" fn mcp_format_response(
 
     to_c_string(&formatted)
 }
+

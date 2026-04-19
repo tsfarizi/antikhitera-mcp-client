@@ -48,7 +48,7 @@ impl ModelClient for OpenAIClient {
         let payload = OpenAIRequest {
             model: request.model.clone(),
             messages: MessageAdapter::to_openai_format(&request.messages),
-            stream: false,
+            stream: true,
         };
 
         info!(
@@ -58,15 +58,22 @@ impl ModelClient for OpenAIClient {
             "Sending request to OpenAI-compatible provider"
         );
 
-        let response: OpenAIResponse = self.base.post_with_bearer(&url, &payload).await?;
+        let raw = self.base.post_with_bearer_text(&url, &payload).await?;
         debug!("Received response from OpenAI-compatible provider");
 
-        let content = response
-            .choices
-            .into_iter()
-            .next()
-            .and_then(|c| c.message)
-            .map(|m| m.content)
+        let content = extract_openai_stream_content(&raw)
+            .or_else(|| {
+                serde_json::from_str::<OpenAIResponse>(&raw)
+                    .ok()
+                    .and_then(|response| {
+                        response
+                            .choices
+                            .into_iter()
+                            .next()
+                            .and_then(|c| c.message)
+                            .map(|m| m.content)
+                    })
+            })
             .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing content"))?;
 
         Ok(ModelResponse::new(content, request.session_id))
@@ -95,4 +102,51 @@ struct OpenAIChoice {
 #[derive(Deserialize)]
 struct OpenAIMessage {
     content: String,
+}
+
+#[derive(Deserialize)]
+struct OpenAIStreamChunk {
+    choices: Vec<OpenAIStreamChoice>,
+}
+
+#[derive(Deserialize)]
+struct OpenAIStreamChoice {
+    delta: Option<OpenAIStreamDelta>,
+}
+
+#[derive(Deserialize)]
+struct OpenAIStreamDelta {
+    content: Option<String>,
+}
+
+fn extract_openai_stream_content(raw: &str) -> Option<String> {
+    let mut content = String::new();
+    let mut saw_chunk = false;
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("data:") {
+            continue;
+        }
+        let payload = trimmed.trim_start_matches("data:").trim();
+        if payload == "[DONE]" {
+            break;
+        }
+        if payload.is_empty() {
+            continue;
+        }
+
+        if let Ok(chunk) = serde_json::from_str::<OpenAIStreamChunk>(payload) {
+            for choice in chunk.choices {
+                if let Some(delta) = choice.delta {
+                    if let Some(piece) = delta.content {
+                        saw_chunk = true;
+                        content.push_str(&piece);
+                    }
+                }
+            }
+        }
+    }
+
+    if saw_chunk { Some(content) } else { None }
 }

@@ -41,7 +41,7 @@ impl ModelClient for OllamaClient {
         let payload = OllamaRequest {
             model: request.model.clone(),
             messages: MessageAdapter::to_ollama_format(&request.messages),
-            stream: false,
+            stream: true,
         };
 
         info!(
@@ -51,13 +51,16 @@ impl ModelClient for OllamaClient {
             "Sending request to Ollama"
         );
 
-        let response: OllamaResponse = self.base.post_no_auth(&url, &payload).await?;
+        let raw = self.base.post_no_auth_text(&url, &payload).await?;
         debug!("Received response from Ollama");
 
-        let content = response
-            .message
-            .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing message"))?
-            .content;
+        let content = extract_ollama_stream_content(&raw)
+            .or_else(|| {
+                serde_json::from_str::<OllamaResponse>(&raw)
+                    .ok()
+                    .and_then(|response| response.message.map(|m| m.content))
+            })
+            .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing message"))?;
 
         Ok(ModelResponse::new(content, request.session_id))
     }
@@ -80,4 +83,34 @@ struct OllamaResponse {
 #[derive(Deserialize)]
 struct OllamaMessage {
     content: String,
+}
+
+#[derive(Deserialize)]
+struct OllamaStreamChunk {
+    message: Option<OllamaMessage>,
+    done: Option<bool>,
+}
+
+fn extract_ollama_stream_content(raw: &str) -> Option<String> {
+    let mut content = String::new();
+    let mut saw_chunk = false;
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Ok(chunk) = serde_json::from_str::<OllamaStreamChunk>(trimmed) {
+            if let Some(msg) = chunk.message {
+                saw_chunk = true;
+                content.push_str(&msg.content);
+            }
+            if chunk.done.unwrap_or(false) {
+                break;
+            }
+        }
+    }
+
+    if saw_chunk { Some(content) } else { None }
 }

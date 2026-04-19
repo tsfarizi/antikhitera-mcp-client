@@ -372,6 +372,31 @@ interface multi-agent-runner {
     /// Returns a JSON-encoded `PipelineResult`.
     pipeline-tasks(tasks-json: string) -> result<string, string>;
 
+    /// Configure orchestrator hardening controls at runtime.
+    ///
+    /// `options-json` follows SDK `OrchestratorOptions` shape:
+    /// ```json
+    /// {
+    ///   "max_concurrent_tasks": 4,
+    ///   "max_total_steps": 200,
+    ///   "max_total_tasks": 50,
+    ///   "default_retry_condition": "on_transient"
+    /// }
+    /// ```
+    configure-hardening(options-json: string) -> result<bool, string>;
+
+    /// Trigger cooperative cancellation for in-flight and future dispatches.
+    cancel-orchestrator() -> result<bool, string>;
+
+    /// Return orchestrator monitor snapshot as JSON.
+    ///
+    /// Expected shape mirrors `OrchestratorMonitorSnapshot`:
+    /// consumed/dispatched counters, limits, exhaustion flags, and cancellation.
+    get-monitor-snapshot() -> result<string, string>;
+
+    /// Decode a serialized `TaskResult` into `TaskResultDetail` JSON.
+    task-result-detail(task-result-json: string) -> result<string, string>;
+
     /// Return a JSON object with orchestrator status:
     /// `{ "agent_count": N, "execution_mode": "auto" }`
     get-status() -> result<string, string>;

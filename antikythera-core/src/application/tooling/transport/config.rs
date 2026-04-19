@@ -4,6 +4,19 @@
 
 use std::collections::HashMap;
 
+/// Declares capabilities offered by a transport implementation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TransportCapability {
+    /// Bidirectional request/response over stateless HTTP.
+    StatelessRpc,
+    /// Stateful sessions (for example SSE + session endpoint).
+    StatefulSession,
+    /// Server-pushed events/notifications.
+    StreamingEvents,
+    /// Transport supports carrying caller metadata/correlation headers.
+    MetadataPropagation,
+}
+
 /// Transport mode for HTTP MCP servers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportMode {
@@ -32,4 +45,15 @@ pub struct HttpTransportConfig {
     pub headers: HashMap<String, String>,
     /// Transport mode (default: Auto)
     pub mode: TransportMode,
+    /// Optional required capabilities for selection/negotiation.
+    pub required_capabilities: Vec<TransportCapability>,
+}
+
+impl HttpTransportConfig {
+    /// Returns true when all required capabilities are present.
+    pub fn is_compatible_with(&self, offered: &[TransportCapability]) -> bool {
+        self.required_capabilities
+            .iter()
+            .all(|required| offered.contains(required))
+    }
 }

@@ -142,6 +142,41 @@ pub struct TaskResultDetail {
     pub budget_exhausted: bool,
 }
 
+#[cfg(feature = "multi-agent")]
+impl OrchestratorOptions {
+    /// Build a default task retry policy from options-level defaults.
+    pub fn default_task_retry_policy(&self) -> antikythera_core::application::agent::multi_agent::TaskRetryPolicy {
+        antikythera_core::application::agent::multi_agent::TaskRetryPolicy {
+            max_retries: 0,
+            backoff_ms: 0,
+            condition: self.default_retry_condition.into(),
+        }
+    }
+
+    /// Apply defaults into a task when it has no explicit retry policy.
+    pub fn apply_to_task(
+        &self,
+        task: &mut antikythera_core::application::agent::multi_agent::AgentTask,
+    ) {
+        if task.retry_policy.is_none() {
+            task.retry_policy = Some(self.default_task_retry_policy());
+        }
+    }
+
+    /// Apply SDK options to a core orchestrator builder.
+    pub fn apply_to_orchestrator<P>(
+        &self,
+        orchestrator: antikythera_core::application::agent::multi_agent::orchestrator::MultiAgentOrchestrator<P>,
+    ) -> antikythera_core::application::agent::multi_agent::orchestrator::MultiAgentOrchestrator<P>
+    where
+        P: antikythera_core::infrastructure::model::ModelProvider + 'static,
+    {
+        orchestrator
+            .with_budget(self.into())
+            .with_default_retry_condition(self.default_retry_condition.into())
+    }
+}
+
 // ============================================================================
 // Conversions between SDK types and core types
 // ============================================================================
@@ -237,16 +272,14 @@ mod core_conversions {
 ///
 /// Use this to obtain the canonical default configuration, then modify fields
 /// as needed before passing to `mcp_build_orchestrator_budget`.
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_default_orchestrator_options() -> *mut c_char {
+pub fn mcp_default_orchestrator_options() -> *mut c_char {
     serialize_result(&OrchestratorOptions::default())
 }
 
 /// Validate an [`OrchestratorOptions`] JSON string.
 ///
 /// Returns `{"valid": true}` or `{"valid": false, "error": "..."}`.
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_validate_orchestrator_options(options_json: *const c_char) -> *mut c_char {
+pub fn mcp_validate_orchestrator_options(options_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(options_json) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
@@ -279,8 +312,7 @@ pub extern "C" fn mcp_validate_orchestrator_options(options_json: *const c_char)
 ///
 /// Returns `{"error": "..."}` if the input cannot be parsed.
 #[cfg(feature = "multi-agent")]
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_task_result_detail(task_result_json: *const c_char) -> *mut c_char {
+pub fn mcp_task_result_detail(task_result_json: *const c_char) -> *mut c_char {
     use antikythera_core::application::agent::multi_agent::TaskResult;
 
     let json_str = match from_c_string(task_result_json) {
@@ -299,8 +331,7 @@ pub extern "C" fn mcp_task_result_detail(task_result_json: *const c_char) -> *mu
 ///
 /// This is a pure decode helper — it performs no I/O.
 #[cfg(feature = "multi-agent")]
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_orchestrator_snapshot(
+pub fn mcp_orchestrator_snapshot(
     budget_snapshot_json: *const c_char,
     cancelled: bool,
 ) -> *mut c_char {
@@ -539,8 +570,7 @@ fn serialize_result<T: serde::Serialize>(result: &T) -> *mut c_char {
 }
 
 /// Register a new agent configuration
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_register_agent(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_register_agent(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return serialize_result(&AgentValidationResult {
@@ -602,8 +632,7 @@ pub extern "C" fn mcp_register_agent(config_json: *const c_char) -> *mut c_char 
 }
 
 /// Unregister an agent by ID
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_unregister_agent(id: *const c_char) -> *mut c_char {
+pub fn mcp_unregister_agent(id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(id) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -623,8 +652,7 @@ pub extern "C" fn mcp_unregister_agent(id: *const c_char) -> *mut c_char {
 }
 
 /// List all registered agents
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_list_agents() -> *mut c_char {
+pub fn mcp_list_agents() -> *mut c_char {
     match AGENTS.lock() {
         Ok(agents) => {
             let configs: Vec<&AgentConfig> = agents.values().collect();
@@ -635,8 +663,7 @@ pub extern "C" fn mcp_list_agents() -> *mut c_char {
 }
 
 /// Get configuration for a specific agent
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_agent(id: *const c_char) -> *mut c_char {
+pub fn mcp_get_agent(id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(id) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -655,8 +682,7 @@ pub extern "C" fn mcp_get_agent(id: *const c_char) -> *mut c_char {
 }
 
 /// Get runtime status of all agents
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_get_agent_status() -> *mut c_char {
+pub fn mcp_get_agent_status() -> *mut c_char {
     match AGENT_STATUS.lock() {
         Ok(statuses) => {
             let status_list: Vec<&AgentStatus> = statuses.values().collect();
@@ -667,8 +693,7 @@ pub extern "C" fn mcp_get_agent_status() -> *mut c_char {
 }
 
 /// Validate agent configuration without registering
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_validate_agent(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_validate_agent(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return serialize_result(&AgentValidationResult {
@@ -691,8 +716,7 @@ pub extern "C" fn mcp_validate_agent(config_json: *const c_char) -> *mut c_char 
 }
 
 /// Export all agents configuration as JSON
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_export_agents_config() -> *mut c_char {
+pub fn mcp_export_agents_config() -> *mut c_char {
     match AGENTS.lock() {
         Ok(agents) => {
             let configs: Vec<&AgentConfig> = agents.values().collect();
@@ -703,8 +727,7 @@ pub extern "C" fn mcp_export_agents_config() -> *mut c_char {
 }
 
 /// Import agents configuration from JSON
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_import_agents_config(config_json: *const c_char) -> *mut c_char {
+pub fn mcp_import_agents_config(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -737,3 +760,4 @@ pub extern "C" fn mcp_import_agents_config(config_json: *const c_char) -> *mut c
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
     }
 }
+

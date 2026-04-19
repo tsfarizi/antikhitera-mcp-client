@@ -16,6 +16,7 @@ mod http_transport_tests {
             url: "https://mcp.example.com".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
 
         let transport = HttpTransport::new(config);
@@ -33,6 +34,7 @@ mod http_transport_tests {
             url: "https://secure.mcp.example.com/api".to_string(),
             headers,
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
 
         let transport = HttpTransport::new(config);
@@ -157,6 +159,7 @@ mod http_transport_async_tests {
             url: "https://nonexistent.example.com".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
 
         let transport = HttpTransport::new(config);
@@ -170,6 +173,7 @@ mod http_transport_async_tests {
             url: "https://test.example.com".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
 
         let transport = HttpTransport::new(config);
@@ -184,6 +188,7 @@ mod http_transport_async_tests {
             url: "https://test.example.com".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
 
         let transport = HttpTransport::new(config);
@@ -197,6 +202,7 @@ mod http_transport_async_tests {
             url: "https://test.example.com".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
 
         let transport = HttpTransport::new(config);
@@ -210,6 +216,7 @@ mod http_transport_async_tests {
             url: "https://test.example.com".to_string(),
             headers: HashMap::new(),
             mode: TransportMode::Auto,
+            required_capabilities: Vec::new(),
         };
 
         let transport = HttpTransport::new(config);

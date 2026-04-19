@@ -16,8 +16,7 @@ use super::helpers::*;
 ///
 /// # Returns
 /// JSON with `success` and `provider_id` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_add_provider(
+pub fn mcp_config_add_provider(
     id: *const c_char,
     provider_type: *const c_char,
     endpoint: *const c_char,
@@ -76,8 +75,7 @@ pub extern "C" fn mcp_config_add_provider(
 ///
 /// # Returns
 /// JSON with `success` and `provider_id` fields, or error
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_remove_provider(id: *const c_char) -> *mut c_char {
+pub fn mcp_config_remove_provider(id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -107,8 +105,7 @@ pub extern "C" fn mcp_config_remove_provider(id: *const c_char) -> *mut c_char {
 ///
 /// # Returns
 /// JSON array of ProviderConfig objects
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_list_providers() -> *mut c_char {
+pub fn mcp_config_list_providers() -> *mut c_char {
     let cfg = match config::load_config(None) {
         Ok(c) => c,
         Err(e) => return error_response(&e),
@@ -125,8 +122,7 @@ pub extern "C" fn mcp_config_list_providers() -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success`, `provider_id`, and `api_key` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_set_provider_api_key(
+pub fn mcp_config_set_provider_api_key(
     id: *const c_char,
     api_key: *const c_char,
 ) -> *mut c_char {
@@ -169,8 +165,7 @@ pub extern "C" fn mcp_config_set_provider_api_key(
 ///
 /// # Returns
 /// JSON with `provider_id` and `api_key` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_get_provider_api_key(id: *const c_char) -> *mut c_char {
+pub fn mcp_config_get_provider_api_key(id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -199,8 +194,7 @@ pub extern "C" fn mcp_config_get_provider_api_key(id: *const c_char) -> *mut c_c
 ///
 /// # Returns
 /// JSON with `success`, `provider_id`, and `model` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_add_provider_model(
+pub fn mcp_config_add_provider_model(
     provider_id: *const c_char,
     model_name: *const c_char,
     display_name: *const c_char,
@@ -259,8 +253,7 @@ pub extern "C" fn mcp_config_add_provider_model(
 ///
 /// # Returns
 /// JSON with `success`, `provider_id`, and `model` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_remove_provider_model(
+pub fn mcp_config_remove_provider_model(
     provider_id: *const c_char,
     model_name: *const c_char,
 ) -> *mut c_char {
@@ -308,8 +301,7 @@ pub extern "C" fn mcp_config_remove_provider_model(
 ///
 /// # Returns
 /// JSON array of model objects with `name` and `display_name`
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_list_provider_models(provider_id: *const c_char) -> *mut c_char {
+pub fn mcp_config_list_provider_models(provider_id: *const c_char) -> *mut c_char {
     let provider_id_str = match from_c_string(provider_id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -328,3 +320,4 @@ pub extern "C" fn mcp_config_list_provider_models(provider_id: *const c_char) ->
         None => error_response(&format!("Provider '{}' not found", provider_id_str)),
     }
 }
+

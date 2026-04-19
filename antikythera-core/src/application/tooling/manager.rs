@@ -3,6 +3,10 @@
 //! Handles both STDIO and HTTP transport connections.
 
 use super::error::ToolInvokeError;
+use super::envelope::{
+    ToolCallEnvelope, ToolResultEnvelope, validate_tool_call_envelope,
+    validate_tool_result_envelope,
+};
 use super::interface::{ServerToolInfo, ToolServerInterface};
 #[cfg(feature = "native-transport")]
 use super::process::McpProcess;
@@ -116,6 +120,7 @@ impl ServerManager {
                     url,
                     headers: config.headers.clone(),
                     mode: TransportMode::Auto,
+                    required_capabilities: Vec::new(),
                 };
                 let transport = Arc::new(HttpTransport::new(transport_config));
                 transport.connect().await?;
@@ -148,13 +153,54 @@ impl ToolServerInterface for ServerManager {
         tool: &str,
         arguments: Value,
     ) -> Result<Value, ToolInvokeError> {
+        let call_env = ToolCallEnvelope {
+            tool: tool.to_string(),
+            arguments: arguments.clone(),
+            correlation_id: None,
+        };
+        validate_tool_call_envelope(&call_env).map_err(|e| ToolInvokeError::Transport {
+            server: server.to_string(),
+            message: format!("invalid MCP tool call envelope: {e}"),
+        })?;
+
         self.ensure_instance(server).await?;
         let instance = self
             .get_instance(server)
             .ok_or_else(|| ToolInvokeError::NotConfigured {
                 server: server.to_string(),
             })?;
-        instance.call_tool(tool, arguments).await
+
+        let output = instance.call_tool(tool, arguments).await;
+        match output {
+            Ok(value) => {
+                let result_env = ToolResultEnvelope {
+                    tool: tool.to_string(),
+                    success: true,
+                    output: value.clone(),
+                    error: None,
+                    correlation_id: None,
+                };
+                validate_tool_result_envelope(&result_env).map_err(|e| ToolInvokeError::Transport {
+                    server: server.to_string(),
+                    message: format!("invalid MCP tool result envelope: {e}"),
+                })?;
+                Ok(value)
+            }
+            Err(err) => {
+                let result_env = ToolResultEnvelope {
+                    tool: tool.to_string(),
+                    success: false,
+                    output: Value::Null,
+                    error: Some(err.to_string()),
+                    correlation_id: None,
+                };
+                validate_tool_result_envelope(&result_env).map_err(|e| ToolInvokeError::Transport {
+                    server: server.to_string(),
+                    message: format!("invalid MCP tool result envelope: {e}"),
+                })?;
+                Err(err)
+            }
+        }
     }
 
     async fn server_instructions(&self, server: &str) -> Option<String> {

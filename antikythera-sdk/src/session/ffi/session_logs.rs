@@ -12,8 +12,7 @@ use antikythera_log::{SessionLogExport, BatchLogExport};
 ///
 /// # Returns
 /// JSON array of LogEntry objects for the session
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_get_logs(session_id: *const c_char) -> *mut c_char {
+pub fn mcp_session_get_logs(session_id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(session_id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -28,8 +27,7 @@ pub extern "C" fn mcp_session_get_logs(session_id: *const c_char) -> *mut c_char
 ///
 /// # Returns
 /// JSON with `session_id`, `export_data` (hex), `log_count`, `size` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_export_logs(session_id: *const c_char) -> *mut c_char {
+pub fn mcp_session_export_logs(session_id: *const c_char) -> *mut c_char {
     let id_str = match from_c_string(session_id) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -59,8 +57,7 @@ pub extern "C" fn mcp_session_export_logs(session_id: *const c_char) -> *mut c_c
 ///
 /// # Returns
 /// JSON with `success`, `session_id`, `log_count` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_import_logs(export_data: *const c_char) -> *mut c_char {
+pub fn mcp_session_import_logs(export_data: *const c_char) -> *mut c_char {
     let data_str = match from_c_string(export_data) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -92,8 +89,7 @@ pub extern "C" fn mcp_session_import_logs(export_data: *const c_char) -> *mut c_
 ///
 /// # Returns
 /// JSON with `session_count`, `total_log_count`, `export_data` (hex), `size` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_batch_export_logs() -> *mut c_char {
+pub fn mcp_session_batch_export_logs() -> *mut c_char {
     // Get all unique session IDs from loggers
     // For now, export a placeholder - in production would iterate all sessions
     let session_logs: Vec<SessionLogExport> = Vec::new();
@@ -115,8 +111,7 @@ pub extern "C" fn mcp_session_batch_export_logs() -> *mut c_char {
 }
 
 /// Import batch of session logs
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_session_batch_import_logs(export_data: *const c_char) -> *mut c_char {
+pub fn mcp_session_batch_import_logs(export_data: *const c_char) -> *mut c_char {
     let data_str = match from_c_string(export_data) {
         Ok(s) => s,
         Err(e) => return error_response(&e),
@@ -136,3 +131,4 @@ pub extern "C" fn mcp_session_batch_import_logs(export_data: *const c_char) -> *
         Err(e) => error_response(&e),
     }
 }
+

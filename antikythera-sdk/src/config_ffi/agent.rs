@@ -10,8 +10,7 @@ use super::helpers::*;
 ///
 /// # Returns
 /// JSON AgentConfig object with all agent settings
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_get_agent() -> *mut c_char {
+pub fn mcp_config_get_agent() -> *mut c_char {
     let cfg = match config::load_config(None) {
         Ok(c) => c,
         Err(e) => return error_response(&e),
@@ -27,8 +26,7 @@ pub extern "C" fn mcp_config_get_agent() -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success` and `max_steps` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_set_agent_max_steps(steps: u32) -> *mut c_char {
+pub fn mcp_config_set_agent_max_steps(steps: u32) -> *mut c_char {
     let mut cfg = match config::load_config(None) {
         Ok(c) => c,
         Err(e) => return error_response(&e),
@@ -52,8 +50,7 @@ pub extern "C" fn mcp_config_set_agent_max_steps(steps: u32) -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success` and `verbose` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_set_agent_verbose(enabled: i32) -> *mut c_char {
+pub fn mcp_config_set_agent_verbose(enabled: i32) -> *mut c_char {
     let mut cfg = match config::load_config(None) {
         Ok(c) => c,
         Err(e) => return error_response(&e),
@@ -77,8 +74,7 @@ pub extern "C" fn mcp_config_set_agent_verbose(enabled: i32) -> *mut c_char {
 ///
 /// # Returns
 /// JSON with `success` and `auto_execute_tools` fields
-#[unsafe(no_mangle)]
-pub extern "C" fn mcp_config_set_agent_auto_execute(enabled: i32) -> *mut c_char {
+pub fn mcp_config_set_agent_auto_execute(enabled: i32) -> *mut c_char {
     let mut cfg = match config::load_config(None) {
         Ok(c) => c,
         Err(e) => return error_response(&e),
@@ -94,3 +90,4 @@ pub extern "C" fn mcp_config_set_agent_auto_execute(enabled: i32) -> *mut c_char
         Err(e) => error_response(&e),
     }
 }
+
