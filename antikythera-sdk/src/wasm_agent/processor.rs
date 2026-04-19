@@ -210,14 +210,14 @@ pub fn validate_json_schema(
         return Err("JSON is null".to_string());
     }
 
-    if let Some(required) = schema.get("required").and_then(|v| v.as_array()) {
-        if let Some(obj) = data.as_object() {
-            for field in required {
-                if let Some(field_str) = field.as_str() {
-                    if !obj.contains_key(field_str) {
-                        return Err(format!("Missing required field: {}", field_str));
-                    }
-                }
+    if let Some(required) = schema.get("required").and_then(|v| v.as_array())
+        && let Some(obj) = data.as_object()
+    {
+        for field in required {
+            if let Some(field_str) = field.as_str()
+                && !obj.contains_key(field_str)
+            {
+                return Err(format!("Missing required field: {}", field_str));
             }
         }
     }

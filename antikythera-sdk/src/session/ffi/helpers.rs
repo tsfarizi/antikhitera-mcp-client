@@ -54,7 +54,7 @@ pub fn success_with(fields: &[(&str, serde_json::Value)]) -> *mut c_char {
 
 /// Decode hex string to bytes
 pub fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err("Invalid hex length".to_string());
     }
     (0..hex.len())

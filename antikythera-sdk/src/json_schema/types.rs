@@ -170,9 +170,7 @@ impl JsonSchema {
     pub fn to_prompt_instruction(&self) -> String {
         let mut instruction = String::new();
 
-        instruction.push_str(&format!(
-            "You must respond with a JSON object matching this schema:\n"
-        ));
+        instruction.push_str("You must respond with a JSON object matching this schema:\n");
         instruction.push_str(&format!("Schema: {}\n", self.name));
 
         if let Some(desc) = &self.description {

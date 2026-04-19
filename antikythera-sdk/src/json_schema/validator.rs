@@ -57,42 +57,35 @@ impl JsonValidator {
         let mut current_response = initial_response.to_string();
         let mut retry_count = 0;
 
-        loop {
-            match self.schema.validate(&current_response) {
-                Ok(()) => {
-                    return ValidationResult {
-                        valid: true,
-                        error: None,
-                        retry_count,
-                        json: Some(current_response),
-                    };
-                }
-                Err(e) => {
-                    retry_count += 1;
+        match self.schema.validate(&current_response) {
+            Ok(()) => ValidationResult {
+                valid: true,
+                error: None,
+                retry_count,
+                json: Some(current_response),
+            },
+            Err(e) => {
+                retry_count += 1;
 
-                    if retry_count > self.max_retries {
-                        return ValidationResult {
-                            valid: false,
-                            error: Some(format!(
-                                "Failed after {} retries: {}",
-                                self.max_retries, e
-                            )),
-                            retry_count,
-                            json: None,
-                        };
-                    }
-
-                    // Generate retry prompt with error feedback
-                    current_response = self.generate_retry_prompt(&current_response, &e);
-
-                    // In production, this would call LLM again with the retry prompt
-                    // For now, return error - actual retry happens in FFI layer
+                if retry_count > self.max_retries {
                     return ValidationResult {
                         valid: false,
-                        error: Some(e.to_string()),
+                        error: Some(format!("Failed after {} retries: {}", self.max_retries, e)),
                         retry_count,
-                        json: Some(current_response),
+                        json: None,
                     };
+                }
+
+                // Generate retry prompt with error feedback
+                current_response = self.generate_retry_prompt(&current_response, &e);
+
+                // In production, this would call LLM again with the retry prompt
+                // For now, return error - actual retry happens in FFI layer
+                ValidationResult {
+                    valid: false,
+                    error: Some(e.to_string()),
+                    retry_count,
+                    json: Some(current_response),
                 }
             }
         }

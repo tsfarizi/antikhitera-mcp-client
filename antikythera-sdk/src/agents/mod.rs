@@ -273,22 +273,11 @@ mod core_conversions {
 // ============================================================================
 
 #[cfg(feature = "multi-agent")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct HardeningRuntimeState {
     options: OrchestratorOptions,
     cancelled: bool,
     last_budget_snapshot: Option<antikythera_core::application::agent::multi_agent::BudgetSnapshot>,
-}
-
-#[cfg(feature = "multi-agent")]
-impl Default for HardeningRuntimeState {
-    fn default() -> Self {
-        Self {
-            options: OrchestratorOptions::default(),
-            cancelled: false,
-            last_budget_snapshot: None,
-        }
-    }
 }
 
 #[cfg(feature = "multi-agent")]
@@ -667,10 +656,10 @@ impl AgentConfig {
         }
 
         // Temperature validation
-        if let Some(temp) = self.temperature {
-            if temp < 0.0 || temp > 2.0 {
-                errors.push("Temperature must be between 0.0 and 2.0".to_string());
-            }
+        if let Some(temp) = self.temperature
+            && !(0.0..=2.0).contains(&temp)
+        {
+            errors.push("Temperature must be between 0.0 and 2.0".to_string());
         }
 
         AgentValidationResult {

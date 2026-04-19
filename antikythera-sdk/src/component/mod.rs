@@ -231,7 +231,11 @@ impl<H: HostImports> DelegatingAgent<H> {
 }
 
 /// FFI entry point for running agent with host delegation
-pub fn run_agent_with_host(
+///
+/// # Safety
+/// The caller must ensure all non-null pointers are valid NUL-terminated C strings
+/// for the duration of this call.
+pub unsafe fn run_agent_with_host(
     prompt_ptr: *const std::os::raw::c_char,
     system_prompt_ptr: *const std::os::raw::c_char,
     session_id_ptr: *const std::os::raw::c_char,
@@ -239,29 +243,23 @@ pub fn run_agent_with_host(
 ) -> *mut std::os::raw::c_char {
     use std::ffi::{CStr, CString};
 
-    let prompt = unsafe {
-        CStr::from_ptr(prompt_ptr)
-            .to_str()
-            .unwrap_or("")
-            .to_string()
-    };
+    let prompt = CStr::from_ptr(prompt_ptr)
+        .to_str()
+        .unwrap_or("")
+        .to_string();
 
-    let system_prompt = unsafe {
-        CStr::from_ptr(system_prompt_ptr)
-            .to_str()
-            .unwrap_or("")
-            .to_string()
-    };
+    let system_prompt = CStr::from_ptr(system_prompt_ptr)
+        .to_str()
+        .unwrap_or("")
+        .to_string();
 
     let session_id = if session_id_ptr.is_null() {
         None
     } else {
-        unsafe {
-            CStr::from_ptr(session_id_ptr)
-                .to_str()
-                .ok()
-                .map(String::from)
-        }
+        CStr::from_ptr(session_id_ptr)
+            .to_str()
+            .ok()
+            .map(String::from)
     };
 
     let result = format!(

@@ -7,7 +7,7 @@ use antikythera_log::{LogBatch, LogEntry, LogFilter, LogLevel, Logger};
 use std::sync::{Arc, LazyLock, Mutex};
 
 // ============================================================================
-/// Global SDK Logger Registry
+// Global SDK Logger Registry
 // ============================================================================
 
 /// Global logger storage for SDK
@@ -31,7 +31,7 @@ pub fn clear_sdk_loggers() {
 }
 
 // ============================================================================
-/// Module-Specific Loggers (with automatic source tracking)
+// Module-Specific Loggers (with automatic source tracking)
 // ============================================================================
 
 /// Config FFI module logger
@@ -319,7 +319,7 @@ impl WasmAgentLogger {
 }
 
 // ============================================================================
-/// SDK Log Query API
+// SDK Log Query API
 // ============================================================================
 
 /// Query SDK logs with filter

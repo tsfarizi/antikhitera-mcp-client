@@ -644,8 +644,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let concurrency_sem = self.concurrency_sem.clone();
         let default_retry_condition = self.default_retry_condition.clone();
 
-        self
-            .scheduler
+        self.scheduler
             .run(prepared, move |(task, profile, routing_decision)| {
                 let client = client.clone();
                 let execution_mode = execution_mode.clone();
