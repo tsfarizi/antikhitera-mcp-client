@@ -24,13 +24,28 @@ pub fn process_llm_response(
     }
 
     // Parse LLM response as JSON
-    let parsed: serde_json::Value = serde_json::from_str(llm_response_content)
-        .map_err(|e| format!("Invalid JSON from LLM: {}", e))?;
+    let parsed: serde_json::Value = match serde_json::from_str(llm_response_content) {
+        Ok(value) => value,
+        Err(_) => {
+            return Ok(AgentAction::Final {
+                response: serde_json::Value::String(llm_response_content.to_string()),
+            })
+        }
+    };
 
     // Determine action from response
-    let action = parsed.get("action")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing 'action' field in LLM response")?;
+    let action = match parsed.get("action").and_then(|v| v.as_str()) {
+        Some(action) => action,
+        None => {
+            if let Some(response) = parsed.get("response").or_else(|| parsed.get("content")) {
+                return Ok(AgentAction::Final {
+                    response: response.clone(),
+                });
+            }
+
+            return Err("Missing 'action' field in LLM response".to_string());
+        }
+    };
 
     match action {
         "call_tool" => {

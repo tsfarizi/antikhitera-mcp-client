@@ -1,23 +1,10 @@
-//! LLM infrastructure — CLI-side implementations
+//! LLM infrastructure compatibility layer.
 //!
-//! This module owns all HTTP LLM provider logic so that `antikythera-core`
-//! can be compiled to WASM without any HTTP client dependencies.
-//!
-//! # Module layout
-//!
-//! - `adapter`           — message-format converters (OpenAI / Ollama / Gemini wire formats)
-//! - `http_client`       — shared `HttpClientBase` for async HTTP calls
-//! - `clients`           — concrete per-provider `ModelClient` implementations
-//! - `factory`           — `ProviderFactory::create()` dispatching on provider type
-//! - `provider_builder`  — builds a `DynamicModelProvider` from config slices
-//! - `gemini`            — thin `LlmProvider` wrapper for the chat use-case
-//! - `ollama`            — thin `LlmProvider` wrapper for the chat use-case
+//! Direct model API calls are no longer implemented in this repository.
+//! These modules are kept only so older call sites fail explicitly with a
+//! clear error message instead of silently performing network I/O.
 
-pub mod adapter;
-pub mod clients;
-pub mod factory;
 pub mod gemini;
-pub mod http_client;
 pub mod ollama;
 pub mod provider_builder;
 

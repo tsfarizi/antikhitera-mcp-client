@@ -23,9 +23,10 @@
 
 use super::tooling::{ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
-use crate::infrastructure::model::{ModelError, ModelProvider, ModelRequest};
+use crate::infrastructure::model::{HostModelResponse, ModelError, ModelProvider, ModelRequest, ModelResponse};
 use crate::domain::types::MessagePart;
 use crate::domain::types::{ChatMessage, MessageRole};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
@@ -172,6 +173,21 @@ pub struct ChatResult {
     pub logs: Vec<String>,
 }
 
+/// Prepared host-facing model request.
+///
+/// The host owns the actual LLM API call. This struct captures the exact
+/// request payload plus the session metadata needed to commit the response
+/// back into the client's internal history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreparedChatTurn {
+    pub session_id: String,
+    pub provider: String,
+    pub model: String,
+    pub model_request: ModelRequest,
+    pub user_message: ChatMessage,
+    pub logs: Vec<String>,
+}
+
 #[derive(Debug, Error)]
 pub enum McpError {
     #[error(transparent)]
@@ -261,7 +277,7 @@ impl<P: ModelProvider> McpClient<P> {
         self.server_bridge.clone()
     }
 
-    pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
+    pub async fn prepare_chat(&self, request: ChatRequest) -> PreparedChatTurn {
         let provider = self.config.default_provider.clone();
         let model = self.config.default_model.clone();
         let session_id = request.session_id.clone().unwrap_or_else(new_session_id);
@@ -319,13 +335,11 @@ impl<P: ModelProvider> McpClient<P> {
             messages.extend(history.iter().cloned());
         }
 
-        let prompt_preview = Self::summarise(&request.prompt);
-
-        // Build user message with text and attachments
         let mut user_parts = vec![MessagePart::text(request.prompt.clone())];
         user_parts.extend(request.attachments.clone());
         let user_message = ChatMessage::with_parts(MessageRole::User, user_parts);
-        messages.push(user_message);
+        let prompt_preview = Self::summarise(&request.prompt);
+        messages.push(user_message.clone());
 
         if !request.attachments.is_empty() {
             logs.push(format!(
@@ -337,52 +351,81 @@ impl<P: ModelProvider> McpClient<P> {
             logs.push(format!("User: {prompt_preview}"));
         }
 
-        info!(
-            session_id = session_id.as_str(),
-            provider = provider.as_str(),
-            model = model.as_str(),
-            "Sending request to model provider"
-        );
-
-        let response = self
-            .provider
-            .chat(ModelRequest {
+        PreparedChatTurn {
+            session_id: session_id.clone(),
+            provider: provider.clone(),
+            model: model.clone(),
+            model_request: ModelRequest {
                 provider: provider.clone(),
                 model: model.clone(),
                 messages,
                 session_id: Some(session_id.clone()),
                 force_json: request.force_json,
-            })
-            .await?;
+            },
+            user_message: user_message.clone(),
+            logs,
+        }
+    }
 
+    pub async fn complete_chat(
+        &self,
+        prepared: PreparedChatTurn,
+        response: ModelResponse,
+    ) -> Result<ChatResult, McpError> {
         let final_session = response
             .session_id
             .clone()
-            .unwrap_or_else(|| session_id.clone());
+            .unwrap_or_else(|| prepared.session_id.clone());
         let assistant_message = response.message.clone();
         let response_preview = Self::summarise(&assistant_message.content());
+
+        let mut logs = prepared.logs;
         logs.push(format!("Model: {response_preview}"));
 
         info!(
             session_id = final_session.as_str(),
-            provider = provider.as_str(),
-            model = model.as_str(),
+            provider = prepared.provider.as_str(),
+            model = prepared.model.as_str(),
             "Response received from model provider"
         );
         for entry in &logs {
             info!(session_id = final_session.as_str(), %entry, "Interaction log");
         }
 
-        self.persist_exchange(&final_session, request.prompt, assistant_message)
+        self.persist_exchange(&final_session, prepared.user_message, assistant_message)
             .await;
 
         Ok(ChatResult {
             content: response.message.content(),
             session_id: final_session,
-            provider,
-            model,
+            provider: prepared.provider,
+            model: prepared.model,
             logs,
         })
+    }
+
+    pub async fn complete_chat_from_host(
+        &self,
+        prepared: PreparedChatTurn,
+        response: HostModelResponse,
+    ) -> Result<ChatResult, McpError> {
+        let provider = prepared.provider.clone();
+        let model_response = response.into_model_response(&provider)?;
+        self.complete_chat(prepared, model_response).await
+    }
+
+    pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
+        let prepared = self.prepare_chat(request).await;
+
+        info!(
+            session_id = prepared.session_id.as_str(),
+            provider = prepared.provider.as_str(),
+            model = prepared.model.as_str(),
+            "Dispatching prepared request to model host"
+        );
+
+        let response = self.provider.chat(prepared.model_request.clone()).await?;
+        self.complete_chat(prepared, response).await
     }
 
     fn compose_system_prompt(&self, override_prompt: Option<String>) -> String {
@@ -439,7 +482,7 @@ impl<P: ModelProvider> McpClient<P> {
     async fn persist_exchange(
         &self,
         session_id: &str,
-        user_prompt: String,
+        user_message: ChatMessage,
         assistant: ChatMessage,
     ) {
         let start_wait = std::time::Instant::now();
@@ -448,7 +491,7 @@ impl<P: ModelProvider> McpClient<P> {
         tracing::debug!(lock_wait_us = ?elapsed.as_micros(), "Acquired session lock to persist exchange");
 
         let history = sessions.entry(session_id.to_string()).or_default();
-        history.push(ChatMessage::new(MessageRole::User, user_prompt));
+        history.push(user_message);
         history.push(assistant);
         debug!(
             session_id,
@@ -482,4 +525,134 @@ impl<P: ModelProvider> McpClient<P> {
 
 fn new_session_id() -> String {
     Uuid::new_v4().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+
+    struct MockProvider {
+        response: String,
+    }
+
+    #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+    #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+    impl ModelProvider for MockProvider {
+        async fn chat(&self, request: ModelRequest) -> Result<ModelResponse, ModelError> {
+            Ok(ModelResponse::new(
+                format!("{}:{}", request.session_id.unwrap_or_default(), self.response),
+                None,
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn prepare_and_complete_chat_preserve_session_history() {
+        let client = McpClient::new(
+            MockProvider {
+                response: "siap".to_string(),
+            },
+            ClientConfig::new("host", "gpt-host"),
+        );
+
+        let first = client
+            .chat(ChatRequest {
+                prompt: "halo".to_string(),
+                attachments: Vec::new(),
+                system_prompt: None,
+                session_id: None,
+                raw_mode: false,
+                bypass_template: false,
+                force_json: false,
+            })
+            .await
+            .unwrap();
+
+        let prepared = client
+            .prepare_chat(ChatRequest {
+                prompt: "lanjut".to_string(),
+                attachments: Vec::new(),
+                system_prompt: None,
+                session_id: Some(first.session_id.clone()),
+                raw_mode: false,
+                bypass_template: false,
+                force_json: false,
+            })
+            .await;
+
+        assert_eq!(prepared.session_id, first.session_id);
+            assert!(prepared.model_request.messages.len() >= 3);
+            assert!(prepared
+                .model_request
+                .messages
+                .iter()
+                .any(|message| message.content() == "halo"));
+            assert!(prepared
+                .model_request
+                .messages
+                .iter()
+                .any(|message| message.content().contains("siap")));
+            assert_eq!(
+                prepared.model_request.messages.last().unwrap().content(),
+                "lanjut"
+            );
+    }
+
+    #[tokio::test]
+    async fn complete_chat_from_host_accepts_plain_text_and_preserves_attachments() {
+        let client = McpClient::new(
+            MockProvider {
+                response: "unused".to_string(),
+            },
+            ClientConfig::new("host", "gpt-host"),
+        );
+
+        let prepared = client
+            .prepare_chat(ChatRequest {
+                prompt: "lihat lampiran".to_string(),
+                attachments: vec![MessagePart::file("a.txt", "text/plain", "ZGF0YQ==")],
+                system_prompt: None,
+                session_id: Some("sess-attach".to_string()),
+                raw_mode: false,
+                bypass_template: false,
+                force_json: false,
+            })
+            .await;
+
+        let result = client
+            .complete_chat_from_host(
+                prepared,
+                HostModelResponse::from_text("berhasil", Some("sess-attach".to_string())),
+            )
+            .await
+            .unwrap();
+
+        let follow_up = client
+            .prepare_chat(ChatRequest {
+                prompt: "cek riwayat".to_string(),
+                attachments: Vec::new(),
+                system_prompt: None,
+                session_id: Some(result.session_id.clone()),
+                raw_mode: false,
+                bypass_template: false,
+                force_json: false,
+            })
+            .await;
+
+            assert!(follow_up
+                .model_request
+                .messages
+                .iter()
+                .any(|message| message.has_attachments() && message.content() == "lihat lampiran"));
+            assert!(follow_up
+                .model_request
+                .messages
+                .iter()
+                .any(|message| message.content() == "berhasil"));
+            assert_eq!(
+                follow_up.model_request.messages.last().unwrap().content(),
+                "cek riwayat"
+            );
+    }
 }

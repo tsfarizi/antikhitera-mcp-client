@@ -11,20 +11,27 @@ use serde::{Deserialize, Serialize};
 /// LLM request from agent to host
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmRequest {
-    pub prompt: String,
-    pub system_prompt: String,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub session_id: Option<String>,
+    pub messages_json: String,
+    pub force_json: bool,
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
-    pub response_format: Option<String>,
+    pub schema_name: Option<String>,
+    pub metadata_json: Option<String>,
 }
 
 /// LLM response from host to agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmResponse {
     pub content: String,
-    pub model: String,
+    pub model: Option<String>,
+    pub session_id: Option<String>,
+    pub message_json: Option<String>,
     pub tokens_used: Option<u32>,
     pub finish_reason: Option<String>,
+    pub raw_response_json: Option<String>,
 }
 
 /// Tool call event from agent to host
@@ -99,17 +106,44 @@ impl<H: HostImports> DelegatingAgent<H> {
                 return Err("Max steps exceeded".to_string());
             }
 
+            let messages_json = serde_json::json!([
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": current_prompt,
+                }
+            ])
+            .to_string();
+
             let llm_request = LlmRequest {
-                prompt: current_prompt.clone(),
-                system_prompt: system_prompt.clone(),
+                provider: None,
+                model: None,
+                session_id: self.session_id.clone(),
+                messages_json,
+                force_json: true,
                 temperature: Some(0.7),
                 max_tokens: Some(4096),
-                response_format: Some("json_object".to_string()),
+                schema_name: None,
+                metadata_json: None,
             };
 
             let llm_response = self.host.call_llm(llm_request).await?;
-            let response_json: serde_json::Value = serde_json::from_str(&llm_response.content)
-                .map_err(|e| format!("Failed to parse LLM response: {}", e))?;
+            let response_body = llm_response
+                .message_json
+                .clone()
+                .or(llm_response.raw_response_json.clone())
+                .unwrap_or_else(|| llm_response.content.clone());
+
+            let response_json: serde_json::Value = match serde_json::from_str(&response_body) {
+                Ok(value) => value,
+                Err(_) => {
+                    self.log("info", "Host returned plain text response; finishing session".to_string());
+                    return Ok(llm_response.content);
+                }
+            };
 
             if let Some(action) = response_json.get("action").and_then(|v| v.as_str()) {
                 match action {

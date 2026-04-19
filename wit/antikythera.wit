@@ -13,28 +13,43 @@
 
 /// LLM request dari WASM ke host
 record llm-request {
+    /// Provider identifier chosen by the framework (optional, host may ignore)
+    provider: option<string>,
+    /// Model name requested by the framework (optional, host may override)
+    model: option<string>,
+    /// Session ID managed by the framework/WASM so the host can correlate state
+    session-id: option<string>,
     /// Prompt messages (JSON encoded)
     messages-json: string,
-    /// System prompt
-    system-prompt: string,
+    /// Force structured JSON behavior when the caller expects structured output
+    force-json: bool,
     /// Temperature (0.0 - 2.0)
     temperature: option<f32>,
     /// Max tokens
     max-tokens: option<u32>,
     /// Expected response schema name (optional)
     schema-name: option<string>,
+    /// Optional extra context/metadata supplied by the framework as JSON
+    metadata-json: option<string>,
 }
 
 /// LLM response dari host ke WASM
 record llm-response {
-    /// Response content
+    /// Response content. Plain text is allowed.
     content: string,
+    /// Optional JSON-encoded assistant message if the host has already shaped
+    /// the provider response into the framework's message structure.
+    message-json: option<string>,
     /// Model yang digunakan
-    model: string,
+    model: option<string>,
+    /// Session ID after host processing (optional)
+    session-id: option<string>,
     /// Tokens used
     tokens-used: option<u32>,
     /// Finish reason
     finish-reason: option<string>,
+    /// Optional raw provider JSON for debugging or host-specific replay
+    raw-response-json: option<string>,
 }
 
 /// Tool call event dari WASM ke host
@@ -156,9 +171,47 @@ interface agent-runner {
     /// Initialize agent with config
     init(config-json: string) -> result<string, string>;
 
-    /// Process LLM response and determine next action
+    /// Prepare a user turn for host-side model execution.
+    ///
+    /// `request-json` is expected to contain:
+    /// ```json
+    /// {
+    ///   "prompt": "User message",
+    ///   "attachments": [],
+    ///   "system_prompt": null,
+    ///   "session_id": null,
+    ///   "raw_mode": false,
+    ///   "bypass_template": false,
+    ///   "force_json": false
+    /// }
+    /// ```
+    ///
+    /// Returns a JSON-encoded prepared turn containing the resolved
+    /// `session_id`, provider/model choice, the assembled message list to send
+    /// to the host-owned LLM call, and internal logging metadata.
+    prepare-user-turn(request-json: string) -> result<string, string>;
+
+    /// Process LLM response and determine next action.
+    ///
+    /// The host may pass either:
+    /// - plain text, which will be treated as a final assistant response, or
+    /// - structured JSON with `action`, `response`, `content`, etc.
     process-llm-response(
         session-id: string,
+        llm-response-json: string,
+    ) -> result<string, string>;
+
+    /// Commit a host-produced LLM response back into the framework-managed
+    /// history/state for a previously prepared turn.
+    ///
+    /// `prepared-turn-json` must be the JSON returned by `prepare-user-turn`.
+    /// `llm-response-json` may encode either a plain text body or a structured
+    /// assistant message envelope.
+    ///
+    /// Returns a JSON-encoded chat result with final `session_id`, `content`,
+    /// provider/model identity, and collected logs.
+    commit-llm-response(
+        prepared-turn-json: string,
         llm-response-json: string,
     ) -> result<string, string>;
 

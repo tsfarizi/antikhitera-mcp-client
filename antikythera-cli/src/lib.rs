@@ -5,8 +5,10 @@
 //! - infrastructure/ (LLM providers, config loading)
 //! - presentation/ (TUI)
 //!
-//! CLI acts as the "host" - it calls LLM APIs directly (native binary).
-//! WASM receives LLM responses from host via FFI (WASM binary).
+//! CLI acts as a thin local surface over the framework runtime.
+//! Model API invocation is host-owned and no longer implemented inside this repository.
+//! Any host, including a native CLI shell, must call the LLM externally and feed the
+//! result back through the framework/session boundary.
 
 // Domain layer (innermost, no external deps)
 pub mod domain;

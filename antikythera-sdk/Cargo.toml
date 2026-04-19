@@ -22,10 +22,9 @@ package = "antikythera:mcp-framework"
 default = ["single-agent"]
 
 # Shared runtime surface for SDK features that depend on core/session crates.
-# Also enables `http-providers` in core: sdk-core is only active for native
-# builds, never for server-side WASM component builds, so it is safe to
-# include HTTP client code here.
-sdk-core = ["dep:antikythera-core", "dep:antikythera-session", "antikythera-core/http-providers"]
+# Model API calls are host-owned, so `sdk-core` intentionally does not enable
+# any direct HTTP provider path in `antikythera-core`.
+sdk-core = ["dep:antikythera-core", "dep:antikythera-session"]
 
 
 

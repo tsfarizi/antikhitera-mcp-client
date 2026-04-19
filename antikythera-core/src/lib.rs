@@ -24,9 +24,11 @@ pub use application::resilience::{
     HealthStatus, ComponentHealth, HealthTracker,
     with_retry, with_retry_if,
 };
-pub use application::client::{ChatRequest, ClientConfig, McpClient};
+pub use application::client::{ChatRequest, ChatResult, ClientConfig, McpClient, PreparedChatTurn};
 pub use config::AppConfig;
-pub use infrastructure::model::{DynamicModelProvider, ModelProvider};
+pub use infrastructure::model::{
+    DynamicModelProvider, HostModelClient, HostModelResponse, HostModelTransport, ModelProvider,
+};
 
 // Re-export CLI argument types so binary crates don't need a direct `cli` dep.
 #[cfg(feature = "wizard")]

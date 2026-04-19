@@ -5,38 +5,26 @@
 //! This module defines the LLM provider *contract* (traits + types) that is
 //! safe to compile into any target including `wasm32-wasip1` (WASM component).
 //!
-//! The *implementations* (HTTP clients for Gemini, OpenAI-compatible, and
-//! Ollama) are gated behind the `http-providers` feature flag and physically
-//! live in `antikythera-cli`.  They are re-exposed here for convenience when
-//! the feature is enabled (native builds only; server-side WASM component
-//! builds must NOT enable `http-providers` — LLM calls are delegated to the
-//! host via the WIT `call_llm_sync` import).
+//! The framework no longer ships built-in HTTP model clients as an active
+//! runtime path. All model dispatch is delegated to the embedding host through
+//! a host-provided transport or through the two-phase prepare/complete flow.
 //!
 //! # Structure
 //! - `types`   — Request, Response, Error types (always compiled)
 //! - `traits`  — `ModelProvider`, `ModelClient` traits (always compiled)
+//! - `host`    — host-delegating `ModelClient` implementation
 //! - `provider` — `DynamicModelProvider` routing layer (always compiled;
-//!                `from_configs` only when `http-providers` is enabled)
-//!
-//! The following sub-modules are only present when `http-providers` is active:
-//! - `adapter`  — Message-format adapters (OpenAI / Gemini / Ollama wire formats)
-//! - `clients`  — Concrete HTTP client implementations
-//! - `factory`  — `ProviderFactory` + `resolve_api_key` helper
+//!                `from_configs` remains only as a compatibility shim that now
+//!                returns an unsupported-operation error)
 
 // ── Always-available modules ────────────────────────────────────────────────
+pub mod host;
 pub mod provider;
 pub mod traits;
 pub mod types;
 
-// ── HTTP provider implementations (native builds only) ────────────────────
-#[cfg(feature = "http-providers")]
-pub mod adapter;
-#[cfg(feature = "http-providers")]
-pub mod clients;
-#[cfg(feature = "http-providers")]
-pub mod factory;
-
 // ── Re-exports ───────────────────────────────────────────────────────────────
+pub use host::{HostModelClient, HostModelResponse, HostModelTransport};
 pub use provider::DynamicModelProvider;
 pub use traits::ModelProvider;
 pub use types::{ModelError, ModelRequest, ModelResponse};

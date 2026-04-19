@@ -35,19 +35,14 @@ wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
 # how and where that state is persisted is entirely up to the host.
 multi-agent = []
 
-# LLM HTTP provider clients (Gemini, OpenAI-compatible, Ollama).
+# Deprecated compatibility flag.
 #
-# This feature gates the HTTP-based model client implementations inside
-# `infrastructure::model::{adapter, clients, factory}` as well as the
-# `DynamicModelProvider::from_configs` convenience constructor.
+# Direct HTTP model request implementations are no longer part of the active
+# core runtime. Hosts are responsible for invoking model APIs and passing the
+# resulting messages back through the host/WASM boundary.
 #
-# **Enable only for native (non-WASM) builds.**
-# - ✅ CLI (`antikythera-cli`) always enables this via the `full` feature.
-# - ✅ SDK native builds enable this via `sdk-core`.
-# - ❌ Server-side WASM component builds (`wasm32-wasip1`) must NOT enable this —
-#      the host process that embeds the .wasm module is responsible for LLM calls;
-#      the WASM component only exchanges structured messages through the WIT interface
-#      (`antikythera::call_llm_sync` host import).
+# This flag is kept only so older feature wiring keeps compiling; it currently
+# enables no additional functionality.
 http-providers = []
 
 # Full-featured build for native runtime

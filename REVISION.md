@@ -198,23 +198,23 @@ Browser WASM (`wasm-bindgen`) and C FFI (`cdylib`, `extern "C"` exports) have be
 Hosts embedding the framework are responsible for any additional interface layers they require.
 
 **Changes made:**
-- Introduced `http-providers` feature flag in `antikythera-core` that gates all HTTP LLM client code
-  (Gemini / OpenAI / Ollama clients, `ProviderFactory`, `DynamicModelProvider::from_configs`)
+- Established the final contract that model API invocation belongs to the embedding host, not to the framework runtime itself
+- `ModelRequest` / `ModelResponse` are now serializable host-boundary contracts
+- Added host-delegating model transport primitives (`HostModelTransport`, `HostModelClient`, `HostModelResponse`)
 - `ModelError::Network` variant changed to use a plain `String` message instead of `reqwest::Error`,
   making the type fully WASM-safe
 - `DynamicModelProvider` gained a push-based `register()` / `new()` API that is always compiled
   (usable in WASM with stub/mock clients)
-- All concrete HTTP LLM implementations physically moved to **`antikythera-cli`**:
-  - `adapter.rs`, `http_client.rs`, `clients/{gemini,openai,ollama}.rs`, `factory.rs`, `provider_builder.rs`
-- CLI's `menu.rs` uses `build_provider_from_configs()` from the CLI's own provider stack
-- `antikythera-sdk` enables `antikythera-core/http-providers` via its `sdk-core` feature (native builds); the `component` feature deliberately omits it
+- Added a two-phase chat flow in core/SDK: framework prepares messages and session context first, host performs the LLM call, then host commits the response back into framework-managed history
+- Host responses may now be plain text or a structured assistant message; both are accepted by the framework
+- `http-providers` remains only as a deprecated compatibility flag and no longer defines the primary runtime path
 - `antikythera-sdk` default features now target native lane only (`default = ["single-agent"]`); browser WASM and server-side component are explicit opt-in lanes
 - `antikythera-sdk` lane-specific exports are now strictly gated: `wasm_agent` and `component` are exported only with `feature = "component"`
 - Server-side WASM component builds (`cargo component build --target wasm32-wasip1`) are now clean: no HTTP deps
 
 ---
 
-## 5. What is still missing before 1.0 — ✅ ALL COMPLETED
+## 5. Pre-1.0 stabilization status after scope reduction
 
 ### ✅ 5.1 Radical scope simplification — COMPLETED (Current Session)
 
@@ -233,12 +233,12 @@ Hosts embedding the framework are responsible for any additional interface layer
   - `--mode multi-agent` (orchestrator harness)
 
 **Result:**
-- Single, focused deployment lane: **server-side WASM component (wasm32-wasip1)** embedded by native host
+- Two focused deployment lanes: **native CLI** and **server-side WASM component (wasm32-wasip1)**
 - Host owns the interface layer (REST, gRPC, WebSocket, etc.)
 - Codebase dramatically simplified (~700 lines of REST/FFI infrastructure deleted)
 - All 82 tests continue to pass; no regressions
 
-### ✅ 5.2 Native CI quality gates — READY TO IMPLEMENT
+### ⏳ 5.2 Native CI quality gates — STILL PENDING
 
 With REST API removed, the build matrix is clean and ready for CI gates.
 
@@ -263,9 +263,9 @@ After radical simplification, the API surface is crystal clear:
 
 | Deployment Lane | Status | API Surface |
 |---|---|---|
-| **Server-side WASM component** | ✅ PRIMARY | WIT imports/exports (host calls LLM via `call_llm_sync`, WASM runs agent logic) |
+| **Server-side WASM component** | ✅ PRIMARY | WIT imports/exports; host performs model calls, WASM prepares/consumes message state |
 | **Native CLI** | ✅ ACTIVE | TUI (stdio), Setup wizard, MultiAgent orchestrator |
-| **Native SDK** | ✅ STABLE | `McpClient`, `DynamicModelProvider`, `MultiAgentOrchestrator`, logging, config |
+| **Native SDK** | ✅ STABLE | `McpClient`, `PreparedChatTurn`, host transport injection, `MultiAgentOrchestrator`, logging, config |
 | **Browser WASM** | ❌ REMOVED | N/A |
 | **C FFI** | ❌ REMOVED | N/A |
 | **REST API** | ❌ REMOVED | N/A |
@@ -291,11 +291,13 @@ With scope simplified, resilience patterns have been added cleanly.
 
 ---
 
-## OLD SECTION 5 (Preserved for Reference) — Most items now completed
+## 6. Remaining features that fit the current product scope
 
----
+The following items assume the current product vision:
 
-## 6. Missing features that are strongly needed and fit this MCP client
+- no embedded REST module inside the framework
+- no browser WASM and no C FFI lane
+- any REST, gRPC, WebSocket, or custom API surface belongs to the embedding host, not to Antikythera itself
 
 ### 6.1 Streaming responses
 
@@ -304,23 +306,24 @@ This is essential.
 The project still needs:
 
 - token streaming from providers
-- SSE or similar streaming output for REST clients
 - intermediate agent event streaming
+- a host-safe streaming contract for CLI and WASM component embeddings
 
-Without this, UX for TUI, web, and agent consumers will feel behind modern expectations.
+Without this, UX for CLI users and embedding hosts will feel behind modern expectations.
 
-### 6.2 Context window management
+### 6.2 Advanced context management
 
-This is critical for a real client framework.
+Basic token estimation, pruning, retry, timeout, and health tracking already landed in section 5.5.
+The remaining gap is advanced context management.
 
 The project needs:
 
-- token estimation
-- history pruning
 - rolling summarization
 - per-provider or per-model policy
+- configurable truncation and summarization strategy per agent or session
+- host-visible summary handoff for component embeddings
 
-Without it, long conversations will eventually fail at runtime.
+Without this, long conversations will still degrade even though hard token-limit failures are reduced.
 
 ### 6.3 Native provider-specific tool calling
 
@@ -335,25 +338,29 @@ For a strong 1.0 client framework, it should support:
 
 This would significantly improve reliability.
 
-### 6.4 REST authentication and policy layer
+Provider-specific request shaping may still exist in the host, but it should not be reintroduced as built-in HTTP calling logic inside this repository.
 
-If the REST server exposes `/chat` and `/tools`, it should have:
+### 6.4 Host-facing policy and integration hooks
 
-- bearer authentication
-- per-route access policy
-- rate limiting
-- auditability
+Because the host owns the interface layer, the framework still needs clearer primitives for:
 
-Without that, production deployment is risky.
+- auth and caller-context propagation from host into an agent run
+- request metadata and correlation IDs
+- model and tool access policy inputs
+- auditable decision events and policy failures
 
-### 6.5 Health, metrics, and observability endpoints
+Without that, each host embedding will rebuild policy wiring ad hoc.
+
+### 6.5 Telemetry and observability hooks
 
 At minimum:
 
-- `/health`
-- `/metrics`
+- health snapshots exportable to the host
+- metrics-friendly counters and timers
 - correlation ID and session ID propagation
-- structured telemetry
+- structured telemetry events
+
+These should be exposed as framework hooks and data surfaces, not as built-in HTTP endpoints.
 
 ### 6.6 Transport plugin architecture
 
@@ -363,11 +370,17 @@ A strong framework would allow extension for:
 - WebSocket transport
 - custom internal bridges
 - enterprise-specific transports
+- clearer transport capability negotiation
 
-### 6.7 Real multi-agent orchestration, or remove it for now
+### 6.7 Multi-agent production hardening
 
-If multi-agent remains public, it should become real.
-If it is not ready, it is healthier to remove or hide it temporarily instead of presenting it as a supported feature.
+The orchestration runtime now exists and is public.
+The remaining gap is production hardening:
+
+- cancellation and deadlines per task
+- concurrency and budget guardrails
+- partial-failure isolation and retry policies
+- richer introspection into routing and scheduling decisions
 
 ---
 
@@ -401,16 +414,15 @@ Two deployment lanes:
 - **server-side WASM component** — `wasm32-wasip1` WASI, WIT imports/exports, hosted via wasmtime;
   host language calls the `.wasm` binary via the component ABI
 
-## Phase 3 — Add the features a modern MCP client truly needs
+## Phase 3 — Add the remaining features that fit the current scope
 
 Implement:
 
-- streaming output
-- context management
-- retry and backoff
-- REST authentication
-- health and metrics
+- streaming output for CLI and WASM component embeddings
+- advanced context management and summarization
 - native provider tool calling
+- host-facing observability and policy hooks
+- transport extensibility and multi-agent hardening
 
 ## Phase 4 — Finalize the 1.0 contract
 
@@ -435,10 +447,10 @@ Before 1.0, decide clearly:
 
 ### High priorities
 
-6. Add streaming
-7. Add context-window management
+6. Add streaming for CLI and host embeddings
+7. Extend context management with summarization and provider-aware policies
 8. Add native provider-specific tool calling
-9. Complete multi-agent runtime resilience (retry, backoff, timeout, history pruning)
+9. Add host-facing observability hooks and harden multi-agent execution
 
 ---
 
@@ -454,6 +466,8 @@ All foundational consistency issues are resolved:
 - config is unified
 - scope is narrowed to native and server-side WASM component lanes
 
-The path forward is to complete the remaining items in section 5 and add the features a modern MCP client needs: streaming, context management, retry/backoff, and native provider tool calling.
+The path forward is to finish the remaining stabilization work and add only the features that match the current scope: streaming, advanced context management, native provider tool calling, host-facing observability, and multi-agent hardening.
+
+Antikythera should not grow an embedded REST module again. If a product needs REST, gRPC, WebSocket, or another interface layer, that surface should live in the host that embeds the framework or consumes the WASM component.
 
 **Consolidate, narrow, then add only what is truly required.**

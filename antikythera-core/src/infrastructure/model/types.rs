@@ -7,10 +7,11 @@
 //! constructing this error.
 
 use crate::domain::types::{ChatMessage, MessageRole};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Model request for LLM chat
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelRequest {
     pub provider: String,
     pub model: String,
@@ -20,7 +21,7 @@ pub struct ModelRequest {
 }
 
 /// Model response from LLM
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelResponse {
     pub message: ChatMessage,
     pub session_id: Option<String>,
@@ -51,6 +52,10 @@ pub enum ModelError {
     Network { provider: String, message: String },
     #[error("provider '{provider}' returned invalid response: {reason}")]
     InvalidResponse { provider: String, reason: String },
+    #[error("host-delegated provider '{provider}' failed: {message}")]
+    HostDelegate { provider: String, message: String },
+    #[error("unsupported model integration: {message}")]
+    Unsupported { message: String },
 }
 
 impl ModelError {
@@ -91,6 +96,19 @@ impl ModelError {
         }
     }
 
+    pub fn host_delegate(provider: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::HostDelegate {
+            provider: provider.into(),
+            message: message.into(),
+        }
+    }
+
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        Self::Unsupported {
+            message: message.into(),
+        }
+    }
+
     /// User-friendly error message in Indonesian
     pub fn user_message(&self) -> String {
         match self {
@@ -110,6 +128,10 @@ impl ModelError {
             ModelError::InvalidResponse { provider, .. } => {
                 format!("Respons dari '{provider}' tidak valid.")
             }
+            ModelError::HostDelegate { provider, message } => {
+                format!("Host gagal memproses permintaan model untuk '{provider}': {message}")
+            }
+            ModelError::Unsupported { message } => message.clone(),
         }
     }
 }

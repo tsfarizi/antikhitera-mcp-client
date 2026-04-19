@@ -6,7 +6,7 @@ This document defines what the Antikythera MCP Framework is, what deployment tar
 
 Antikythera is a **Rust-based MCP client framework** designed to:
 
-- connect to LLM providers (Gemini, Ollama, OpenAI, Anthropic)
+- prepare and process LLM message flows while leaving the actual model API call to the embedding host
 - connect to MCP tool servers over STDIO and HTTP transports
 - run agent and tool-calling flows with structured step management
 - expose agent logic as a portable **server-side WASM component** (wasm32-wasip1)
@@ -27,9 +27,9 @@ The `antikythera-sdk` crate provides the stable integration surface:
 
 | Area | Key types |
 |:-----|:---------|
-| Client and config | `AppConfig`, `McpClient`, `ClientConfig`, `ChatRequest` |
+| Client and config | `AppConfig`, `McpClient`, `ClientConfig`, `ChatRequest`, `PreparedChatTurn` |
 | Agent infrastructure | `Agent`, `AgentOptions`, `AgentOutcome`, `ToolDescriptor` |
-| Model providers | `DynamicModelProvider`, `ModelProvider` |
+| Host model delegation | `DynamicModelProvider`, `ModelProvider`, `HostModelClient`, `HostModelTransport` |
 | Multi-agent | `MultiAgentOrchestrator`, `AgentProfile`, `AgentTask` |
 | Routing strategies | `DirectRouter`, `RoundRobinRouter`, `FirstAvailableRouter`, `RoleRouter` |
 | Logging | `ConfigLogger`, `AgentLogger`, `TransportLogger` |
@@ -58,7 +58,7 @@ flowchart LR
     WASM --> LOGIC[Agent logic and reasoning loop]
 ```
 
-The WASM component handles agent reasoning and response parsing. The host handles every external integration: LLM calls, tool execution, persistence, and protocol exposure. This keeps the component portable across runtimes and avoids embedding infrastructure concerns inside the framework.
+The WASM component handles agent reasoning, session continuity, history shaping, and response parsing. The host handles every external integration: LLM calls, tool execution, persistence, and protocol exposure. This keeps the component portable across runtimes and avoids embedding infrastructure concerns inside the framework.
 
 ## Feature flags
 
@@ -69,7 +69,7 @@ The WASM component handles agent reasoning and response parsing. The host handle
 | `wasm-runtime` | Wasmtime host for running WASM agents | Active development |
 | `wizard` | Configuration wizard in CLI | Stable |
 | `cache` | Response caching layer | Stable |
-| `http-providers` | HTTP-based LLM provider clients | Stable |
+| `http-providers` | Deprecated compatibility flag; no active direct model client path | Deprecated |
 | `native-transport` | STDIO and HTTP MCP transport | Stable |
 
 ## Related documents

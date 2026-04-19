@@ -7,20 +7,13 @@
 //!
 //! ## Building a provider
 //!
-//! ### Native / CLI builds (`http-providers` feature enabled)
-//! Use the convenience constructor:
-//! ```no_run,ignore
-//! let provider = DynamicModelProvider::from_configs(&config.providers)?;
-//! ```
-//!
-//! ### WASM component builds (`http-providers` feature disabled)
-//! Register pre-built `ModelClient` implementations directly:
+//! Register host-backed `ModelClient` implementations directly:
 //! ```no_run,ignore
 //! let provider = DynamicModelProvider::new()
 //!     .register("ollama", vec!["llama3".into()], Box::new(my_client));
 //! ```
-//! In the WASM component lane the host is responsible for providing the
-//! `ModelClient` implementations — the WASM module only sees the trait.
+//! The host is responsible for providing the `ModelClient` implementations —
+//! the core runtime only sees the trait.
 
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
@@ -28,8 +21,6 @@ use std::collections::{HashMap, HashSet};
 use super::traits::{ModelClient, ModelProvider};
 use super::types::{ModelError, ModelRequest, ModelResponse};
 
-#[cfg(feature = "http-providers")]
-use super::factory::ProviderFactory;
 #[cfg(feature = "http-providers")]
 use crate::config::ModelProviderConfig;
 
@@ -87,24 +78,16 @@ impl DynamicModelProvider {
         self
     }
 
-    /// Convenience constructor — build a provider from a list of
-    /// [`ModelProviderConfig`] entries using the built-in
-    /// [`ProviderFactory`].
+    /// Compatibility shim kept for older call sites.
     ///
-    /// **Requires the `http-providers` feature.**  This method is not
-    /// available in WASM component builds; use [`register`](Self::register)
-    /// with host-provided clients instead.
+    /// The framework no longer instantiates HTTP model clients from config.
+    /// Hosts must register a delegated [`ModelClient`] explicitly or use the
+    /// prepare/complete chat flow.
     #[cfg(feature = "http-providers")]
-    pub fn from_configs(configs: &[ModelProviderConfig]) -> Result<Self, ModelError> {
-        let mut provider = Self::new();
-
-        for config in configs {
-            let models: Vec<String> = config.models.iter().map(|m| m.name.clone()).collect();
-            let client = ProviderFactory::create(config);
-            provider = provider.register(config.id.clone(), models, client);
-        }
-
-        Ok(provider)
+    pub fn from_configs(_configs: &[ModelProviderConfig]) -> Result<Self, ModelError> {
+        Err(ModelError::unsupported(
+            "Inisialisasi provider model dari konfigurasi sudah dinonaktifkan. Host harus menyuntikkan ModelClient sendiri atau gunakan alur prepare/complete chat.",
+        ))
     }
 
     /// Check if a backend for the given provider ID is registered.

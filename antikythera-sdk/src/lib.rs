@@ -166,5 +166,8 @@ pub use component::{
 #[cfg(feature = "sdk-core")]
 pub mod high_level_api;
 
+#[cfg(feature = "sdk-core")]
+pub use antikythera_core::{HostModelClient, HostModelResponse, HostModelTransport};
+
 /// SDK version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
