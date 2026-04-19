@@ -272,7 +272,15 @@ After radical simplification, the API surface is crystal clear:
 
 **Next step:**
 - Document final contract in README
-- Record in REVISION.md as v1.0 API freeze
+
+**Implemented now (host-driven contract runtime):**
+- ✅ Added explicit two-phase host flow in SDK/agent runner:
+  - `prepare_user_turn(request_json)` — builds session-aware message payload for host model invocation
+  - `commit_llm_response(prepared_turn_json, llm_response_json)` — commits host response into WASM-managed history/state
+- ✅ Added session runtime helpers for host integration:
+  - `init_agent_runner`, `process_llm_response_for_session`, `process_tool_result_for_session`, `get_agent_state`, `reset_agent_session`
+- ✅ Host responses can be plain text or structured JSON action payloads; both are accepted and normalized into framework state
+- ✅ Session continuity remains internal to framework/WASM (`session_id`, message history, step tracking), while model HTTP/API invocation remains fully host-owned
 
 ### ✅ 5.5 Runtime resilience — COMPLETED
 
@@ -329,7 +337,7 @@ Without this, long conversations will still degrade even though hard token-limit
 
 The current agent flow still leans heavily on internal JSON conventions.
 
-For a strong 1.0 client framework, it should support:
+For a strong 1.0 client framework, host integrations should support:
 
 - OpenAI native tool calling
 - Gemini tools
@@ -420,7 +428,7 @@ Implement:
 
 - streaming output for CLI and WASM component embeddings
 - advanced context management and summarization
-- native provider tool calling
+- host-side native provider tool calling adapters (outside this repo's runtime core)
 - host-facing observability and policy hooks
 - transport extensibility and multi-agent hardening
 
@@ -449,7 +457,7 @@ Before 1.0, decide clearly:
 
 6. Add streaming for CLI and host embeddings
 7. Extend context management with summarization and provider-aware policies
-8. Add native provider-specific tool calling
+8. Add host-side native provider-specific tool calling adapters
 9. Add host-facing observability hooks and harden multi-agent execution
 
 ---

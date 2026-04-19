@@ -31,6 +31,7 @@
 
 pub mod types;
 pub mod processor;
+pub mod runner;
 
 // Re-export main types
 pub use types::{
@@ -49,4 +50,14 @@ pub use processor::{
     build_system_prompt,
     build_llm_messages,
     validate_json_schema,
+};
+
+pub use runner::{
+    init,
+    prepare_user_turn,
+    commit_llm_response,
+    process_llm_response_for_session,
+    process_tool_result_for_session,
+    get_state,
+    reset_session,
 };

@@ -143,6 +143,14 @@ pub use wasm_agent::{
     build_system_prompt,
     build_llm_messages,
     validate_json_schema,
+    // Runner contract
+    init as init_agent_runner,
+    prepare_user_turn,
+    commit_llm_response,
+    process_llm_response_for_session,
+    process_tool_result_for_session,
+    get_state as get_agent_state,
+    reset_session as reset_agent_session,
 };
 
 /// WASM Component feature slice (Host Imports/Exports)
