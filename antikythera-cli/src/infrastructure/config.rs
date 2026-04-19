@@ -45,8 +45,10 @@ pub fn create_provider_config(
         .find(|p| p.id == config.model.default_provider)
         .ok_or_else(|| format!("Provider '{}' not found", config.model.default_provider))?;
 
-    let provider_type = ProviderType::from_str(&provider.provider_type)
-        .ok_or_else(|| format!("Unknown provider type: {}", provider.provider_type))?;
+    let provider_type = provider
+        .provider_type
+        .parse::<ProviderType>()
+        .map_err(|_| format!("Unknown provider type: {}", provider.provider_type))?;
 
     Ok(ProviderConfig {
         id: provider.id.clone(),

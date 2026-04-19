@@ -20,9 +20,7 @@ use super::clients::{GeminiClient, OllamaClient, OpenAIClient};
 /// The `spec` value is expected to be the **name of an environment variable**
 /// (e.g. `"GEMINI_API_KEY"`).  An empty string or `None` spec returns `None`.
 pub fn resolve_api_key(provider: &str, spec: Option<&str>) -> Option<String> {
-    let Some(raw) = spec.map(str::trim) else {
-        return None;
-    };
+    let raw = spec.map(str::trim)?;
     if raw.is_empty() {
         return None;
     }

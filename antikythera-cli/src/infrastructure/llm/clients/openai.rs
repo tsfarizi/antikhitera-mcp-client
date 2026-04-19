@@ -153,16 +153,16 @@ fn extract_openai_stream_content(
 
         if let Ok(chunk) = serde_json::from_str::<OpenAIStreamChunk>(payload) {
             for choice in chunk.choices {
-                if let Some(delta) = choice.delta {
-                    if let Some(piece) = delta.content {
-                        saw_chunk = true;
-                        emit_stream_event(StreamEvent::Chunk {
-                            provider_id: provider_id.to_string(),
-                            session_id: session.clone(),
-                            content: piece.clone(),
-                        });
-                        content.push_str(&piece);
-                    }
+                if let Some(delta) = choice.delta
+                    && let Some(piece) = delta.content
+                {
+                    saw_chunk = true;
+                    emit_stream_event(StreamEvent::Chunk {
+                        provider_id: provider_id.to_string(),
+                        session_id: session.clone(),
+                        content: piece.clone(),
+                    });
+                    content.push_str(&piece);
                 }
             }
         }

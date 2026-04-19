@@ -53,11 +53,19 @@ pub enum ProviderType {
 }
 
 impl ProviderType {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
+        s.parse::<ProviderType>().ok()
+    }
+}
+
+impl std::str::FromStr for ProviderType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "gemini" => Some(ProviderType::Gemini),
-            "ollama" => Some(ProviderType::Ollama),
-            _ => None,
+            "gemini" => Ok(ProviderType::Gemini),
+            "ollama" => Ok(ProviderType::Ollama),
+            _ => Err(format!("Unknown provider type: {s}")),
         }
     }
 }

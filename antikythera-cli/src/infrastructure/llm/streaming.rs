@@ -51,9 +51,9 @@ pub fn install_terminal_stream_sink() {
 }
 
 pub(crate) fn emit_stream_event(event: StreamEvent) {
-    if let Ok(guard) = STREAM_SINK.lock() {
-        if let Some(sink) = guard.as_ref() {
-            sink(&event);
-        }
+    if let Ok(guard) = STREAM_SINK.lock()
+        && let Some(sink) = guard.as_ref()
+    {
+        sink(&event);
     }
 }
