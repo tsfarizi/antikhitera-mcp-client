@@ -160,7 +160,7 @@ impl ToolServerInterface for ServerManager {
         };
         validate_tool_call_envelope(&call_env).map_err(|e| ToolInvokeError::Transport {
             server: server.to_string(),
-            message: format!("invalid MCP tool call envelope: {e}"),
+            message: e.to_transport_message("call"),
         })?;
 
         self.ensure_instance(server).await?;
@@ -182,7 +182,7 @@ impl ToolServerInterface for ServerManager {
                 };
                 validate_tool_result_envelope(&result_env).map_err(|e| ToolInvokeError::Transport {
                     server: server.to_string(),
-                    message: format!("invalid MCP tool result envelope: {e}"),
+                    message: e.to_transport_message("result"),
                 })?;
                 Ok(value)
             }
@@ -196,7 +196,7 @@ impl ToolServerInterface for ServerManager {
                 };
                 validate_tool_result_envelope(&result_env).map_err(|e| ToolInvokeError::Transport {
                     server: server.to_string(),
-                    message: format!("invalid MCP tool result envelope: {e}"),
+                    message: e.to_transport_message("result"),
                 })?;
                 Err(err)
             }

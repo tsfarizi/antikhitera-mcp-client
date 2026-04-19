@@ -358,6 +358,106 @@ fn budget_task_limit_exhaustion() {
     assert!(budget.is_task_budget_exhausted()); // 2 >= 2
 }
 
+// ---------------------------------------------------------------------------
+// SDK hardening API surface
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn sdk_hardening_runtime_configure_cancel_and_snapshot() {
+    use antikythera_sdk::agents::{
+        cancel_orchestrator, configure_hardening, get_monitor_snapshot,
+        reset_hardening_runtime,
+    };
+
+    reset_hardening_runtime().expect("reset runtime");
+
+    configure_hardening(
+        &serde_json::json!({
+            "max_concurrent_tasks": 4,
+            "max_total_steps": 120,
+            "max_total_tasks": 30,
+            "default_retry_condition": "on_transient"
+        })
+        .to_string(),
+    )
+    .expect("configure hardening");
+
+    cancel_orchestrator().expect("cancel runtime");
+    let snapshot_json = get_monitor_snapshot().expect("snapshot");
+    let snapshot: serde_json::Value = serde_json::from_str(&snapshot_json).expect("json");
+
+    assert_eq!(snapshot["max_concurrent_tasks"], 4);
+    assert_eq!(snapshot["max_total_steps"], 120);
+    assert_eq!(snapshot["max_total_tasks"], 30);
+    assert_eq!(snapshot["cancelled"], true);
+}
+
+#[test]
+fn sdk_default_retry_condition_applies_to_unconfigured_task() {
+    use antikythera_sdk::agents::{OrchestratorOptions, RetryConditionOption};
+    use antikythera_core::application::agent::multi_agent::task::AgentTask;
+
+    let mut task = AgentTask::new("summarize this document");
+    let options = OrchestratorOptions {
+        default_retry_condition: RetryConditionOption::OnTransient,
+        ..OrchestratorOptions::default()
+    };
+
+    options.apply_to_task(&mut task);
+    let retry = task.retry_policy.expect("retry policy should be injected");
+    let retry_json = serde_json::to_value(&retry).expect("serialize retry policy");
+
+    assert_eq!(retry_json["condition"], "on_transient");
+}
+
+#[test]
+fn sdk_task_result_detail_is_decoded_without_manual_mapping() {
+    use antikythera_sdk::agents::task_result_detail;
+
+    let task_result_json = serde_json::json!({
+        "task_id": "task-1",
+        "agent_id": "agent-a",
+        "success": false,
+        "output": null,
+        "error": "timeout",
+        "steps_used": 0,
+        "session_id": "session-a",
+        "error_kind": "transient",
+        "metadata": {
+            "attempt_count": 1,
+            "duration_ms": 11,
+            "timed_out": true,
+            "deadline_exceeded": false,
+            "cancelled": false,
+            "retry_applied": false,
+            "routed_by": null,
+            "execution_mode": "auto",
+            "correlation_id": "corr-7",
+            "routing_decision": {
+                "router_name": "round-robin",
+                "selected_agent_id": "agent-a",
+                "candidates_considered": 2,
+                "reason": "balanced"
+            },
+            "concurrency_wait_ms": 3,
+            "budget_exhausted": false,
+            "error_kind": "transient"
+        }
+    })
+    .to_string();
+
+    let detail_json = task_result_detail(&task_result_json).expect("detail json");
+    let detail: serde_json::Value = serde_json::from_str(&detail_json).expect("parsed detail");
+
+    assert_eq!(detail["error_kind"], "transient");
+    assert_eq!(detail["is_transient"], true);
+    assert_eq!(detail["router_name"], "round-robin");
+    assert_eq!(detail["selected_agent_id"], "agent-a");
+    assert_eq!(detail["candidates_considered"], 2);
+    assert_eq!(detail["concurrency_wait_ms"], 3);
+}
+
 #[test]
 fn budget_clone_shares_counter_state() {
     use antikythera_core::application::agent::multi_agent::budget::OrchestratorBudget;

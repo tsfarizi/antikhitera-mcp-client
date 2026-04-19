@@ -13,7 +13,9 @@ use std::sync::Arc;
 use antikythera_core::cli::{Cli, RunMode};
 use antikythera_core::application::stdio;
 use antikythera_core::{AppConfig, ClientConfig, McpClient};
-use antikythera_cli::infrastructure::llm::build_provider_from_configs;
+use antikythera_cli::infrastructure::llm::{
+    build_provider_from_configs, install_terminal_stream_sink,
+};
 use clap::Parser;
 
 #[cfg(feature = "multi-agent")]
@@ -38,6 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let provider = build_provider_from_configs(&providers)?;
+    install_terminal_stream_sink();
     let mut client_cfg = ClientConfig::new(
         config.default_provider.clone(),
         config.model.clone(),

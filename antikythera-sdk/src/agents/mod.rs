@@ -265,6 +265,129 @@ mod core_conversions {
 }
 
 // ============================================================================
+// Host runtime hardening controls (native Rust surface)
+// ============================================================================
+
+#[cfg(feature = "multi-agent")]
+#[derive(Debug, Clone)]
+struct HardeningRuntimeState {
+    options: OrchestratorOptions,
+    cancelled: bool,
+    last_budget_snapshot: Option<antikythera_core::application::agent::multi_agent::BudgetSnapshot>,
+}
+
+#[cfg(feature = "multi-agent")]
+impl Default for HardeningRuntimeState {
+    fn default() -> Self {
+        Self {
+            options: OrchestratorOptions::default(),
+            cancelled: false,
+            last_budget_snapshot: None,
+        }
+    }
+}
+
+#[cfg(feature = "multi-agent")]
+static HARDENING_RUNTIME: LazyLock<Mutex<HardeningRuntimeState>> =
+    LazyLock::new(|| Mutex::new(HardeningRuntimeState::default()));
+
+#[cfg(feature = "multi-agent")]
+fn with_hardening_runtime<T>(
+    f: impl FnOnce(&mut HardeningRuntimeState) -> Result<T, String>,
+) -> Result<T, String> {
+    let mut guard = HARDENING_RUNTIME
+        .lock()
+        .map_err(|_| "hardening runtime lock poisoned".to_string())?;
+    f(&mut guard)
+}
+
+/// Configure runtime hardening options from JSON.
+///
+/// This updates the host-visible defaults and clears cancellation state so the
+/// next orchestrator run starts from a clean control plane.
+#[cfg(feature = "multi-agent")]
+pub fn configure_hardening(options_json: &str) -> Result<bool, String> {
+    let options: OrchestratorOptions =
+        serde_json::from_str(options_json).map_err(|e| format!("Invalid OrchestratorOptions JSON: {e}"))?;
+
+    if options.max_concurrent_tasks == Some(0) {
+        return Err("max_concurrent_tasks must be > 0 if set".to_string());
+    }
+    if options.max_total_steps == Some(0) {
+        return Err("max_total_steps must be > 0 if set".to_string());
+    }
+    if options.max_total_tasks == Some(0) {
+        return Err("max_total_tasks must be > 0 if set".to_string());
+    }
+
+    with_hardening_runtime(|state| {
+        state.options = options;
+        state.cancelled = false;
+        Ok(true)
+    })
+}
+
+/// Mark orchestrator runtime as cancelled.
+#[cfg(feature = "multi-agent")]
+pub fn cancel_orchestrator() -> Result<bool, String> {
+    with_hardening_runtime(|state| {
+        state.cancelled = true;
+        Ok(true)
+    })
+}
+
+/// Update latest budget snapshot seen by host runtime.
+#[cfg(feature = "multi-agent")]
+pub fn update_monitor_budget_snapshot(
+    snapshot: &antikythera_core::application::agent::multi_agent::BudgetSnapshot,
+) -> Result<bool, String> {
+    with_hardening_runtime(|state| {
+        state.last_budget_snapshot = Some(snapshot.clone());
+        Ok(true)
+    })
+}
+
+/// Read monitor snapshot from the current host runtime state.
+#[cfg(feature = "multi-agent")]
+pub fn get_monitor_snapshot() -> Result<String, String> {
+    with_hardening_runtime(|state| {
+        let monitor = if let Some(snapshot) = state.last_budget_snapshot.as_ref() {
+            OrchestratorMonitorSnapshot::from(snapshot).with_cancelled(state.cancelled)
+        } else {
+            OrchestratorMonitorSnapshot {
+                max_total_steps: state.options.max_total_steps,
+                max_total_tasks: state.options.max_total_tasks,
+                max_concurrent_tasks: state.options.max_concurrent_tasks,
+                cancelled: state.cancelled,
+                ..OrchestratorMonitorSnapshot::default()
+            }
+        };
+        serde_json::to_string(&monitor)
+            .map_err(|e| format!("Failed to serialize monitor snapshot: {e}"))
+    })
+}
+
+/// Decode a serialized `TaskResult` JSON into task detail JSON.
+#[cfg(feature = "multi-agent")]
+pub fn task_result_detail(task_result_json: &str) -> Result<String, String> {
+    use antikythera_core::application::agent::multi_agent::TaskResult;
+
+    let result: TaskResult = serde_json::from_str(task_result_json)
+        .map_err(|e| format!("Invalid TaskResult JSON: {e}"))?;
+    let detail = TaskResultDetail::from(&result);
+    serde_json::to_string(&detail).map_err(|e| format!("Failed to serialize TaskResultDetail: {e}"))
+}
+
+/// Reset host runtime hardening state to defaults.
+#[cfg(feature = "multi-agent")]
+pub fn reset_hardening_runtime() -> Result<bool, String> {
+    with_hardening_runtime(|state| {
+        *state = HardeningRuntimeState::default();
+        Ok(true)
+    })
+}
+
+// ============================================================================
 // FFI — Orchestrator options, monitoring, and task introspection
 // ============================================================================
 
@@ -307,21 +430,51 @@ pub fn mcp_validate_orchestrator_options(options_json: *const c_char) -> *mut c_
     }
 }
 
+/// Configure host runtime hardening options from JSON.
+#[cfg(feature = "multi-agent")]
+pub fn mcp_configure_hardening(options_json: *const c_char) -> *mut c_char {
+    let json_str = match from_c_string(options_json) {
+        Ok(s) => s,
+        Err(e) => return to_c_string(&format!(r#"{{"success":false,"error":"{}"}}"#, e)),
+    };
+
+    match configure_hardening(&json_str) {
+        Ok(success) => to_c_string(&format!(r#"{{"success":{success}}}"#)),
+        Err(e) => to_c_string(&format!(r#"{{"success":false,"error":"{}"}}"#, e)),
+    }
+}
+
+/// Mark active runtime as cancelled.
+#[cfg(feature = "multi-agent")]
+pub fn mcp_cancel_orchestrator() -> *mut c_char {
+    match cancel_orchestrator() {
+        Ok(success) => to_c_string(&format!(r#"{{"success":{success}}}"#)),
+        Err(e) => to_c_string(&format!(r#"{{"success":false,"error":"{}"}}"#, e)),
+    }
+}
+
+/// Return current monitor snapshot JSON from host runtime state.
+#[cfg(feature = "multi-agent")]
+pub fn mcp_get_monitor_snapshot() -> *mut c_char {
+    match get_monitor_snapshot() {
+        Ok(json) => to_c_string(&json),
+        Err(e) => to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
+    }
+}
+
 /// Decode a serialized [`TaskResult`] JSON into a [`TaskResultDetail`] JSON
 /// for easy routing/error introspection without requiring a live orchestrator.
 ///
 /// Returns `{"error": "..."}` if the input cannot be parsed.
 #[cfg(feature = "multi-agent")]
 pub fn mcp_task_result_detail(task_result_json: *const c_char) -> *mut c_char {
-    use antikythera_core::application::agent::multi_agent::TaskResult;
-
     let json_str = match from_c_string(task_result_json) {
         Ok(s) => s,
         Err(e) => return to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
     };
-    match serde_json::from_str::<TaskResult>(&json_str) {
-        Ok(result) => serialize_result(&TaskResultDetail::from(&result)),
-        Err(e) => to_c_string(&format!(r#"{{"error":"Invalid TaskResult JSON: {}"}}"#, e)),
+    match task_result_detail(&json_str) {
+        Ok(json) => to_c_string(&json),
+        Err(e) => to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
     }
 }
 

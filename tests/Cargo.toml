@@ -1,6 +1,6 @@
 [package]
 name = "antikythera-tests"
-version = "0.9.6"
+version = "0.9.7"
 edition = "2024"
 publish = false
 
@@ -64,7 +64,7 @@ path = "resilience/resilience_tests.rs"
 antikythera-log = { path = "../antikythera-log" }
 antikythera-session = { path = "../antikythera-session" }
 antikythera-core = { path = "../antikythera-core", features = ["full"] }
-antikythera-sdk = { path = "../antikythera-sdk", features = ["component"] }
+antikythera-sdk = { path = "../antikythera-sdk", features = ["component", "multi-agent"] }
 serde_json.workspace = true
 chrono.workspace = true
 tempfile = "3.10"

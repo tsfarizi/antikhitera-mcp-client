@@ -173,6 +173,20 @@ commit_llm_response(prepared_turn_json, llm_response_json) -> agent_action_json
 - ✅ Retry logic and resilience policies (backoff, timeouts)
 - ✅ Multi-agent orchestration (router, scheduler, execution modes)
 
+### Runtime hardening and monitoring APIs
+
+For multi-agent hosts, SDK-level runtime controls are available to adjust
+hardening behavior and inspect live execution state without rebuilding:
+
+- `configure_hardening(options_json)`
+- `cancel_orchestrator()`
+- `get_monitor_snapshot()`
+- `task_result_detail(task_result_json)`
+
+The native CLI path also enables provider stream chunk events and installs a
+terminal sink (stderr) so streamed content is visible live while stdout stays
+safe for machine-readable output.
+
 ---
 
 ---

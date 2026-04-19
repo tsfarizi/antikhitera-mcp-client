@@ -1,8 +1,10 @@
-//! LLM infrastructure compatibility layer.
-//!
-//! Direct model API calls are no longer implemented in this repository.
-//! These modules are kept only so older call sites fail explicitly with a
-//! clear error message instead of silently performing network I/O.
+//! LLM infrastructure layer for native CLI runtime.
+
+mod adapter;
+mod clients;
+mod factory;
+mod http_client;
+mod streaming;
 
 pub mod gemini;
 pub mod ollama;
@@ -11,3 +13,6 @@ pub mod provider_builder;
 pub use gemini::GeminiProvider;
 pub use ollama::OllamaProvider;
 pub use provider_builder::build_provider_from_configs;
+pub use streaming::{
+	clear_stream_event_sink, install_terminal_stream_sink, set_stream_event_sink,
+};

@@ -12,6 +12,7 @@ use tracing::{debug, info};
 
 use super::super::adapter::MessageAdapter;
 use super::super::http_client::HttpClientBase;
+use super::super::streaming::{emit_stream_event, StreamEvent};
 
 /// Ollama client for a local LLM inference server.
 #[derive(Clone)]
@@ -54,7 +55,11 @@ impl ModelClient for OllamaClient {
         let raw = self.base.post_no_auth_text(&url, &payload).await?;
         debug!("Received response from Ollama");
 
-        let content = extract_ollama_stream_content(&raw)
+        let content = extract_ollama_stream_content(
+            &raw,
+            self.base.id.as_str(),
+            request.session_id.as_deref(),
+        )
             .or_else(|| {
                 serde_json::from_str::<OllamaResponse>(&raw)
                     .ok()
@@ -91,9 +96,19 @@ struct OllamaStreamChunk {
     done: Option<bool>,
 }
 
-fn extract_ollama_stream_content(raw: &str) -> Option<String> {
+fn extract_ollama_stream_content(
+    raw: &str,
+    provider_id: &str,
+    session_id: Option<&str>,
+) -> Option<String> {
     let mut content = String::new();
     let mut saw_chunk = false;
+    let session = session_id.map(|v| v.to_string());
+
+    emit_stream_event(StreamEvent::Started {
+        provider_id: provider_id.to_string(),
+        session_id: session.clone(),
+    });
 
     for line in raw.lines() {
         let trimmed = line.trim();
@@ -104,6 +119,11 @@ fn extract_ollama_stream_content(raw: &str) -> Option<String> {
         if let Ok(chunk) = serde_json::from_str::<OllamaStreamChunk>(trimmed) {
             if let Some(msg) = chunk.message {
                 saw_chunk = true;
+                emit_stream_event(StreamEvent::Chunk {
+                    provider_id: provider_id.to_string(),
+                    session_id: session.clone(),
+                    content: msg.content.clone(),
+                });
                 content.push_str(&msg.content);
             }
             if chunk.done.unwrap_or(false) {
@@ -111,6 +131,11 @@ fn extract_ollama_stream_content(raw: &str) -> Option<String> {
             }
         }
     }
+
+    emit_stream_event(StreamEvent::Completed {
+        provider_id: provider_id.to_string(),
+        session_id: session,
+    });
 
     if saw_chunk { Some(content) } else { None }
 }
