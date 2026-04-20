@@ -42,10 +42,7 @@ impl ChatUseCase {
     }
 
     /// Send user message and get response (may involve tool calls)
-    pub async fn send_message(
-        &mut self,
-        user_input: &str,
-    ) -> CliResult<String> {
+    pub async fn send_message(&mut self, user_input: &str) -> CliResult<String> {
         // Add user message
         self.session.add_message(Message::user(user_input));
 

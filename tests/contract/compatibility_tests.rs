@@ -3,8 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use antikythera_sdk::wasm_agent::runner::{
-    commit_llm_response, get_slo_snapshot, init, prepare_user_turn, process_tool_result_for_session,
-    reset_session,
+    commit_llm_response, get_slo_snapshot, init, prepare_user_turn,
+    process_tool_result_for_session, reset_session,
 };
 
 fn repo_root() -> PathBuf {
@@ -109,7 +109,10 @@ fn wit_contract_signatures_match_golden() {
         .map(|line| line.to_string())
         .collect::<Vec<_>>();
 
-    assert_eq!(actual, expected, "WIT contract changed; this is a breaking-contract detector failure");
+    assert_eq!(
+        actual, expected,
+        "WIT contract changed; this is a breaking-contract detector failure"
+    );
 }
 
 #[test]
@@ -169,7 +172,8 @@ fn payload_contract_shapes_match_golden() {
     let tool_v: serde_json::Value = serde_json::from_str(&tool_processed).unwrap();
 
     let golden_path = fixture_path("payload_contract.golden.json");
-    let golden: serde_json::Value = serde_json::from_str(&fs::read_to_string(golden_path).unwrap()).unwrap();
+    let golden: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(golden_path).unwrap()).unwrap();
 
     assert_eq!(
         sorted_keys(&prepared_v),
@@ -256,7 +260,8 @@ fn correlation_and_slo_contract_are_present() {
     )
     .unwrap();
 
-    let slo_v: serde_json::Value = serde_json::from_str(&get_slo_snapshot("corr-slo-session").unwrap()).unwrap();
+    let slo_v: serde_json::Value =
+        serde_json::from_str(&get_slo_snapshot("corr-slo-session").unwrap()).unwrap();
     let keys = sorted_keys(&slo_v).into_iter().collect::<BTreeSet<_>>();
 
     for required in [
@@ -268,7 +273,10 @@ fn correlation_and_slo_contract_are_present() {
         "p95_prepare_latency_ms",
         "p95_commit_latency_ms",
     ] {
-        assert!(keys.contains(required), "missing required SLO key: {required}");
+        assert!(
+            keys.contains(required),
+            "missing required SLO key: {required}"
+        );
     }
 
     assert_eq!(slo_v["correlation_id"], "corr-e2e");

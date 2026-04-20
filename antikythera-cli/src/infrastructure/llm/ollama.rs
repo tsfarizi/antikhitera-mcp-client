@@ -39,8 +39,7 @@ impl LlmProvider for OllamaProvider {
     ) -> CliResult<String> {
         Err(CliError::Unsupported(format!(
             "Direct Ollama model invocation is disabled for model '{}' at '{}'. The host must perform the call and hand the response back to the framework.",
-            self.model,
-            self.endpoint
+            self.model, self.endpoint
         )))
     }
 }

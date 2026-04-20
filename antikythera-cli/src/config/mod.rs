@@ -13,11 +13,11 @@
 
 // Re-export the unified config types from core so the rest of the CLI crate and
 // the `antikythera-config` binary can import them from a single place.
+use crate::error::{CliError, CliResult};
 pub use antikythera_core::config::postcard_config::{
     AgentConfig, AppConfig, CONFIG_PATH, DocServerConfig, ModelConfig, ModelInfo, PromptsConfig,
     ProviderConfig, ServerConfig,
 };
-use crate::error::{CliError, CliResult};
 
 /// Type alias kept for backward compatibility within the CLI crate.
 /// Prefer using `AppConfig` directly in new code.
@@ -33,14 +33,12 @@ use std::path::Path;
 
 /// Serialize `AppConfig` to Postcard binary.
 pub fn config_to_postcard(config: &AppConfig) -> CliResult<Vec<u8>> {
-    antikythera_core::config::postcard_config::config_to_postcard(config)
-        .map_err(CliError::Config)
+    antikythera_core::config::postcard_config::config_to_postcard(config).map_err(CliError::Config)
 }
 
 /// Deserialize `AppConfig` from Postcard binary.
 pub fn config_from_postcard(data: &[u8]) -> CliResult<AppConfig> {
-    antikythera_core::config::postcard_config::config_from_postcard(data)
-        .map_err(CliError::Config)
+    antikythera_core::config::postcard_config::config_from_postcard(data).map_err(CliError::Config)
 }
 
 /// Load `AppConfig` from `path` (defaults to [`CONFIG_PATH`] = `app.pc`).
@@ -106,7 +104,10 @@ mod tests {
         let config = AppConfig::default();
         let bytes = config_to_postcard(&config).expect("serialize");
         let decoded = config_from_postcard(&bytes).expect("deserialize");
-        assert_eq!(decoded.model.default_provider, config.model.default_provider);
+        assert_eq!(
+            decoded.model.default_provider,
+            config.model.default_provider
+        );
     }
 
     #[test]
@@ -119,9 +120,13 @@ mod tests {
     #[test]
     fn deprecated_aliases_delegate_to_new_names() {
         let missing = Path::new("definitely-not-exists-app.pc");
-        let e1 = load_app_config(Some(missing)).expect_err("expected error").to_string();
+        let e1 = load_app_config(Some(missing))
+            .expect_err("expected error")
+            .to_string();
         #[allow(deprecated)]
-        let e2 = load_config(Some(missing)).expect_err("expected error").to_string();
+        let e2 = load_config(Some(missing))
+            .expect_err("expected error")
+            .to_string();
         assert_eq!(e1, e2);
     }
 }

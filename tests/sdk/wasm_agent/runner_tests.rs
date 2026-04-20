@@ -420,7 +420,10 @@ fn missing_required_param_returns_error() {
     .to_string();
 
     let result = commit_llm_response(&prepared, &response);
-    assert!(result.is_err(), "should reject call with missing required param");
+    assert!(
+        result.is_err(),
+        "should reject call with missing required param"
+    );
     let err = result.unwrap_err();
     assert!(
         err.contains("lon"),
@@ -458,7 +461,11 @@ fn valid_tool_call_passes_validation() {
     .to_string();
 
     let result = commit_llm_response(&prepared, &response);
-    assert!(result.is_ok(), "valid tool call should pass, got: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "valid tool call should pass, got: {:?}",
+        result
+    );
     let value: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
     assert_eq!(value["action"], "call_tool");
     assert_eq!(value["tool_name"], "db.query");
@@ -567,7 +574,8 @@ fn archived_session_prepare_requests_restore_and_supports_progress_stream() {
     )
     .unwrap();
 
-    let events: serde_json::Value = serde_json::from_str(&drain_events(&archived_id).unwrap()).unwrap();
+    let events: serde_json::Value =
+        serde_json::from_str(&drain_events(&archived_id).unwrap()).unwrap();
     let kinds: Vec<String> = events
         .as_array()
         .unwrap()
@@ -600,7 +608,8 @@ fn hydrate_session_restores_archived_state() {
     commit_llm_response(&first, "reply-1").unwrap();
 
     let _other = init(&cfg).unwrap();
-    let events: serde_json::Value = serde_json::from_str(&drain_events(&archived_id).unwrap()).unwrap();
+    let events: serde_json::Value =
+        serde_json::from_str(&drain_events(&archived_id).unwrap()).unwrap();
     let state_json = events
         .as_array()
         .unwrap()
@@ -650,12 +659,16 @@ fn sweep_idle_sessions_archives_timed_out_session() {
     commit_llm_response(&prepared, "world").unwrap();
 
     let swept = sweep_idle_sessions(Some(chrono::Utc::now().timestamp_millis() + 2_000)).unwrap();
-    assert_eq!(swept, 1, "exactly one session should be archived by idle sweep");
+    assert_eq!(
+        swept, 1,
+        "exactly one session should be archived by idle sweep"
+    );
 
     let state_result = get_state(&session_id);
     assert!(state_result.is_err());
 
-    let events: serde_json::Value = serde_json::from_str(&drain_events(&session_id).unwrap()).unwrap();
+    let events: serde_json::Value =
+        serde_json::from_str(&drain_events(&session_id).unwrap()).unwrap();
     let archived = events
         .as_array()
         .unwrap()
@@ -664,4 +677,3 @@ fn sweep_idle_sessions_archives_timed_out_session() {
         .expect("missing session_archived event");
     assert_eq!(archived["payload"]["reason"], "idle_timeout");
 }
-

@@ -96,7 +96,10 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             let mut config = load_app_config(None)?;
 
             if config.providers.iter().any(|p| p.id == id) {
-                return Err(CliError::Validation(format!("Provider '{}' already exists", id)));
+                return Err(CliError::Validation(format!(
+                    "Provider '{}' already exists",
+                    id
+                )));
             }
 
             config.providers.push(ProviderConfig {

@@ -5,7 +5,9 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use super::processor::{build_llm_messages, process_llm_response, process_tool_result, validate_tool_call};
+use super::processor::{
+    build_llm_messages, process_llm_response, process_tool_result, validate_tool_call,
+};
 use super::types::{
     AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary, SloSnapshot,
     StreamEvent, StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolRegistry,
@@ -454,12 +456,14 @@ impl AgentRunnerRuntime {
         if !self.sessions.contains_key(&session_id)
             && self.archived_sessions.contains_key(&session_id)
         {
-            let archived = self.archived_sessions.get(&session_id).cloned().unwrap_or(
-                ArchivedSessionRecord {
-                    archived_at_ms: now_ms,
-                    reason: "unknown".to_string(),
-                },
-            );
+            let archived =
+                self.archived_sessions
+                    .get(&session_id)
+                    .cloned()
+                    .unwrap_or(ArchivedSessionRecord {
+                        archived_at_ms: now_ms,
+                        reason: "unknown".to_string(),
+                    });
             self.emit_pending_event(
                 &session_id,
                 StreamEventKind::SessionRestoreRequested,
@@ -542,13 +546,11 @@ impl AgentRunnerRuntime {
                 .map_err(|e| format!("Failed to encode messages_json: {e}"))?,
         };
 
-        let encoded =
-            serde_json::to_string(&prepared).map_err(|e| format!("Failed to encode prepared turn: {e}"))?;
+        let encoded = serde_json::to_string(&prepared)
+            .map_err(|e| format!("Failed to encode prepared turn: {e}"))?;
 
-        let _ = self.enforce_capacity(
-            Some(&prepared.session_id),
-            prepared.correlation_id.clone(),
-        )?;
+        let _ =
+            self.enforce_capacity(Some(&prepared.session_id), prepared.correlation_id.clone())?;
 
         Ok(encoded)
     }
@@ -815,7 +817,11 @@ impl AgentRunnerRuntime {
         } else {
             0.0
         };
-        let retry_ratio = if commits > 0.0 { retries / commits } else { 0.0 };
+        let retry_ratio = if commits > 0.0 {
+            retries / commits
+        } else {
+            0.0
+        };
 
         let snapshot = SloSnapshot {
             session_id: runtime.state.session_id.clone(),
@@ -1008,7 +1014,10 @@ pub fn hydrate_session(session_id: &str, state_json: &str) -> Result<bool, Strin
 }
 
 /// Emit stream progress updates for session restore so host/user can see load progress.
-pub fn report_session_restore_progress(session_id: &str, progress_json: &str) -> Result<bool, String> {
+pub fn report_session_restore_progress(
+    session_id: &str,
+    progress_json: &str,
+) -> Result<bool, String> {
     with_runtime(|rt| rt.report_restore_progress(session_id, progress_json))
 }
 

@@ -358,11 +358,12 @@ impl ToolRegistry {
         tool_name: &str,
         arguments: &serde_json::Value,
     ) -> Result<(), ToolValidationError> {
-        let def = self.tools.get(tool_name).ok_or_else(|| {
-            ToolValidationError::UnknownTool {
+        let def = self
+            .tools
+            .get(tool_name)
+            .ok_or_else(|| ToolValidationError::UnknownTool {
                 name: tool_name.to_string(),
-            }
-        })?;
+            })?;
 
         for param in def.required_params() {
             let present = arguments

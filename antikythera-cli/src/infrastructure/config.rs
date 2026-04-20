@@ -32,13 +32,15 @@ pub fn build_llm_provider(
         .iter()
         .find(|p| p.id == config.model.default_provider)
         .ok_or_else(|| {
-            CliError::Validation(format!("Provider '{}' not found", config.model.default_provider))
+            CliError::Validation(format!(
+                "Provider '{}' not found",
+                config.model.default_provider
+            ))
         })?;
 
     Err(CliError::Unsupported(format!(
         "Direct model invocation for provider '{}' ({}) is disabled in this repository. The embedding host must call the model API and pass the response back into the framework.",
-        provider.id,
-        provider.provider_type
+        provider.id, provider.provider_type
     )))
 }
 
@@ -60,7 +62,10 @@ pub fn build_active_provider_config(config: &AppConfig) -> CliResult<ProviderCon
         .iter()
         .find(|p| p.id == config.model.default_provider)
         .ok_or_else(|| {
-            CliError::Validation(format!("Provider '{}' not found", config.model.default_provider))
+            CliError::Validation(format!(
+                "Provider '{}' not found",
+                config.model.default_provider
+            ))
         })?;
 
     let provider_type = provider

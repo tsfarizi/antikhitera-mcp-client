@@ -6,8 +6,8 @@
 //! host's responsibility via FFI.
 
 use antikythera_sdk::{
-    process_llm_response, validate_tool_call, AgentAction, AgentState, ToolDefinition,
-    ToolParameterSchema, ToolRegistry, ToolValidationError, WasmAgentConfig,
+    AgentAction, AgentState, ToolDefinition, ToolParameterSchema, ToolRegistry,
+    ToolValidationError, WasmAgentConfig, process_llm_response, validate_tool_call,
 };
 
 // ---------------------------------------------------------------------------
@@ -260,7 +260,10 @@ fn tool_registry_to_prompt_block_contains_tool_names() {
     let registry = make_weather_registry();
     let block = registry.to_prompt_block().expect("registry is non-empty");
     assert!(block.contains("weather.get"), "block: {block}");
-    assert!(block.contains("city*"), "required param marked with *: {block}");
+    assert!(
+        block.contains("city*"),
+        "required param marked with *: {block}"
+    );
 }
 
 #[test]

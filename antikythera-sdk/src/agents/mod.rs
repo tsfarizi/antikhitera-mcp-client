@@ -1025,8 +1025,8 @@ impl AgentRegistry {
     }
 
     pub fn import_json(&self, config_json: &str) -> Result<usize, String> {
-        let configs: Vec<AgentConfig> = serde_json::from_str(config_json)
-            .map_err(|e| format!("Invalid JSON: {e}"))?;
+        let configs: Vec<AgentConfig> =
+            serde_json::from_str(config_json).map_err(|e| format!("Invalid JSON: {e}"))?;
 
         let mut agents = self
             .agents

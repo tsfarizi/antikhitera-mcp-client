@@ -130,14 +130,20 @@ fn partial_output_stream_is_committed_deterministically() {
     )
     .unwrap();
 
-    append_llm_chunk("partial-stream-session", "{\"response\":\"par", Some("trace-stream")).unwrap();
+    append_llm_chunk(
+        "partial-stream-session",
+        "{\"response\":\"par",
+        Some("trace-stream"),
+    )
+    .unwrap();
     append_llm_chunk("partial-stream-session", "tial\"}", Some("trace-stream")).unwrap();
 
     let committed = commit_llm_stream(&prepared).unwrap();
     let value: serde_json::Value = serde_json::from_str(&committed).unwrap();
     assert_eq!(value["action"], "final");
 
-    let events: serde_json::Value = serde_json::from_str(&drain_events("partial-stream-session").unwrap()).unwrap();
+    let events: serde_json::Value =
+        serde_json::from_str(&drain_events("partial-stream-session").unwrap()).unwrap();
     assert!(
         events
             .as_array()
@@ -173,10 +179,12 @@ fn timeout_mode_is_deterministic_via_sweep_and_hydrate() {
     .unwrap();
     let _ = commit_llm_response(&prepared, "ok").unwrap();
 
-    let archived = sweep_idle_sessions(Some(chrono::Utc::now().timestamp_millis() + 2_000)).unwrap();
+    let archived =
+        sweep_idle_sessions(Some(chrono::Utc::now().timestamp_millis() + 2_000)).unwrap();
     assert_eq!(archived, 1);
 
-    let events: serde_json::Value = serde_json::from_str(&drain_events("timeout-replay-session").unwrap()).unwrap();
+    let events: serde_json::Value =
+        serde_json::from_str(&drain_events("timeout-replay-session").unwrap()).unwrap();
     let state_json = events
         .as_array()
         .unwrap()

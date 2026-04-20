@@ -40,6 +40,9 @@ pub use application::streaming::{
     StreamingBuffer, StreamingMode, StreamingPhase2Options, StreamingRequest, StreamingResponse,
     StreamingSnapshot, ToolEventPhase,
 };
+pub mod streaming {
+    pub use crate::application::streaming::*;
+}
 pub use config::AppConfig;
 pub use infrastructure::model::{
     DynamicModelProvider, HostModelClient, HostModelResponse, HostModelTransport, ModelProvider,
