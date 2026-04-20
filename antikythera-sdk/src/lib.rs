@@ -189,7 +189,11 @@ pub use wasm_agent::{
     StreamEventKind,
     TelemetrySnapshot,
     ToolCall,
+    ToolDefinition,
+    ToolParameterSchema,
+    ToolRegistry,
     ToolResult,
+    ToolValidationError,
     TruncationStrategy,
     WasmAgentConfig,
     // Runner contract
@@ -201,6 +205,7 @@ pub use wasm_agent::{
     drain_events,
     get_state as get_agent_state,
     get_telemetry_snapshot,
+    get_tools_prompt,
     init as init_agent_runner,
     prepare_user_turn,
     // Processor
@@ -208,9 +213,11 @@ pub use wasm_agent::{
     process_llm_response_for_session,
     process_tool_result,
     process_tool_result_for_session,
+    register_tools,
     reset_session as reset_agent_session,
     set_context_policy,
     validate_json_schema,
+    validate_tool_call,
 };
 
 /// WASM Component feature slice (Host Imports/Exports)

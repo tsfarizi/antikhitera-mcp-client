@@ -161,6 +161,23 @@ Target: Production-grade observability, resilience, and enterprise deployment.
 - Version compatibility promise
 - Semver enforcement
 
+**Priority 6: WASM MCP Tool Registry Synchronization (Gap Fix)**
+- ✅ **Modules**: `antikythera-sdk::wasm_agent::{types,processor,runner}` + `wit/antikythera.wit`
+- **Scope**:
+  - Added canonical tool schema types: `ToolParameterSchema`, `ToolDefinition`, `ToolRegistry`, `ToolValidationError`
+  - Added runtime API: `register_tools(tools_json)` and `get_tools_prompt()`
+  - Added `validate_tool_call(registry, tool_name, arguments)` with backward-compatible bypass when registry is empty
+  - `commit_llm_response` now validates `call_tool` actions against host-registered MCP tools
+  - `prepare_user_turn` now appends a generated tool block into `system_prompt` when registry is populated
+  - WIT contract extended with:
+    - host import: `list-mcp-tools()`
+    - runner exports: `register-tools(tools-json)` and `get-tools-prompt()`
+  - Tests:
+    - `tests/sdk/wasm_agent/processor_tests.rs`: 15 passing tests (includes new validation and registry tests)
+    - `tests/sdk/wasm_agent/runner_tests.rs`: 12 passing tests (includes unknown-tool, missing-param, valid-call, and empty-registry compatibility cases)
+- **Backward compatibility**: Existing behavior remains valid when no tool registry is provided (`register_tools([])` or never called)
+- **Deliverables**: Code + tests + WIT contract update + clippy ✅
+
 ---
 
 ## 12. Implementation standards for 0.9.8+ work

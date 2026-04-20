@@ -1,4 +1,4 @@
-﻿//! Centralized tests for the WASM agent runner.
+//! Centralized tests for the WASM agent runner.
 //!
 //! Covers: session lifecycle, commit flows (plain text + structured tool call),
 //! streaming commit, telemetry counters, global context-policy update,
@@ -6,7 +6,8 @@
 
 use antikythera_sdk::wasm_agent::runner::{
     append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events, get_state,
-    get_telemetry_snapshot, init, prepare_user_turn, set_context_policy,
+    get_telemetry_snapshot, get_tools_prompt, init, prepare_user_turn, register_tools,
+    set_context_policy,
 };
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,7 @@ fn prepare_request(session_id: &str, prompt: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[serial_test::serial]
 fn plain_text_commit_returns_final_action() {
     let session_id = init(&config_json()).unwrap();
     let prepared = prepare_user_turn(&prepare_request(&session_id, "hello")).unwrap();
@@ -50,7 +52,22 @@ fn plain_text_commit_returns_final_action() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[serial_test::serial]
 fn structured_tool_call_commit_returns_call_tool() {
+    register_tools(
+        &serde_json::json!([
+            {
+                "name": "weather.get",
+                "description": "Get weather",
+                "parameters": [
+                    {"name": "city", "param_type": "string", "description": "City", "required": true}
+                ]
+            }
+        ])
+        .to_string(),
+    )
+    .unwrap();
+
     let session_id = init(&config_json()).unwrap();
     let prepared = prepare_user_turn(
         &serde_json::json!({
@@ -83,6 +100,7 @@ fn structured_tool_call_commit_returns_call_tool() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[serial_test::serial]
 fn stream_chunks_and_drain_events() {
     let session_id = init(&config_json()).unwrap();
     let prepared = prepare_user_turn(
@@ -116,6 +134,7 @@ fn stream_chunks_and_drain_events() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[serial_test::serial]
 fn telemetry_counters_increment_per_turn() {
     let session_id = init(&config_json()).unwrap();
 
@@ -143,6 +162,7 @@ fn telemetry_counters_increment_per_turn() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[serial_test::serial]
 fn set_context_policy_applies_global_policy_on_next_turn() {
     // Inline high-threshold policy in every prepare call prevents concurrent init() calls
     // from other tests from mutating the global default_config and triggering early
@@ -212,6 +232,7 @@ fn set_context_policy_applies_global_policy_on_next_turn() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[serial_test::serial]
 fn keep_balanced_truncation_retains_head_and_tail() {
     // Inline context_policy in every prepare call isolates this test from concurrent
     // init() calls that overwrite the global default_config.context_policy.
@@ -269,3 +290,201 @@ fn keep_balanced_truncation_retains_head_and_tail() {
         "KeepBalanced should truncate history to at most max_history_messages (4), got {history_len}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// 7. Tool registry -- register_tools and get_tools_prompt
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn register_tools_counts_tools_correctly() {
+    let tools_json = serde_json::json!([
+        {
+            "name": "weather.get",
+            "description": "Get current weather for a city",
+            "parameters": [
+                {"name": "city", "param_type": "string", "description": "City name", "required": true}
+            ]
+        },
+        {
+            "name": "calculator.add",
+            "description": "Add two numbers",
+            "parameters": [
+                {"name": "a", "param_type": "number", "description": "First operand", "required": true},
+                {"name": "b", "param_type": "number", "description": "Second operand", "required": true}
+            ]
+        }
+    ])
+    .to_string();
+
+    let count = register_tools(&tools_json).unwrap();
+    assert_eq!(count, 2, "expected 2 tools registered");
+}
+
+#[test]
+#[serial_test::serial]
+fn get_tools_prompt_contains_tool_names() {
+    let tools_json = serde_json::json!([
+        {
+            "name": "search.query",
+            "description": "Search the web",
+            "parameters": [
+                {"name": "query", "param_type": "string", "description": "Search query", "required": true}
+            ]
+        }
+    ])
+    .to_string();
+
+    register_tools(&tools_json).unwrap();
+    let prompt = get_tools_prompt().unwrap();
+    assert!(
+        prompt.contains("search.query"),
+        "tools prompt should contain tool name 'search.query'"
+    );
+    assert!(
+        prompt.contains("query*"),
+        "required param should be marked with '*'"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 8. Tool registry -- validation blocks unknown tool calls
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn unknown_tool_call_returns_error_when_registry_populated() {
+    // Register only one known tool
+    let tools_json = serde_json::json!([
+        {
+            "name": "weather.get",
+            "description": "Get weather",
+            "parameters": [
+                {"name": "city", "param_type": "string", "description": "City", "required": true}
+            ]
+        }
+    ])
+    .to_string();
+    register_tools(&tools_json).unwrap();
+
+    let session_id = init(&config_json()).unwrap();
+    let prepared = prepare_user_turn(&prepare_request(&session_id, "book a flight")).unwrap();
+
+    // LLM tries to call a tool not in the registry
+    let response = serde_json::json!({
+        "action": "call_tool",
+        "tool": "flights.book",
+        "input": {"destination": "Tokyo"}
+    })
+    .to_string();
+
+    let result = commit_llm_response(&prepared, &response);
+    assert!(result.is_err(), "should reject unknown tool call");
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("flights.book"),
+        "error should mention the unknown tool name, got: {err}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 9. Tool registry -- validation blocks missing required param
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn missing_required_param_returns_error() {
+    // Use a unique tool name to avoid cross-test registry pollution
+    let tools_json = serde_json::json!([
+        {
+            "name": "geo.lookup",
+            "description": "Lookup geo coordinates",
+            "parameters": [
+                {"name": "lat", "param_type": "number", "description": "Latitude", "required": true},
+                {"name": "lon", "param_type": "number", "description": "Longitude", "required": true}
+            ]
+        }
+    ])
+    .to_string();
+    register_tools(&tools_json).unwrap();
+
+    let session_id = init(&config_json()).unwrap();
+    let prepared = prepare_user_turn(&prepare_request(&session_id, "find location")).unwrap();
+
+    // LLM omits 'lon' (required)
+    let response = serde_json::json!({
+        "action": "call_tool",
+        "tool": "geo.lookup",
+        "input": {"lat": 1.28}
+    })
+    .to_string();
+
+    let result = commit_llm_response(&prepared, &response);
+    assert!(result.is_err(), "should reject call with missing required param");
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("lon"),
+        "error should mention the missing param, got: {err}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 10. Tool registry -- valid call passes through when registry populated
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn valid_tool_call_passes_validation() {
+    let tools_json = serde_json::json!([
+        {
+            "name": "db.query",
+            "description": "Run a database query",
+            "parameters": [
+                {"name": "sql", "param_type": "string", "description": "SQL statement", "required": true}
+            ]
+        }
+    ])
+    .to_string();
+    register_tools(&tools_json).unwrap();
+
+    let session_id = init(&config_json()).unwrap();
+    let prepared = prepare_user_turn(&prepare_request(&session_id, "list users")).unwrap();
+
+    let response = serde_json::json!({
+        "action": "call_tool",
+        "tool": "db.query",
+        "input": {"sql": "SELECT * FROM users"}
+    })
+    .to_string();
+
+    let result = commit_llm_response(&prepared, &response);
+    assert!(result.is_ok(), "valid tool call should pass, got: {:?}", result);
+    let value: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+    assert_eq!(value["action"], "call_tool");
+    assert_eq!(value["tool_name"], "db.query");
+}
+
+// ---------------------------------------------------------------------------
+// 11. Tool registry -- empty registry allows any tool call (backward compat)
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn empty_registry_allows_any_tool_call() {
+    // Clear the registry
+    register_tools("[]").unwrap();
+
+    let session_id = init(&config_json()).unwrap();
+    let prepared = prepare_user_turn(&prepare_request(&session_id, "do something")).unwrap();
+
+    let response = serde_json::json!({
+        "action": "call_tool",
+        "tool": "anything.goes",
+        "input": {}
+    })
+    .to_string();
+
+    let result = commit_llm_response(&prepared, &response);
+    assert!(result.is_ok(), "empty registry should allow any tool call");
+}
+

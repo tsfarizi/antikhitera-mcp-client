@@ -96,6 +96,13 @@ interface host-imports {
     /// Execute tool call via MCP (host responsibility)
     emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
 
+    /// List tools available from the MCP server.
+    ///
+    /// Called by WASM to refresh its local registry after session init or on demand.
+    /// The host is responsible for fetching the tool list from the MCP server and
+    /// returning it as a JSON-encoded array of tool-definition records.
+    list-mcp-tools() -> result<string, string>;
+
     /// Log message to host
     log-message(event: log-event);
 
@@ -226,6 +233,25 @@ interface agent-runner {
 
     /// Reset agent session
     reset-session(session-id: string) -> result<bool, string>;
+
+    /// Register MCP tool definitions for WASM-side validation.
+    ///
+    /// `tools-json` is a JSON array of tool definition objects, typically
+    /// obtained from `host-imports.list-mcp-tools()` or built by the host
+    /// after calling `tools/list` on the MCP server.
+    ///
+    /// Returns the number of tools registered.  Pass an empty array `[]` to
+    /// clear the registry.  When the registry is non-empty, any LLM-requested
+    /// `call_tool` action will be validated against it before the host is asked
+    /// to execute it.
+    register-tools(tools-json: string) -> result<u32, string>;
+
+    /// Returns a formatted tool-list block for injection into a system prompt.
+    ///
+    /// The block lists tool names, parameter names (required params marked
+    /// with `*`), and descriptions.  Returns an empty string when the registry
+    /// is empty.
+    get-tools-prompt() -> result<string, string>;
 }
 
 /// JSON Schema validation

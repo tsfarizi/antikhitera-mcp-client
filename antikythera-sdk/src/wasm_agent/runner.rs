@@ -5,10 +5,10 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use super::processor::{build_llm_messages, process_llm_response, process_tool_result};
+use super::processor::{build_llm_messages, process_llm_response, process_tool_result, validate_tool_call};
 use super::types::{
     AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary, StreamEvent,
-    StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolResult,
+    StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolRegistry, ToolResult,
     TruncationStrategy,
 };
 
@@ -120,6 +120,8 @@ impl SessionRuntime {
 struct AgentRunnerRuntime {
     sessions: HashMap<String, SessionRuntime>,
     default_config: AgentConfig,
+    /// Tool definitions pushed from the host (MCP server capabilities).
+    known_tools: ToolRegistry,
 }
 
 impl AgentRunnerRuntime {
@@ -138,6 +140,16 @@ impl AgentRunnerRuntime {
             return policy.clone();
         }
         self.default_config.context_policy.clone()
+    }
+
+    fn register_tools(&mut self, tools_json: &str) -> Result<u32, String> {
+        self.known_tools = ToolRegistry::from_json(tools_json)?;
+        Ok(self.known_tools.len() as u32)
+    }
+
+    fn get_tools_prompt(&self) -> Result<String, String> {
+        let block = self.known_tools.to_prompt_block().unwrap_or_default();
+        Ok(block)
     }
 
     fn configure(&mut self, config_json: &str) -> Result<String, String> {
@@ -249,6 +261,9 @@ impl AgentRunnerRuntime {
         let input: PrepareUserTurnInput =
             serde_json::from_str(request_json).map_err(|e| format!("Invalid request-json: {e}"))?;
 
+        // Snapshot the tool block before the mutable session borrow to avoid borrow conflict.
+        let tool_block_snapshot = self.known_tools.to_prompt_block();
+
         let session_id = input.session_id.clone().unwrap_or_else(new_session_id);
         let policy = self.resolve_policy(&input);
         let runtime = self.ensure_session(&session_id);
@@ -266,7 +281,16 @@ impl AgentRunnerRuntime {
             );
         }
 
-        let system_prompt = input.system_prompt.clone().unwrap_or_default();
+        let base_system_prompt = input.system_prompt.clone().unwrap_or_default();
+        let system_prompt = if let Some(tool_block) = tool_block_snapshot {
+            if base_system_prompt.is_empty() {
+                tool_block
+            } else {
+                format!("{base_system_prompt}\n\n{tool_block}")
+            }
+        } else {
+            base_system_prompt
+        };
         let mut messages = build_llm_messages(&system_prompt, &runtime.state);
         messages.push(HashMap::from([
             ("role".to_string(), "user".to_string()),
@@ -325,6 +349,9 @@ impl AgentRunnerRuntime {
         let prepared: PreparedTurn = serde_json::from_str(prepared_turn_json)
             .map_err(|e| format!("Invalid prepared-turn-json: {e}"))?;
 
+        // Snapshot the registry before the mutable session borrow to avoid borrow conflict.
+        let registry_snapshot = self.known_tools.clone();
+
         let runtime = self.ensure_session(&prepared.session_id);
         runtime.state.add_message(AgentMessage {
             role: "user".to_string(),
@@ -374,6 +401,11 @@ impl AgentRunnerRuntime {
                 }
             }
             AgentAction::CallTool { tool, input } => {
+                // Validate the tool call against the registered registry (no-op if empty).
+                if let Err(validation_err) = validate_tool_call(&registry_snapshot, &tool, &input) {
+                    return Err(validation_err.to_string());
+                }
+
                 runtime.state.add_message(AgentMessage {
                     role: "assistant".to_string(),
                     content: format!("call_tool:{}", tool),
@@ -588,4 +620,19 @@ pub fn get_state(session_id: &str) -> Result<String, String> {
 
 pub fn reset_session(session_id: &str) -> Result<bool, String> {
     with_runtime(|rt| Ok(rt.sessions.remove(session_id).is_some()))
+}
+
+/// Register MCP tool definitions so WASM can validate LLM-driven tool calls.
+///
+/// `tools_json` must be a JSON array of `ToolDefinition` objects.  The call
+/// replaces the entire registry; pass an empty array to clear it.  Returns the
+/// number of tools registered.
+pub fn register_tools(tools_json: &str) -> Result<u32, String> {
+    with_runtime(|rt| rt.register_tools(tools_json))
+}
+
+/// Returns a formatted tool-list block suitable for injection into a system
+/// prompt, or an empty string when no tools have been registered.
+pub fn get_tools_prompt() -> Result<String, String> {
+    with_runtime(|rt| rt.get_tools_prompt())
 }

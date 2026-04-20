@@ -224,3 +224,22 @@ pub fn validate_json_schema(
 
     Ok(())
 }
+
+// ============================================================================
+// Tool Registry Validation
+// ============================================================================
+
+/// Validate a tool call against the registered tool definitions.
+///
+/// When the registry is empty (not yet populated by the host), validation is
+/// skipped so sessions that pre-date tool registration are unaffected.
+pub fn validate_tool_call(
+    registry: &ToolRegistry,
+    tool_name: &str,
+    arguments: &serde_json::Value,
+) -> Result<(), ToolValidationError> {
+    if !registry.is_populated() {
+        return Ok(());
+    }
+    registry.validate_call(tool_name, arguments)
+}
