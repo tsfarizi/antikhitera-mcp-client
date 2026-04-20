@@ -19,8 +19,8 @@ name = "antikythera-config"
 path = "src/bin/config.rs"
 
 [dependencies]
-antikythera-core = { path = "../antikythera-core", version = "0.9.9", features = ["full"] }
-antikythera-sdk = { path = "../antikythera-sdk", version = "0.9.9", features = ["component"] }
+antikythera-core = { path = "../antikythera-core", version = "1.0.0", features = ["full"] }
+antikythera-sdk = { path = "../antikythera-sdk", version = "1.0.0", features = ["component"] }
 
 # Core async runtime
 tokio.workspace = true

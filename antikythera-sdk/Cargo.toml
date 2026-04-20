@@ -58,13 +58,13 @@ full = ["multi-agent", "antikythera-core/full"]
 
 [dependencies]
 # Core with configurable features - SDK enables what it needs through feature wiring
-antikythera-core = { path = "../antikythera-core", version = "0.9.9", default-features = false, optional = true }
+antikythera-core = { path = "../antikythera-core", version = "1.0.0", default-features = false, optional = true }
 
 # Logging
-antikythera-log = { path = "../antikythera-log", version = "0.9.9", features = ["subscriber"] }
+antikythera-log = { path = "../antikythera-log", version = "1.0.0", features = ["subscriber"] }
 
 # Session management
-antikythera-session = { path = "../antikythera-session", version = "0.9.9", optional = true }
+antikythera-session = { path = "../antikythera-session", version = "1.0.0", optional = true }
 
 # Core async runtime (wasm-compatible)
 tokio = { version = "1.39", default-features = false, features = ["macros", "rt"] }

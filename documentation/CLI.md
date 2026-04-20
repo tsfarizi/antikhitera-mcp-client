@@ -192,9 +192,9 @@ To keep CLI discoverability and public contracts stable:
 | Factory/builders | `build_*` for constructors and adapters |
 | Backward compatibility | old names retained as deprecated aliases only |
 
-### Deprecated alias map and timeline
+### Deprecated alias map
 
-Current aliases are maintained for migration compatibility and are planned to be removed in `2.0.0`.
+Current aliases are maintained only for compatibility and are documented in the deprecation policy.
 
 | Deprecated symbol | Replacement |
 |:------------------|:------------|
