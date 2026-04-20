@@ -2,8 +2,11 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,6 +18,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve release version and tag
+        id: release_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            version="${tag#v}"
+          else
+            version="$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "([^"]+)"/\1/')"
+            tag="v${version}"
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release target: ${tag}"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -74,6 +95,10 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: Antikythera MCP Framework ${{ steps.release_meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          overwrite_files: true
           files: |
             dist/antikythera-sdk-browser.wasm
             dist/antikythera-sdk-component.wasm
