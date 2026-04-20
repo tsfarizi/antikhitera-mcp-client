@@ -206,6 +206,7 @@ pub use wasm_agent::{
     get_state as get_agent_state,
     get_telemetry_snapshot,
     get_tools_prompt,
+    hydrate_session,
     init as init_agent_runner,
     prepare_user_turn,
     // Processor
@@ -214,8 +215,10 @@ pub use wasm_agent::{
     process_tool_result,
     process_tool_result_for_session,
     register_tools,
+    report_session_restore_progress,
     reset_session as reset_agent_session,
     set_context_policy,
+    sweep_idle_sessions,
     validate_json_schema,
     validate_tool_call,
 };

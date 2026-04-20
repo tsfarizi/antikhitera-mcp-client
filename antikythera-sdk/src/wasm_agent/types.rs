@@ -67,6 +67,10 @@ pub enum StreamEventKind {
     ToolResult,
     FinalResponse,
     SummaryUpdated,
+    SessionArchived,
+    SessionRestoreRequested,
+    SessionRestoreProgress,
+    SessionRestored,
     Telemetry,
 }
 

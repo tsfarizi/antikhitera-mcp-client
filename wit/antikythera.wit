@@ -252,6 +252,22 @@ interface agent-runner {
     /// with `*`), and descriptions.  Returns an empty string when the registry
     /// is empty.
     get-tools-prompt() -> result<string, string>;
+
+    /// Hydrate an archived session back into WASM memory.
+    ///
+    /// Hosts call this after loading the session snapshot from durable storage.
+    hydrate-session(session-id: string, state-json: string) -> result<bool, string>;
+
+    /// Emit restore progress so host and users can receive loading feedback.
+    ///
+    /// `progress-json` is free-form JSON payload (stage, percent, message, etc.).
+    report-session-restore-progress(session-id: string, progress-json: string) -> result<bool, string>;
+
+    /// Sweep idle sessions using timeout policy and archive timed-out sessions.
+    ///
+    /// Use `none` to evaluate against current clock, or pass explicit millis for
+    /// deterministic tests/replays.
+    sweep-idle-sessions(now-unix-ms: option<s64>) -> result<u32, string>;
 }
 
 /// JSON Schema validation

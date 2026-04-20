@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-cli"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "antikythera-core",
  "antikythera-sdk",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-core"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "antikythera-log",
  "anyhow",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-log"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-sdk"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "antikythera-core",
  "antikythera-log",
@@ -194,7 +194,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-session"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "antikythera-log",
  "chrono",
@@ -352,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "build-scripts"
-version = "0.9.8"
+version = "0.9.9"
 
 [[package]]
 name = "bumpalo"

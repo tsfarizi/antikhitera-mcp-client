@@ -18,6 +18,7 @@ struct RunnerConfigInput {
     pub verbose: Option<bool>,
     pub auto_execute_tools: Option<bool>,
     pub session_timeout_secs: Option<u32>,
+    pub max_in_memory_sessions: Option<usize>,
     pub session_id: Option<String>,
     pub context_policy: Option<ContextPolicy>,
 }
@@ -69,22 +70,31 @@ struct ContextPolicyUpdateInput {
     pub policy: ContextPolicy,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ArchivedSessionRecord {
+    pub archived_at_ms: i64,
+    pub reason: String,
+}
+
 struct SessionRuntime {
     state: AgentState,
     pending_llm_chunks: Vec<String>,
     events: Vec<StreamEvent>,
     seq: u64,
+    last_touched_ms: i64,
     telemetry: TelemetrySnapshot,
 }
 
 impl SessionRuntime {
     fn new(config: AgentConfig) -> Self {
         let session_id = config.session_id.clone();
+        let now_ms = now_unix_ms();
         Self {
             state: AgentState::new(config),
             pending_llm_chunks: Vec::new(),
             events: Vec::new(),
             seq: 0,
+            last_touched_ms: now_ms,
             telemetry: TelemetrySnapshot {
                 session_id,
                 correlation_id: None,
@@ -93,6 +103,10 @@ impl SessionRuntime {
                 total_commit_latency_ms: 0,
             },
         }
+    }
+
+    fn touch(&mut self, now_ms: i64) {
+        self.last_touched_ms = now_ms;
     }
 
     fn emit_event(
@@ -116,15 +130,163 @@ impl SessionRuntime {
     }
 }
 
-#[derive(Default)]
 struct AgentRunnerRuntime {
     sessions: HashMap<String, SessionRuntime>,
+    archived_sessions: HashMap<String, ArchivedSessionRecord>,
+    pending_events: HashMap<String, Vec<StreamEvent>>,
+    pending_event_seq: HashMap<String, u64>,
     default_config: AgentConfig,
+    max_in_memory_sessions: usize,
     /// Tool definitions pushed from the host (MCP server capabilities).
     known_tools: ToolRegistry,
 }
 
+impl Default for AgentRunnerRuntime {
+    fn default() -> Self {
+        Self {
+            sessions: HashMap::new(),
+            archived_sessions: HashMap::new(),
+            pending_events: HashMap::new(),
+            pending_event_seq: HashMap::new(),
+            default_config: AgentConfig::default(),
+            max_in_memory_sessions: 128,
+            known_tools: ToolRegistry::default(),
+        }
+    }
+}
+
 impl AgentRunnerRuntime {
+    fn emit_pending_event(
+        &mut self,
+        session_id: &str,
+        kind: StreamEventKind,
+        correlation_id: Option<String>,
+        payload: serde_json::Value,
+    ) {
+        let seq_entry = self
+            .pending_event_seq
+            .entry(session_id.to_string())
+            .or_insert(0);
+        *seq_entry += 1;
+        self.pending_events
+            .entry(session_id.to_string())
+            .or_default()
+            .push(StreamEvent {
+                seq: *seq_entry,
+                session_id: session_id.to_string(),
+                step: 0,
+                correlation_id,
+                kind,
+                payload,
+            });
+    }
+
+    fn archive_session(
+        &mut self,
+        session_id: &str,
+        reason: &str,
+        correlation_id: Option<String>,
+    ) -> Result<bool, String> {
+        let Some(runtime) = self.sessions.remove(session_id) else {
+            return Ok(false);
+        };
+
+        let archived_at_ms = now_unix_ms();
+        let state_json = runtime.state.to_json()?;
+
+        self.archived_sessions.insert(
+            session_id.to_string(),
+            ArchivedSessionRecord {
+                archived_at_ms,
+                reason: reason.to_string(),
+            },
+        );
+
+        self.emit_pending_event(
+            session_id,
+            StreamEventKind::SessionArchived,
+            correlation_id,
+            serde_json::json!({
+                "reason": reason,
+                "archived_at_ms": archived_at_ms,
+                "last_touched_ms": runtime.last_touched_ms,
+                "state_json": state_json,
+                "message_count": runtime.state.message_history.len(),
+                "step": runtime.state.current_step,
+            }),
+        );
+
+        Ok(true)
+    }
+
+    fn sweep_idle_sessions(&mut self, now_ms: i64) -> Result<u32, String> {
+        let candidates: Vec<String> = self
+            .sessions
+            .iter()
+            .filter_map(|(id, session)| {
+                if !session.pending_llm_chunks.is_empty() {
+                    return None;
+                }
+                let timeout_ms = i64::from(session.state.config.session_timeout_secs) * 1_000;
+                if timeout_ms <= 0 {
+                    return None;
+                }
+                if now_ms.saturating_sub(session.last_touched_ms) > timeout_ms {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut archived = 0_u32;
+        for session_id in candidates {
+            if self.archive_session(&session_id, "idle_timeout", None)? {
+                archived += 1;
+            }
+        }
+        Ok(archived)
+    }
+
+    fn enforce_capacity(
+        &mut self,
+        protected_session_id: Option<&str>,
+        correlation_id: Option<String>,
+    ) -> Result<u32, String> {
+        if self.max_in_memory_sessions == 0 {
+            return Ok(0);
+        }
+
+        let mut archived = 0_u32;
+        while self.sessions.len() > self.max_in_memory_sessions {
+            let candidate = self
+                .sessions
+                .iter()
+                .filter(|(id, session)| {
+                    if let Some(protected) = protected_session_id
+                        && id.as_str() == protected
+                    {
+                        return false;
+                    }
+                    session.pending_llm_chunks.is_empty()
+                })
+                .min_by_key(|(_, session)| session.last_touched_ms)
+                .map(|(id, _)| id.clone());
+
+            let Some(candidate_id) = candidate else {
+                break;
+            };
+
+            if self.archive_session(&candidate_id, "capacity_pressure", correlation_id.clone())? {
+                archived += 1;
+            } else {
+                break;
+            }
+        }
+
+        Ok(archived)
+    }
+
     fn ensure_session(&mut self, session_id: &str) -> &mut SessionRuntime {
         self.sessions
             .entry(session_id.to_string())
@@ -168,6 +330,9 @@ impl AgentRunnerRuntime {
         if let Some(value) = input.session_timeout_secs {
             self.default_config.session_timeout_secs = value;
         }
+        if let Some(value) = input.max_in_memory_sessions {
+            self.max_in_memory_sessions = value.max(1);
+        }
         if let Some(policy) = input.context_policy {
             self.default_config.context_policy = policy;
         }
@@ -178,6 +343,8 @@ impl AgentRunnerRuntime {
         self.sessions
             .entry(session_id.clone())
             .or_insert_with(|| SessionRuntime::new(config));
+
+        let _ = self.enforce_capacity(Some(&session_id), None)?;
 
         Ok(session_id)
     }
@@ -261,12 +428,50 @@ impl AgentRunnerRuntime {
         let input: PrepareUserTurnInput =
             serde_json::from_str(request_json).map_err(|e| format!("Invalid request-json: {e}"))?;
 
+        let now_ms = now_unix_ms();
+        let _ = self.sweep_idle_sessions(now_ms)?;
+
         // Snapshot the tool block before the mutable session borrow to avoid borrow conflict.
         let tool_block_snapshot = self.known_tools.to_prompt_block();
 
         let session_id = input.session_id.clone().unwrap_or_else(new_session_id);
+
+        if !self.sessions.contains_key(&session_id)
+            && self.archived_sessions.contains_key(&session_id)
+        {
+            let archived = self.archived_sessions.get(&session_id).cloned().unwrap_or(
+                ArchivedSessionRecord {
+                    archived_at_ms: now_ms,
+                    reason: "unknown".to_string(),
+                },
+            );
+            self.emit_pending_event(
+                &session_id,
+                StreamEventKind::SessionRestoreRequested,
+                input.correlation_id.clone(),
+                serde_json::json!({
+                    "reason": archived.reason,
+                    "archived_at_ms": archived.archived_at_ms,
+                }),
+            );
+            self.emit_pending_event(
+                &session_id,
+                StreamEventKind::SessionRestoreProgress,
+                input.correlation_id.clone(),
+                serde_json::json!({
+                    "stage": "requested",
+                    "percent": 0,
+                    "message": "Host load_state required before this turn can continue"
+                }),
+            );
+            return Err(format!(
+                "Session '{session_id}' archived and not in RAM. Host must load persisted state then call hydrate_session"
+            ));
+        }
+
         let policy = self.resolve_policy(&input);
         let runtime = self.ensure_session(&session_id);
+        runtime.touch(now_ms);
 
         let summary = Self::maybe_update_summary(&mut runtime.state, &policy);
         if let Some(summary) = &summary {
@@ -320,7 +525,15 @@ impl AgentRunnerRuntime {
                 .map_err(|e| format!("Failed to encode messages_json: {e}"))?,
         };
 
-        serde_json::to_string(&prepared).map_err(|e| format!("Failed to encode prepared turn: {e}"))
+        let encoded =
+            serde_json::to_string(&prepared).map_err(|e| format!("Failed to encode prepared turn: {e}"))?;
+
+        let _ = self.enforce_capacity(
+            Some(&prepared.session_id),
+            prepared.correlation_id.clone(),
+        )?;
+
+        Ok(encoded)
     }
 
     fn append_llm_chunk(
@@ -329,7 +542,9 @@ impl AgentRunnerRuntime {
         chunk: &str,
         correlation_id: Option<String>,
     ) -> Result<bool, String> {
+        let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
+        runtime.touch(now_unix_ms());
         runtime.pending_llm_chunks.push(chunk.to_string());
         runtime.telemetry.counters.llm_chunks += 1;
         runtime.emit_event(
@@ -345,6 +560,7 @@ impl AgentRunnerRuntime {
         prepared_turn_json: &str,
         llm_response_json: &str,
     ) -> Result<String, String> {
+        let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let started = Instant::now();
         let prepared: PreparedTurn = serde_json::from_str(prepared_turn_json)
             .map_err(|e| format!("Invalid prepared-turn-json: {e}"))?;
@@ -353,6 +569,7 @@ impl AgentRunnerRuntime {
         let registry_snapshot = self.known_tools.clone();
 
         let runtime = self.ensure_session(&prepared.session_id);
+        runtime.touch(now_unix_ms());
         runtime.state.add_message(AgentMessage {
             role: "user".to_string(),
             content: prepared.prompt,
@@ -461,7 +678,9 @@ impl AgentRunnerRuntime {
         session_id: &str,
         llm_response_json: &str,
     ) -> Result<String, String> {
+        let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
+        runtime.touch(now_unix_ms());
         let action = process_llm_response(&mut runtime.state, llm_response_json)?;
         serde_json::to_string(&action).map_err(|e| format!("Failed to encode action: {e}"))
     }
@@ -471,6 +690,7 @@ impl AgentRunnerRuntime {
         session_id: &str,
         tool_result_json: &str,
     ) -> Result<String, String> {
+        let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let input: ToolResultInput = serde_json::from_str(tool_result_json)
             .map_err(|e| format!("Invalid tool-result-json: {e}"))?;
 
@@ -478,6 +698,7 @@ impl AgentRunnerRuntime {
             .map_err(|e| format!("Invalid tool output_json: {e}"))?;
 
         let runtime = self.ensure_session(session_id);
+        runtime.touch(now_unix_ms());
         let next_message = process_tool_result(
             &mut runtime.state,
             &input.tool_name,
@@ -514,13 +735,28 @@ impl AgentRunnerRuntime {
     }
 
     fn drain_events(&mut self, session_id: &str) -> Result<String, String> {
-        let runtime = self.ensure_session(session_id);
-        let events = std::mem::take(&mut runtime.events);
+        let mut events = Vec::new();
+        if let Some(runtime) = self.sessions.get_mut(session_id) {
+            events.extend(std::mem::take(&mut runtime.events));
+        }
+        if let Some(pending) = self.pending_events.remove(session_id) {
+            events.extend(pending);
+        }
+
+        if events.is_empty()
+            && !self.sessions.contains_key(session_id)
+            && !self.archived_sessions.contains_key(session_id)
+        {
+            return Err(format!("Session not found: {session_id}"));
+        }
+
         serde_json::to_string(&events).map_err(|e| format!("Failed to encode events: {e}"))
     }
 
     fn telemetry_snapshot(&mut self, session_id: &str) -> Result<String, String> {
+        let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
+        runtime.touch(now_unix_ms());
         runtime.emit_event(
             StreamEventKind::Telemetry,
             runtime.telemetry.correlation_id.clone(),
@@ -528,6 +764,53 @@ impl AgentRunnerRuntime {
         );
         serde_json::to_string(&runtime.telemetry)
             .map_err(|e| format!("Failed to encode telemetry snapshot: {e}"))
+    }
+
+    fn hydrate_session(&mut self, session_id: &str, state_json: &str) -> Result<bool, String> {
+        let mut state = AgentState::from_json(state_json)?;
+        state.session_id = session_id.to_string();
+
+        let config = state.config.clone();
+        let now_ms = now_unix_ms();
+        let mut runtime = SessionRuntime::new(config);
+        runtime.state = state;
+        runtime.touch(now_ms);
+
+        self.sessions.insert(session_id.to_string(), runtime);
+        self.archived_sessions.remove(session_id);
+
+        self.emit_pending_event(
+            session_id,
+            StreamEventKind::SessionRestored,
+            None,
+            serde_json::json!({
+                "restored_at_ms": now_ms,
+                "source": "host_load_state"
+            }),
+        );
+
+        Ok(true)
+    }
+
+    fn report_restore_progress(
+        &mut self,
+        session_id: &str,
+        progress_json: &str,
+    ) -> Result<bool, String> {
+        let payload: serde_json::Value = serde_json::from_str(progress_json)
+            .map_err(|e| format!("Invalid progress-json: {e}"))?;
+        self.emit_pending_event(
+            session_id,
+            StreamEventKind::SessionRestoreProgress,
+            None,
+            payload,
+        );
+        Ok(true)
+    }
+
+    fn sweep_sessions(&mut self, now_ms: Option<i64>) -> Result<u32, String> {
+        let now = now_ms.unwrap_or_else(now_unix_ms);
+        self.sweep_idle_sessions(now)
     }
 }
 
@@ -553,6 +836,10 @@ fn new_session_id() -> String {
         .unwrap_or_else(|| chrono::Utc::now().timestamp_micros() * 1_000);
     let seq = SESSION_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("session-{ts_ns}-{seq}")
+}
+
+fn now_unix_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
 }
 
 pub fn init(config_json: &str) -> Result<String, String> {
@@ -610,16 +897,26 @@ pub fn get_telemetry_snapshot(session_id: &str) -> Result<String, String> {
 
 pub fn get_state(session_id: &str) -> Result<String, String> {
     with_runtime(|rt| {
-        let state = rt
-            .sessions
-            .get(session_id)
-            .ok_or_else(|| format!("Session not found: {session_id}"))?;
+        let Some(state) = rt.sessions.get(session_id) else {
+            if rt.archived_sessions.contains_key(session_id) {
+                return Err(format!(
+                    "Session '{session_id}' is archived in host storage; call hydrate_session after host load"
+                ));
+            }
+            return Err(format!("Session not found: {session_id}"));
+        };
         state.state.to_json()
     })
 }
 
 pub fn reset_session(session_id: &str) -> Result<bool, String> {
-    with_runtime(|rt| Ok(rt.sessions.remove(session_id).is_some()))
+    with_runtime(|rt| {
+        let removed = rt.sessions.remove(session_id).is_some();
+        rt.archived_sessions.remove(session_id);
+        rt.pending_events.remove(session_id);
+        rt.pending_event_seq.remove(session_id);
+        Ok(removed)
+    })
 }
 
 /// Register MCP tool definitions so WASM can validate LLM-driven tool calls.
@@ -635,4 +932,19 @@ pub fn register_tools(tools_json: &str) -> Result<u32, String> {
 /// prompt, or an empty string when no tools have been registered.
 pub fn get_tools_prompt() -> Result<String, String> {
     with_runtime(|rt| rt.get_tools_prompt())
+}
+
+/// Restore an archived session into WASM memory after the host has loaded it.
+pub fn hydrate_session(session_id: &str, state_json: &str) -> Result<bool, String> {
+    with_runtime(|rt| rt.hydrate_session(session_id, state_json))
+}
+
+/// Emit stream progress updates for session restore so host/user can see load progress.
+pub fn report_session_restore_progress(session_id: &str, progress_json: &str) -> Result<bool, String> {
+    with_runtime(|rt| rt.report_restore_progress(session_id, progress_json))
+}
+
+/// Trigger idle-timeout sweep manually (useful for deterministic tests and host schedulers).
+pub fn sweep_idle_sessions(now_unix_ms: Option<i64>) -> Result<u32, String> {
+    with_runtime(|rt| rt.sweep_sessions(now_unix_ms))
 }

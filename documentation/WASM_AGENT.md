@@ -48,6 +48,42 @@ The intended host/WASM exchange is:
 
 This allows the host to own provider-specific payload shaping while the framework owns conversation continuity, step tracking, and response interpretation.
 
+## Session archive and restore flow
+
+The runner now supports automatic in-memory pressure handling and idle timeout archival.
+
+### Triggers
+
+- Capacity pressure: session count exceeds `max_in_memory_sessions`
+- Inactive timeout: `sweep_idle_sessions(...)` finds sessions older than `session_timeout_secs`
+
+### What the runner emits
+
+When a session leaves RAM, the event stream includes:
+
+- `session_archived`
+    - includes `reason` (`capacity_pressure` or `idle_timeout`)
+    - includes `state_json` snapshot to persist in host storage
+
+If a request arrives for an archived session, the runner emits:
+
+- `session_restore_requested`
+- `session_restore_progress` (initial stage)
+
+Host can push progress updates at any time using:
+
+- `report_session_restore_progress(session_id, progress_json)`
+
+After host loads state from durable storage, it restores RAM state via:
+
+- `hydrate_session(session_id, state_json)`
+
+Which emits:
+
+- `session_restored`
+
+This flow allows hosts to stream loading feedback to user interfaces when restore latency is non-trivial.
+
 ## Related documents
 
 - [`COMPONENT.md`](COMPONENT.md)

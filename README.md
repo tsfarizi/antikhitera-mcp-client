@@ -183,6 +183,21 @@ hardening behavior and inspect live execution state without rebuilding:
 - `get_monitor_snapshot()`
 - `task_result_detail(task_result_json)`
 
+WASM session lifecycle hardening APIs are also available for host persistence:
+
+- `sweep_idle_sessions(now_unix_ms)`
+- `hydrate_session(session_id, state_json)`
+- `report_session_restore_progress(session_id, progress_json)`
+
+When in-memory capacity is exceeded (`max_in_memory_sessions`) or timeout policy
+marks a session as inactive, the runner emits stream events that hosts can
+forward to telemetry/UI:
+
+- `session_archived` (includes `state_json` snapshot for host persistence)
+- `session_restore_requested`
+- `session_restore_progress`
+- `session_restored`
+
 The native CLI path also enables provider stream chunk events and installs a
 terminal sink (stderr) so streamed content is visible live while stdout stays
 safe for machine-readable output.

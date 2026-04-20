@@ -6,8 +6,8 @@
 
 use antikythera_sdk::wasm_agent::runner::{
     append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events, get_state,
-    get_telemetry_snapshot, get_tools_prompt, init, prepare_user_turn, register_tools,
-    set_context_policy,
+    get_telemetry_snapshot, get_tools_prompt, hydrate_session, init, prepare_user_turn,
+    register_tools, report_session_restore_progress, set_context_policy, sweep_idle_sessions,
 };
 
 // ---------------------------------------------------------------------------
@@ -486,5 +486,182 @@ fn empty_registry_allows_any_tool_call() {
 
     let result = commit_llm_response(&prepared, &response);
     assert!(result.is_ok(), "empty registry should allow any tool call");
+}
+
+// ---------------------------------------------------------------------------
+// 12. Capacity pressure auto-archives the oldest inactive session
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn capacity_pressure_archives_oldest_session_and_emits_state_payload() {
+    register_tools("[]").unwrap();
+
+    let cfg = serde_json::json!({
+        "max_steps": 10,
+        "session_timeout_secs": 3600,
+        "max_in_memory_sessions": 1
+    })
+    .to_string();
+
+    let oldest = init(&cfg).unwrap();
+    let prepared = prepare_user_turn(&prepare_request(&oldest, "persist me")).unwrap();
+    commit_llm_response(&prepared, "ok").unwrap();
+
+    let _newest = init(&cfg).unwrap();
+
+    let state_result = get_state(&oldest);
+    assert!(state_result.is_err(), "oldest session should be archived");
+    assert!(
+        state_result.unwrap_err().contains("archived"),
+        "expected archived-state error"
+    );
+
+    let events: serde_json::Value = serde_json::from_str(&drain_events(&oldest).unwrap()).unwrap();
+    let archived = events
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["kind"] == "session_archived")
+        .expect("missing session_archived event");
+
+    assert_eq!(archived["payload"]["reason"], "capacity_pressure");
+    assert!(
+        archived["payload"]["state_json"].as_str().is_some(),
+        "archived event should contain state snapshot JSON for host persistence"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 13. Archived session triggers restore request and streaming progress events
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn archived_session_prepare_requests_restore_and_supports_progress_stream() {
+    register_tools("[]").unwrap();
+
+    let cfg = serde_json::json!({
+        "max_steps": 10,
+        "session_timeout_secs": 3600,
+        "max_in_memory_sessions": 1
+    })
+    .to_string();
+
+    let archived_id = init(&cfg).unwrap();
+    let prepared = prepare_user_turn(&prepare_request(&archived_id, "hello")).unwrap();
+    commit_llm_response(&prepared, "done").unwrap();
+    let _other = init(&cfg).unwrap();
+
+    let err = prepare_user_turn(&prepare_request(&archived_id, "come back")).unwrap_err();
+    assert!(err.contains("hydrate_session"));
+
+    report_session_restore_progress(
+        &archived_id,
+        &serde_json::json!({
+            "stage": "host_loading",
+            "percent": 40,
+            "message": "Loading from durable storage"
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let events: serde_json::Value = serde_json::from_str(&drain_events(&archived_id).unwrap()).unwrap();
+    let kinds: Vec<String> = events
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["kind"].as_str().unwrap_or_default().to_string())
+        .collect();
+
+    assert!(kinds.contains(&"session_restore_requested".to_string()));
+    assert!(kinds.contains(&"session_restore_progress".to_string()));
+}
+
+// ---------------------------------------------------------------------------
+// 14. Hydrate session restores archived state and allows turn continuation
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn hydrate_session_restores_archived_state() {
+    register_tools("[]").unwrap();
+
+    let cfg = serde_json::json!({
+        "max_steps": 10,
+        "session_timeout_secs": 3600,
+        "max_in_memory_sessions": 1
+    })
+    .to_string();
+
+    let archived_id = init(&cfg).unwrap();
+    let first = prepare_user_turn(&prepare_request(&archived_id, "message-1")).unwrap();
+    commit_llm_response(&first, "reply-1").unwrap();
+
+    let _other = init(&cfg).unwrap();
+    let events: serde_json::Value = serde_json::from_str(&drain_events(&archived_id).unwrap()).unwrap();
+    let state_json = events
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["kind"] == "session_archived")
+        .and_then(|event| event["payload"]["state_json"].as_str())
+        .expect("archived snapshot state_json should be present")
+        .to_string();
+
+    hydrate_session(&archived_id, &state_json).unwrap();
+
+    let second = prepare_user_turn(&prepare_request(&archived_id, "message-2")).unwrap();
+    let result = commit_llm_response(&second, "reply-2").unwrap();
+    let value: serde_json::Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(value["action"], "final");
+
+    let restored_events: serde_json::Value =
+        serde_json::from_str(&drain_events(&archived_id).unwrap()).unwrap();
+    assert!(
+        restored_events
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "session_restored"),
+        "session_restored event should be emitted after hydration"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 15. Idle sweep archives timed-out sessions deterministically
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial_test::serial]
+fn sweep_idle_sessions_archives_timed_out_session() {
+    register_tools("[]").unwrap();
+
+    let cfg = serde_json::json!({
+        "max_steps": 10,
+        "session_timeout_secs": 1,
+        "max_in_memory_sessions": 32
+    })
+    .to_string();
+
+    let session_id = init(&cfg).unwrap();
+    let prepared = prepare_user_turn(&prepare_request(&session_id, "hello")).unwrap();
+    commit_llm_response(&prepared, "world").unwrap();
+
+    let swept = sweep_idle_sessions(Some(chrono::Utc::now().timestamp_millis() + 2_000)).unwrap();
+    assert_eq!(swept, 1, "exactly one session should be archived by idle sweep");
+
+    let state_result = get_state(&session_id);
+    assert!(state_result.is_err());
+
+    let events: serde_json::Value = serde_json::from_str(&drain_events(&session_id).unwrap()).unwrap();
+    let archived = events
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["kind"] == "session_archived")
+        .expect("missing session_archived event");
+    assert_eq!(archived["payload"]["reason"], "idle_timeout");
 }
 
