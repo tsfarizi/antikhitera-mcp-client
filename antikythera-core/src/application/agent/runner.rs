@@ -3,7 +3,7 @@ use super::errors::AgentError;
 use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use crate::application::client::{ChatRequest, McpClient};
-use crate::infrastructure::model::ModelProvider;
+use crate::application::model_provider::ModelProvider;
 use serde_json::{Value, json};
 use std::sync::Arc;
 #[cfg(feature = "native-transport")]

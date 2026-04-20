@@ -11,8 +11,8 @@
 //!
 //! | This module (`postcard_config`) | Runtime module (`app`) | Purpose |
 //! |---------------------------------|------------------------|---------|
-//! | [`AppConfig`] / [`PostcardAppConfig`] | [`super::app::AppConfig`] | Serialised blob ↔ runtime struct |
-//! | [`ServerConfig`] | [`super::app::RestServerConfig`] | REST server bind settings |
+//! | [`PostcardAppConfig`] (`AppConfig` alias) | [`super::app::AppConfig`] | Serialised blob ↔ runtime struct |
+//! | [`PostcardServerConfig`] (`ServerConfig` alias) | [`super::app::RestServerConfig`] | REST server bind settings |
 //! | [`AgentConfig`] | *(derived at runtime)* | Agent tuning knobs |
 //!
 //! **Use [`PostcardAppConfig`]** when you need to disambiguate the serialised
@@ -33,9 +33,9 @@ use std::path::{Path, PathBuf};
 
 /// Complete application configuration (single Postcard blob)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AppConfig {
+pub struct PostcardAppConfig {
     /// REST server settings
-    pub server: ServerConfig,
+    pub server: PostcardServerConfig,
     /// LLM providers
     pub providers: Vec<ProviderConfig>,
     /// Default provider and model
@@ -54,7 +54,7 @@ pub struct AppConfig {
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
+pub struct PostcardServerConfig {
     /// Bind address (e.g., "127.0.0.1:8080")
     pub bind: String,
     /// CORS allowed origins
@@ -63,7 +63,7 @@ pub struct ServerConfig {
     pub docs: Vec<DocServerConfig>,
 }
 
-impl Default for ServerConfig {
+impl Default for PostcardServerConfig {
     fn default() -> Self {
         Self {
             bind: "127.0.0.1:8080".to_string(),
@@ -201,17 +201,17 @@ impl Default for AgentConfig {
 pub const CONFIG_PATH: &str = "app.pc";
 
 /// Serialize configuration to Postcard binary
-pub fn config_to_postcard(config: &AppConfig) -> Result<Vec<u8>, String> {
+pub fn config_to_postcard(config: &PostcardAppConfig) -> Result<Vec<u8>, String> {
     postcard::to_allocvec(config).map_err(|e| format!("Failed to serialize config: {}", e))
 }
 
 /// Deserialize configuration from Postcard binary
-pub fn config_from_postcard(data: &[u8]) -> Result<AppConfig, String> {
+pub fn config_from_postcard(data: &[u8]) -> Result<PostcardAppConfig, String> {
     postcard::from_bytes(data).map_err(|e| format!("Failed to deserialize config: {}", e))
 }
 
 /// Load configuration from file
-pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
+pub fn load_config(path: Option<&Path>) -> Result<PostcardAppConfig, String> {
     let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
 
     if !config_path.exists() {
@@ -224,17 +224,20 @@ pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
     config_from_postcard(&data)
 }
 
-/// Alias for [`AppConfig`] that makes the distinction from
+/// Alias for [`PostcardAppConfig`] that makes the distinction from
 /// [`super::app::AppConfig`] explicit in code that imports both.
 ///
 /// ```rust,ignore
 /// use antikythera_core::config::postcard_config::PostcardAppConfig;
 /// use antikythera_core::config::AppConfig; // runtime form
 /// ```
-pub type PostcardAppConfig = AppConfig;
+pub type AppConfig = PostcardAppConfig;
+
+/// Backwards-compatible alias for serialized server config.
+pub type ServerConfig = PostcardServerConfig;
 
 /// Save configuration to file
-pub fn save_config(config: &AppConfig, path: Option<&Path>) -> Result<(), String> {
+pub fn save_config(config: &PostcardAppConfig, path: Option<&Path>) -> Result<(), String> {
     let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
 
     // Create directory if needed
@@ -252,8 +255,8 @@ pub fn save_config(config: &AppConfig, path: Option<&Path>) -> Result<(), String
 }
 
 /// Initialize default configuration and save to file
-pub fn init_default_config(path: Option<&Path>) -> Result<AppConfig, String> {
-    let config = AppConfig::default();
+pub fn init_default_config(path: Option<&Path>) -> Result<PostcardAppConfig, String> {
+    let config = PostcardAppConfig::default();
     save_config(&config, path)?;
     Ok(config)
 }

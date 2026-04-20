@@ -1,7 +1,7 @@
 use crate::application::agent::{Agent, AgentOptions, AgentOutcome, AgentStep};
 use crate::application::client::{ChatRequest, ChatResult, McpClient};
+use crate::application::model_provider::ModelProvider;
 use crate::config::{AppConfig, CONFIG_PATH};
-use crate::infrastructure::model::ModelProvider;
 use serde_json::{Value, to_string_pretty};
 use std::fs;
 use std::io::ErrorKind;

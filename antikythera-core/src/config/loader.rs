@@ -83,7 +83,7 @@ pub fn save_config(config: &super::AppConfig, path: Option<&Path>) -> Result<(),
 }
 
 /// Convert Postcard config to AppConfig
-fn convert_to_app_config(pc: &postcard_config::AppConfig) -> super::AppConfig {
+fn convert_to_app_config(pc: &postcard_config::PostcardAppConfig) -> super::AppConfig {
     super::AppConfig {
         default_provider: pc.model.default_provider.clone(),
         model: pc.model.model.clone(),
@@ -154,9 +154,9 @@ fn opt_nonempty(s: &str) -> Option<String> {
 }
 
 /// Convert AppConfig to Postcard config
-fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::AppConfig {
-    postcard_config::AppConfig {
-        server: postcard_config::ServerConfig {
+fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::PostcardAppConfig {
+    postcard_config::PostcardAppConfig {
+        server: postcard_config::PostcardServerConfig {
             bind: config.rest_server.bind.clone(),
             cors_origins: config.rest_server.cors_origins.clone(),
             docs: config

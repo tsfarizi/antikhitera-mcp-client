@@ -1,12 +1,10 @@
-//! Agent Management Feature Slice
+//! Agent management feature slice.
 //!
-//! This module provides types, registry, validation, and FFI bindings
-//! for managing multi-agent configurations.
+//! This module provides a Rust-native registry API for managing multi-agent
+//! configurations used by tests and host-side integrations.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-use std::os::raw::c_char;
 use std::sync::{LazyLock, Mutex};
 
 // ============================================================================
@@ -557,52 +555,56 @@ pub fn reset_hardening_runtime() -> Result<bool, String> {
 }
 
 // ============================================================================
-// FFI — Orchestrator options, monitoring, and task introspection
+// Orchestrator options, monitoring, and task introspection
 // ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationReport {
+    pub valid: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<String>,
+}
 
 /// Return the default [`OrchestratorOptions`] as a JSON string.
 ///
 /// Use this to obtain the canonical default configuration, then modify fields
 /// as needed before passing to `mcp_build_orchestrator_budget`.
-pub fn mcp_default_orchestrator_options() -> *mut c_char {
-    serialize_result(&OrchestratorOptions::default())
+pub fn mcp_default_orchestrator_options() -> OrchestratorOptions {
+    OrchestratorOptions::default()
 }
 
 /// Return default [`StreamingOptions`] as a JSON string.
-pub fn mcp_default_streaming_options() -> *mut c_char {
-    serialize_result(&StreamingOptions::default())
+pub fn mcp_default_streaming_options() -> StreamingOptions {
+    StreamingOptions::default()
 }
 
 /// Validate a [`StreamingOptions`] JSON string.
-///
-/// Returns `{"valid": true}` or `{"valid": false, "error": "..."}`.
-pub fn mcp_validate_streaming_options(options_json: *const c_char) -> *mut c_char {
-    let json_str = match from_c_string(options_json) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
-    };
-    match serde_json::from_str::<StreamingOptions>(&json_str) {
+pub fn mcp_validate_streaming_options(options_json: &str) -> ValidationReport {
+    match serde_json::from_str::<StreamingOptions>(options_json) {
         Ok(opts) => {
             let errors = validate_streaming_options_collect(&opts);
             if errors.is_empty() {
-                to_c_string(r#"{"valid":true}"#)
+                ValidationReport {
+                    valid: true,
+                    errors: Vec::new(),
+                }
             } else {
-                serialize_result(&serde_json::json!({"valid": false, "errors": errors}))
+                ValidationReport {
+                    valid: false,
+                    errors,
+                }
             }
         }
-        Err(e) => to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
+        Err(e) => ValidationReport {
+            valid: false,
+            errors: vec![format!("Invalid JSON: {e}")],
+        },
     }
 }
 
 /// Validate an [`OrchestratorOptions`] JSON string.
-///
-/// Returns `{"valid": true}` or `{"valid": false, "error": "..."}`.
-pub fn mcp_validate_orchestrator_options(options_json: *const c_char) -> *mut c_char {
-    let json_str = match from_c_string(options_json) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
-    };
-    match serde_json::from_str::<OrchestratorOptions>(&json_str) {
+pub fn mcp_validate_orchestrator_options(options_json: &str) -> ValidationReport {
+    match serde_json::from_str::<OrchestratorOptions>(options_json) {
         Ok(opts) => {
             // Basic sanity checks
             let mut errors: Vec<String> = Vec::new();
@@ -617,61 +619,47 @@ pub fn mcp_validate_orchestrator_options(options_json: *const c_char) -> *mut c_
             }
             errors.extend(validate_guardrail_options_collect(&opts.guardrails));
             if errors.is_empty() {
-                to_c_string(r#"{"valid":true}"#)
+                ValidationReport {
+                    valid: true,
+                    errors: Vec::new(),
+                }
             } else {
-                serialize_result(&serde_json::json!({"valid": false, "errors": errors}))
+                ValidationReport {
+                    valid: false,
+                    errors,
+                }
             }
         }
-        Err(e) => to_c_string(&format!(r#"{{"valid":false,"error":"{}"}}"#, e)),
+        Err(e) => ValidationReport {
+            valid: false,
+            errors: vec![format!("Invalid JSON: {e}")],
+        },
     }
 }
 
 /// Configure host runtime hardening options from JSON.
 #[cfg(feature = "multi-agent")]
-pub fn mcp_configure_hardening(options_json: *const c_char) -> *mut c_char {
-    let json_str = match from_c_string(options_json) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"success":false,"error":"{}"}}"#, e)),
-    };
-
-    match configure_hardening(&json_str) {
-        Ok(success) => to_c_string(&format!(r#"{{"success":{success}}}"#)),
-        Err(e) => to_c_string(&format!(r#"{{"success":false,"error":"{}"}}"#, e)),
-    }
+pub fn mcp_configure_hardening(options_json: &str) -> Result<bool, String> {
+    configure_hardening(options_json)
 }
 
 /// Mark active runtime as cancelled.
 #[cfg(feature = "multi-agent")]
-pub fn mcp_cancel_orchestrator() -> *mut c_char {
-    match cancel_orchestrator() {
-        Ok(success) => to_c_string(&format!(r#"{{"success":{success}}}"#)),
-        Err(e) => to_c_string(&format!(r#"{{"success":false,"error":"{}"}}"#, e)),
-    }
+pub fn mcp_cancel_orchestrator() -> Result<bool, String> {
+    cancel_orchestrator()
 }
 
 /// Return current monitor snapshot JSON from host runtime state.
 #[cfg(feature = "multi-agent")]
-pub fn mcp_get_monitor_snapshot() -> *mut c_char {
-    match get_monitor_snapshot() {
-        Ok(json) => to_c_string(&json),
-        Err(e) => to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
-    }
+pub fn mcp_get_monitor_snapshot() -> Result<String, String> {
+    get_monitor_snapshot()
 }
 
 /// Decode a serialized [`TaskResult`] JSON into a [`TaskResultDetail`] JSON
 /// for easy routing/error introspection without requiring a live orchestrator.
-///
-/// Returns `{"error": "..."}` if the input cannot be parsed.
 #[cfg(feature = "multi-agent")]
-pub fn mcp_task_result_detail(task_result_json: *const c_char) -> *mut c_char {
-    let json_str = match from_c_string(task_result_json) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
-    };
-    match task_result_detail(&json_str) {
-        Ok(json) => to_c_string(&json),
-        Err(e) => to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
-    }
+pub fn mcp_task_result_detail(task_result_json: &str) -> Result<String, String> {
+    task_result_detail(task_result_json)
 }
 
 /// Build an [`OrchestratorMonitorSnapshot`] from a [`BudgetSnapshot`] JSON
@@ -681,24 +669,17 @@ pub fn mcp_task_result_detail(task_result_json: *const c_char) -> *mut c_char {
 /// This is a pure decode helper — it performs no I/O.
 #[cfg(feature = "multi-agent")]
 pub fn mcp_orchestrator_snapshot(
-    budget_snapshot_json: *const c_char,
+    budget_snapshot_json: &str,
     cancelled: bool,
-) -> *mut c_char {
+) -> Result<OrchestratorMonitorSnapshot, String> {
     use antikythera_core::application::agent::multi_agent::BudgetSnapshot;
 
-    let json_str = match from_c_string(budget_snapshot_json) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"error":"{}"}}"#, e)),
-    };
-    match serde_json::from_str::<BudgetSnapshot>(&json_str) {
+    match serde_json::from_str::<BudgetSnapshot>(budget_snapshot_json) {
         Ok(snap) => {
             let monitor = OrchestratorMonitorSnapshot::from(&snap).with_cancelled(cancelled);
-            serialize_result(&monitor)
+            Ok(monitor)
         }
-        Err(e) => to_c_string(&format!(
-            r#"{{"error":"Invalid BudgetSnapshot JSON: {}"}}"#,
-            e
-        )),
+        Err(e) => Err(format!("Invalid BudgetSnapshot JSON: {}", e)),
     }
 }
 
@@ -927,255 +908,211 @@ impl AgentConfig {
 // Registry
 // ============================================================================
 
-/// Agent registry
-static AGENTS: LazyLock<Mutex<HashMap<String, AgentConfig>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Agent status tracking
-static AGENT_STATUS: LazyLock<Mutex<HashMap<String, AgentStatus>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Get mutable access to agent registry (for tests)
-#[allow(dead_code)]
-pub fn agents_lock() -> std::sync::MutexGuard<'static, HashMap<String, AgentConfig>> {
-    AGENTS.lock().unwrap()
+#[derive(Debug, Default)]
+pub struct AgentRegistry {
+    agents: Mutex<HashMap<String, AgentConfig>>,
+    statuses: Mutex<HashMap<String, AgentStatus>>,
 }
 
-/// Get mutable access to agent status registry (for tests)
-#[allow(dead_code)]
-pub fn agent_status_lock() -> std::sync::MutexGuard<'static, HashMap<String, AgentStatus>> {
-    AGENT_STATUS.lock().unwrap()
-}
-
-// ============================================================================
-// FFI Bindings
-// ============================================================================
-
-fn to_c_string(s: &str) -> *mut c_char {
-    match CString::new(s) {
-        Ok(cstr) => cstr.into_raw(),
-        Err(_) => std::ptr::null_mut(),
+impl AgentRegistry {
+    pub fn new() -> Self {
+        Self::default()
     }
-}
 
-fn from_c_string(ptr: *const c_char) -> Result<String, String> {
-    if ptr.is_null() {
-        return Err("Null pointer".to_string());
-    }
-    unsafe {
-        CStr::from_ptr(ptr)
-            .to_str()
-            .map(|s| s.to_string())
-            .map_err(|e| format!("Invalid UTF-8: {}", e))
-    }
-}
-
-fn serialize_result<T: serde::Serialize>(result: &T) -> *mut c_char {
-    match serde_json::to_string(result) {
-        Ok(json) => to_c_string(&json),
-        Err(e) => {
-            let error = serde_json::json!({"error": format!("Serialization failed: {}", e)});
-            to_c_string(&error.to_string())
+    fn default_status(config: &AgentConfig) -> AgentStatus {
+        AgentStatus {
+            id: config.id.clone(),
+            name: config.name.clone(),
+            active: false,
+            session_id: None,
+            tasks_completed: 0,
+            tasks_failed: 0,
         }
     }
-}
 
-/// Register a new agent configuration
-pub fn mcp_register_agent(config_json: *const c_char) -> *mut c_char {
-    let json_str = match from_c_string(config_json) {
-        Ok(s) => s,
-        Err(e) => {
-            return serialize_result(&AgentValidationResult {
-                valid: false,
-                errors: vec![format!("Invalid JSON: {}", e)],
-                agent_id: String::new(),
-            });
+    pub fn register(&self, config: AgentConfig) -> AgentValidationResult {
+        let validation = config.validate();
+        if !validation.valid {
+            return validation;
         }
-    };
 
-    let config: AgentConfig = match serde_json::from_str(&json_str) {
-        Ok(c) => c,
-        Err(e) => {
-            return serialize_result(&AgentValidationResult {
-                valid: false,
-                errors: vec![format!("Invalid JSON: {}", e)],
-                agent_id: String::new(),
-            });
-        }
-    };
-
-    let validation = config.validate();
-    if !validation.valid {
-        return serialize_result(&validation);
-    }
-
-    let id = config.id.clone();
-    match AGENTS.lock() {
-        Ok(mut agents) => {
-            if agents.contains_key(&id) {
-                return serialize_result(&AgentValidationResult {
+        let id = config.id.clone();
+        let mut agents = match self.agents.lock() {
+            Ok(agents) => agents,
+            Err(_) => {
+                return AgentValidationResult {
                     valid: false,
-                    errors: vec![format!("Agent '{}' already exists", id)],
+                    errors: vec!["Failed to lock agent registry".to_string()],
                     agent_id: id,
-                });
-            }
-
-            let status = AgentStatus {
-                id: id.clone(),
-                name: config.name.clone(),
-                active: false,
-                session_id: None,
-                tasks_completed: 0,
-                tasks_failed: 0,
-            };
-
-            AGENT_STATUS.lock().unwrap().insert(id.clone(), status);
-            agents.insert(id.clone(), config);
-
-            serialize_result(&AgentValidationResult {
-                valid: true,
-                errors: vec![],
-                agent_id: id,
-            })
-        }
-        Err(e) => serialize_result(&AgentValidationResult {
-            valid: false,
-            errors: vec![format!("Failed to lock registry: {}", e)],
-            agent_id: String::new(),
-        }),
-    }
-}
-
-/// Unregister an agent by ID
-pub fn mcp_unregister_agent(id: *const c_char) -> *mut c_char {
-    let id_str = match from_c_string(id) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    };
-
-    match AGENTS.lock() {
-        Ok(mut agents) => {
-            if agents.remove(&id_str).is_some() {
-                AGENT_STATUS.lock().unwrap().remove(&id_str);
-                to_c_string(r#"{"success": true}"#)
-            } else {
-                to_c_string(&format!(r#"{{"error": "Agent '{}' not found"}}"#, id_str))
-            }
-        }
-        Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    }
-}
-
-/// List all registered agents
-pub fn mcp_list_agents() -> *mut c_char {
-    match AGENTS.lock() {
-        Ok(agents) => {
-            let configs: Vec<&AgentConfig> = agents.values().collect();
-            serialize_result(&configs)
-        }
-        Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    }
-}
-
-/// Get configuration for a specific agent
-pub fn mcp_get_agent(id: *const c_char) -> *mut c_char {
-    let id_str = match from_c_string(id) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    };
-
-    match AGENTS.lock() {
-        Ok(agents) => {
-            if let Some(config) = agents.get(&id_str) {
-                serialize_result(config)
-            } else {
-                to_c_string(&format!(r#"{{"error": "Agent '{}' not found"}}"#, id_str))
-            }
-        }
-        Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    }
-}
-
-/// Get runtime status of all agents
-pub fn mcp_get_agent_status() -> *mut c_char {
-    match AGENT_STATUS.lock() {
-        Ok(statuses) => {
-            let status_list: Vec<&AgentStatus> = statuses.values().collect();
-            serialize_result(&status_list)
-        }
-        Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    }
-}
-
-/// Validate agent configuration without registering
-pub fn mcp_validate_agent(config_json: *const c_char) -> *mut c_char {
-    let json_str = match from_c_string(config_json) {
-        Ok(s) => s,
-        Err(e) => {
-            return serialize_result(&AgentValidationResult {
-                valid: false,
-                errors: vec![format!("Invalid JSON: {}", e)],
-                agent_id: String::new(),
-            });
-        }
-    };
-
-    let config: AgentConfig = match serde_json::from_str(&json_str) {
-        Ok(c) => c,
-        Err(e) => {
-            return serialize_result(&AgentValidationResult {
-                valid: false,
-                errors: vec![format!("Invalid JSON: {}", e)],
-                agent_id: String::new(),
-            });
-        }
-    };
-
-    serialize_result(&config.validate())
-}
-
-/// Export all agents configuration as JSON
-pub fn mcp_export_agents_config() -> *mut c_char {
-    match AGENTS.lock() {
-        Ok(agents) => {
-            let configs: Vec<&AgentConfig> = agents.values().collect();
-            serialize_result(&configs)
-        }
-        Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    }
-}
-
-/// Import agents configuration from JSON
-pub fn mcp_import_agents_config(config_json: *const c_char) -> *mut c_char {
-    let json_str = match from_c_string(config_json) {
-        Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
-    };
-
-    let configs: Vec<AgentConfig> = match serde_json::from_str(&json_str) {
-        Ok(c) => c,
-        Err(e) => return to_c_string(&format!(r#"{{"error": "Invalid JSON: {}"}}"#, e)),
-    };
-
-    let count = configs.len();
-    match AGENTS.lock() {
-        Ok(mut agents) => {
-            for config in configs {
-                let id = config.id.clone();
-                let status = AgentStatus {
-                    id: id.clone(),
-                    name: config.name.clone(),
-                    active: false,
-                    session_id: None,
-                    tasks_completed: 0,
-                    tasks_failed: 0,
                 };
-
-                AGENT_STATUS.lock().unwrap().insert(id.clone(), status);
-                agents.insert(id, config);
             }
-            to_c_string(&format!(r#"{{"success": true, "imported": {}}}"#, count))
+        };
+
+        if agents.contains_key(&id) {
+            return AgentValidationResult {
+                valid: false,
+                errors: vec![format!("Agent '{}' already exists", id)],
+                agent_id: id,
+            };
         }
-        Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
+
+        let mut statuses = match self.statuses.lock() {
+            Ok(statuses) => statuses,
+            Err(_) => {
+                return AgentValidationResult {
+                    valid: false,
+                    errors: vec!["Failed to lock agent status registry".to_string()],
+                    agent_id: id,
+                };
+            }
+        };
+
+        statuses.insert(id.clone(), Self::default_status(&config));
+        agents.insert(id.clone(), config);
+
+        AgentValidationResult {
+            valid: true,
+            errors: Vec::new(),
+            agent_id: id,
+        }
     }
+
+    pub fn unregister(&self, id: &str) -> Result<bool, String> {
+        let mut agents = self
+            .agents
+            .lock()
+            .map_err(|_| "Failed to lock agent registry".to_string())?;
+        let removed = agents.remove(id).is_some();
+
+        if removed {
+            let mut statuses = self
+                .statuses
+                .lock()
+                .map_err(|_| "Failed to lock agent status registry".to_string())?;
+            statuses.remove(id);
+        }
+
+        Ok(removed)
+    }
+
+    pub fn get(&self, id: &str) -> Result<Option<AgentConfig>, String> {
+        let agents = self
+            .agents
+            .lock()
+            .map_err(|_| "Failed to lock agent registry".to_string())?;
+        Ok(agents.get(id).cloned())
+    }
+
+    pub fn list(&self) -> Result<Vec<AgentConfig>, String> {
+        let agents = self
+            .agents
+            .lock()
+            .map_err(|_| "Failed to lock agent registry".to_string())?;
+        Ok(agents.values().cloned().collect())
+    }
+
+    pub fn status_list(&self) -> Result<Vec<AgentStatus>, String> {
+        let statuses = self
+            .statuses
+            .lock()
+            .map_err(|_| "Failed to lock agent status registry".to_string())?;
+        Ok(statuses.values().cloned().collect())
+    }
+
+    pub fn export_json(&self) -> Result<String, String> {
+        let agents = self.list()?;
+        serde_json::to_string(&agents).map_err(|e| format!("Failed to serialize agents: {e}"))
+    }
+
+    pub fn import_json(&self, config_json: &str) -> Result<usize, String> {
+        let configs: Vec<AgentConfig> = serde_json::from_str(config_json)
+            .map_err(|e| format!("Invalid JSON: {e}"))?;
+
+        let mut agents = self
+            .agents
+            .lock()
+            .map_err(|_| "Failed to lock agent registry".to_string())?;
+        let mut statuses = self
+            .statuses
+            .lock()
+            .map_err(|_| "Failed to lock agent status registry".to_string())?;
+
+        for config in &configs {
+            statuses.insert(config.id.clone(), Self::default_status(config));
+            agents.insert(config.id.clone(), config.clone());
+        }
+
+        Ok(configs.len())
+    }
+}
+
+static GLOBAL_AGENT_REGISTRY: LazyLock<AgentRegistry> = LazyLock::new(AgentRegistry::new);
+
+pub fn global_agent_registry() -> &'static AgentRegistry {
+    &GLOBAL_AGENT_REGISTRY
+}
+
+/// Register a new agent configuration from JSON.
+pub fn mcp_register_agent(config_json: &str) -> AgentValidationResult {
+    let config: AgentConfig = match serde_json::from_str(config_json) {
+        Ok(c) => c,
+        Err(e) => {
+            return AgentValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {e}")],
+                agent_id: String::new(),
+            };
+        }
+    };
+
+    global_agent_registry().register(config)
+}
+
+/// Unregister an agent by ID.
+pub fn mcp_unregister_agent(id: &str) -> Result<bool, String> {
+    global_agent_registry().unregister(id)
+}
+
+/// List all registered agents.
+pub fn mcp_list_agents() -> Result<Vec<AgentConfig>, String> {
+    global_agent_registry().list()
+}
+
+/// Get configuration for a specific agent.
+pub fn mcp_get_agent(id: &str) -> Result<AgentConfig, String> {
+    match global_agent_registry().get(id)? {
+        Some(config) => Ok(config),
+        None => Err(format!("Agent '{}' not found", id)),
+    }
+}
+
+/// Get runtime status of all agents.
+pub fn mcp_get_agent_status() -> Result<Vec<AgentStatus>, String> {
+    global_agent_registry().status_list()
+}
+
+/// Validate agent configuration without registering.
+pub fn mcp_validate_agent(config_json: &str) -> AgentValidationResult {
+    let config: AgentConfig = match serde_json::from_str(config_json) {
+        Ok(c) => c,
+        Err(e) => {
+            return AgentValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {e}")],
+                agent_id: String::new(),
+            };
+        }
+    };
+
+    config.validate()
+}
+
+/// Export all agents configuration as JSON.
+pub fn mcp_export_agents_config() -> Result<String, String> {
+    global_agent_registry().export_json()
+}
+
+/// Import agents configuration from JSON.
+pub fn mcp_import_agents_config(config_json: &str) -> Result<usize, String> {
+    global_agent_registry().import_json(config_json)
 }

@@ -16,7 +16,7 @@
 //!     execution::ExecutionMode,
 //! };
 //!
-//! # async fn example(client: Arc<antikythera_core::application::client::McpClient<impl antikythera_core::infrastructure::model::ModelProvider + 'static>>) {
+//! # async fn example(client: Arc<antikythera_core::application::client::McpClient<impl antikythera_core::application::model_provider::ModelProvider + 'static>>) {
 //! let orchestrator = MultiAgentOrchestrator::new(client, ExecutionMode::Auto)
 //!     .register_agent(AgentProfile {
 //!         id: "reviewer".into(),
@@ -52,7 +52,7 @@ use super::task::{
 };
 use crate::application::agent::{Agent, AgentOptions};
 use crate::application::client::McpClient;
-use crate::infrastructure::model::ModelProvider;
+use crate::application::model_provider::ModelProvider;
 
 #[derive(Clone)]
 struct ExecuteTaskRuntime {
@@ -407,7 +407,7 @@ fn classify_agent_error(error: &str) -> ErrorKind {
 /// #     execution::ExecutionMode,
 /// #     router::RoundRobinRouter,
 /// # };
-/// # fn doc(client: Arc<antikythera_core::application::client::McpClient<impl antikythera_core::infrastructure::model::ModelProvider + 'static>>) {
+/// # fn doc(client: Arc<antikythera_core::application::client::McpClient<impl antikythera_core::application::model_provider::ModelProvider + 'static>>) {
 /// let orchestrator = MultiAgentOrchestrator::new(client, ExecutionMode::Auto)
 ///     .register_agent(AgentProfile {
 ///         id: "a1".into(),

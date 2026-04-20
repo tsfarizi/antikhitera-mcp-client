@@ -29,7 +29,7 @@
 //!     execution::ExecutionMode,
 //! };
 //!
-//! # async fn run(client: Arc<antikythera_core::application::client::McpClient<impl antikythera_core::infrastructure::model::ModelProvider + 'static>>) {
+//! # async fn run(client: Arc<antikythera_core::application::client::McpClient<impl antikythera_core::application::model_provider::ModelProvider + 'static>>) {
 //! let orch = MultiAgentOrchestrator::new(client, ExecutionMode::Auto)
 //!     .register_agent(AgentProfile {
 //!         id: "reviewer".into(),

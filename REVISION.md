@@ -178,6 +178,20 @@ Target: Production-grade observability, resilience, and enterprise deployment.
 - **Backward compatibility**: Existing behavior remains valid when no tool registry is provided (`register_tools([])` or never called)
 - **Deliverables**: Code + tests + WIT contract update + clippy ✅
 
+**Priority 7: Architecture Consistency Remediation (Critical Findings)**
+- ✅ **Modules**: `antikythera-sdk::agents`, `antikythera-core::application`, `antikythera-core::config`
+- **Scope**:
+  - Removed C-style pointer API surface from `antikythera-sdk::agents` and migrated to Rust-native typed APIs (`&str`, structs, `Result`)
+  - Replaced panic-prone registry locking with typed lock-error handling and an explicit `AgentRegistry` service
+  - Added `application::model_provider` port and migrated application modules away from direct `infrastructure::model` import paths
+  - Introduced explicit postcard config canonical names (`PostcardAppConfig`, `PostcardServerConfig`) while retaining compatibility aliases
+  - Updated config loader/wizard/prompt paths to use explicit postcard types for disambiguation
+- **Backward compatibility**:
+  - Existing serialized config shape remains unchanged
+  - Compatibility aliases kept for postcard config types
+- **Verification**:
+  - `cargo test --workspace --lib --tests` ✅
+
 ---
 
 ## 12. Implementation standards for 0.9.8+ work

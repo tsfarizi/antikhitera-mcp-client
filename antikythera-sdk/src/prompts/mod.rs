@@ -25,11 +25,11 @@ fn from_c_string(ptr: *const c_char) -> Result<String, String> {
     }
 }
 
-fn load_config() -> Result<postcard_config::AppConfig, String> {
+fn load_config() -> Result<postcard_config::PostcardAppConfig, String> {
     postcard_config::load_config(None)
 }
 
-fn save_config(config: &postcard_config::AppConfig) -> Result<(), String> {
+fn save_config(config: &postcard_config::PostcardAppConfig) -> Result<(), String> {
     postcard_config::save_config(config, None)
 }
 

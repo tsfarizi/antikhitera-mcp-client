@@ -6,9 +6,7 @@ pub mod generators;
 pub mod prompts;
 pub mod ui;
 
-use crate::config::postcard_config::{
-    self, AppConfig as PostcardAppConfig, ModelConfig, PromptsConfig,
-};
+use crate::config::postcard_config::{self, ModelConfig, PostcardAppConfig, PromptsConfig};
 use generators::client;
 use std::error::Error;
 

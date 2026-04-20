@@ -21,6 +21,7 @@ pub mod client;
 pub mod context_management;
 pub mod discovery;
 pub mod hooks;
+pub mod model_provider;
 pub mod observability;
 pub mod resilience;
 pub mod services;
@@ -35,6 +36,7 @@ pub use hooks::{
     HostHookMiddleware, InMemoryTelemetryHook, PolicyDecision, PolicyDecisionHook,
     PolicyDecisionInput, PolicyTarget, TelemetryHook,
 };
+pub use model_provider::ModelProvider;
 pub use observability::{
     AuditCategory, AuditRecord, AuditTrail, CallerContext, InMemoryMetricsExporter,
     InMemoryObservabilityHook, InMemoryTracingHook, LatencySummary, LatencyTracker, MetricKind,

@@ -1,7 +1,7 @@
 use crate::application::agent::{Agent, AgentOptions, AgentStep};
 use crate::application::client::{ChatRequest, McpClient, McpError};
+use crate::application::model_provider::ModelProvider;
 use crate::domain::types::MessagePart;
-use crate::infrastructure::model::ModelProvider;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tracing::{debug, error, info};
