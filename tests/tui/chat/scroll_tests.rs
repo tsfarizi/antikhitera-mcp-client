@@ -1,39 +1,10 @@
-//! Scroll tests
+﻿//! Scroll tests
 
 use antikythera_core::tui::screens::chat::ChatState;
 
-#[test]
-fn test_scroll_up() {
-    let mut state = ChatState::new();
-    state.scroll_offset = 5;
-
-    state.scroll_up();
-    assert_eq!(state.scroll_offset, 4);
-}
-
-#[test]
-fn test_scroll_down() {
-    let mut state = ChatState::new();
-    state.scroll_offset = 5;
-
-    state.scroll_down(100);
-    assert_eq!(state.scroll_offset, 6);
-}
-
-#[test]
-fn test_scroll_to_bottom() {
-    let mut state = ChatState::new();
-    state.scroll_offset = 10;
-
-    state.scroll_to_bottom();
-    assert_eq!(state.scroll_offset, u16::MAX);
-}
-
-#[test]
-fn test_scroll_up_at_zero() {
-    let mut state = ChatState::new();
-    state.scroll_offset = 0;
-
-    state.scroll_up();
-    assert_eq!(state.scroll_offset, 0);
-}
+// Split into 5 parts for consistent test organization.
+include!("scroll_tests/part_01.rs");
+include!("scroll_tests/part_02.rs");
+include!("scroll_tests/part_03.rs");
+include!("scroll_tests/part_04.rs");
+include!("scroll_tests/part_05.rs");

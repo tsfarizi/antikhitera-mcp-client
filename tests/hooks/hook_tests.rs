@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use std::sync::Arc;
 
 use antikythera_core::{
@@ -60,71 +60,9 @@ impl PolicyDecisionHook for ToolPolicy {
     }
 }
 
-#[test]
-fn middleware_prepare_context_updates_correlation_and_metadata() {
-    let middleware = HostHookMiddleware::new(
-        HookRegistry::new()
-            .with_auth_hook(Arc::new(RequireUser))
-            .with_correlation_hook(Arc::new(AddCorrelation)),
-    );
-
-    let prepared = middleware
-        .prepare_context(
-            HookContext::new(
-                CallerContext::new().with_user_id("user-a"),
-                HookOperation::AgentRun,
-            )
-            .with_session_id("sess-a"),
-        )
-        .expect("prepare context should succeed");
-
-    assert_eq!(prepared.correlation_id.as_deref(), Some("corr-hook"));
-    assert_eq!(
-        prepared.metadata.get("trace_origin").map(String::as_str),
-        Some("integration-test")
-    );
-}
-
-#[test]
-fn middleware_policy_denies_blocked_tool() {
-    let middleware =
-        HostHookMiddleware::new(HookRegistry::new().with_policy_hook(Arc::new(ToolPolicy)));
-    let context = HookContext::new(
-        CallerContext::new().with_user_id("user-a"),
-        HookOperation::ToolCall,
-    );
-
-    let decision = middleware
-        .authorize_tool(&context, "blocked")
-        .expect("policy evaluation should succeed");
-
-    assert_eq!(decision, PolicyDecision::Deny);
-}
-
-#[test]
-fn telemetry_hook_records_external_event() {
-    let sink = InMemoryTelemetryHook::new();
-    let middleware =
-        HostHookMiddleware::new(HookRegistry::new().with_telemetry_hook(Arc::new(sink.clone())));
-    let context = HookContext::new(
-        CallerContext::new().with_user_id("user-a"),
-        HookOperation::AgentRun,
-    )
-    .with_correlation_id("corr-a")
-    .with_session_id("sess-a");
-
-    let event = TelemetryEvent {
-        event_type: "agent_finished".to_string(),
-        correlation_id: context.correlation_id.clone(),
-        session_id: context.session_id.clone(),
-        timestamp_ms: 1,
-        attributes: HashMap::new(),
-    };
-
-    middleware
-        .emit_event(&context, event)
-        .expect("emit event should succeed");
-
-    assert_eq!(sink.snapshot().len(), 1);
-    assert_eq!(sink.snapshot()[0].event_type, "agent_finished");
-}
+// Split into 5 parts for consistent test organization.
+include!("hook_tests/part_01.rs");
+include!("hook_tests/part_02.rs");
+include!("hook_tests/part_03.rs");
+include!("hook_tests/part_04.rs");
+include!("hook_tests/part_05.rs");

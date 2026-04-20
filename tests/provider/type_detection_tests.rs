@@ -1,4 +1,4 @@
-// Provider config tests - testing ModelProviderConfig behavior
+﻿// Provider config tests - testing ModelProviderConfig behavior
 //
 // Tests for provider type detection and helper methods.
 // Updated to use split config: client.toml + model.toml
@@ -41,51 +41,9 @@ prompt_template = "test"
 "#
 }
 
-#[test]
-fn is_ollama_case_insensitive() {
-    let dir = tempdir().expect("tempdir");
-    let client_content = r#"
-[[providers]]
-id = "test"
-type = "OLLAMA"
-endpoint = "http://localhost:11434"
-models = ["test"]
-"#;
-    let path = write_configs(dir.path(), client_content, minimal_model(), minimal_ui());
-
-    let config = AppConfig::load(Some(&path)).expect("load config");
-    assert!(config.providers[0].is_ollama());
-}
-
-#[test]
-fn is_gemini_case_insensitive() {
-    let dir = tempdir().expect("tempdir");
-    let client_content = r#"
-[[providers]]
-id = "test"
-type = "GEMINI"
-endpoint = "https://example.com"
-models = ["test"]
-"#;
-    let path = write_configs(dir.path(), client_content, minimal_model(), minimal_ui());
-
-    let config = AppConfig::load(Some(&path)).expect("load config");
-    assert!(config.providers[0].is_gemini());
-}
-
-#[test]
-fn provider_type_mixed_case() {
-    let dir = tempdir().expect("tempdir");
-    let client_content = r#"
-[[providers]]
-id = "test"
-type = "OlLaMa"
-endpoint = "http://localhost:11434"
-models = ["test"]
-"#;
-    let path = write_configs(dir.path(), client_content, minimal_model(), minimal_ui());
-
-    let config = AppConfig::load(Some(&path)).expect("load config");
-    assert!(config.providers[0].is_ollama());
-    assert!(!config.providers[0].is_gemini());
-}
+// Split into 5 parts for consistent test organization.
+include!("type_detection_tests/part_01.rs");
+include!("type_detection_tests/part_02.rs");
+include!("type_detection_tests/part_03.rs");
+include!("type_detection_tests/part_04.rs");
+include!("type_detection_tests/part_05.rs");

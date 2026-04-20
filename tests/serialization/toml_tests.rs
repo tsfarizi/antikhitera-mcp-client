@@ -1,4 +1,4 @@
-// Serialization tests - testing config TOML serialization
+﻿// Serialization tests - testing config TOML serialization
 //
 // Tests for converting AppConfig back to TOML format.
 // Updated to use split config: client.toml + model.toml
@@ -52,53 +52,9 @@ prompt_template = "You are a helpful assistant."
 "#
 }
 
-#[test]
-fn to_raw_toml_contains_required_fields() {
-    let dir = tempdir().expect("tempdir");
-    let path = write_configs(dir.path(), minimal_client(), minimal_model(), minimal_ui());
-
-    let config = AppConfig::load(Some(&path)).expect("load config");
-    let raw = config.to_raw_toml();
-
-    assert!(raw.contains("default_provider = \"gemini\""));
-    assert!(raw.contains("model = \"gemini-1.5-flash\""));
-    assert!(raw.contains("[[providers]]"));
-    assert!(raw.contains("prompt_template"));
-}
-
-#[test]
-fn to_raw_toml_includes_provider_details() {
-    let dir = tempdir().expect("tempdir");
-    let path = write_configs(dir.path(), minimal_client(), minimal_model(), minimal_ui());
-
-    let config = AppConfig::load(Some(&path)).expect("load config");
-    let raw = config.to_raw_toml();
-
-    assert!(raw.contains("id = \"gemini\""));
-    assert!(raw.contains("type = \"gemini\""));
-    assert!(raw.contains("endpoint = \"https://generativelanguage.googleapis.com\""));
-}
-
-#[test]
-fn to_raw_toml_handles_system_prompt() {
-    let dir = tempdir().expect("tempdir");
-    let client_content = r#"
-[[providers]]
-id = "gemini"
-type = "gemini"
-endpoint = "https://example.com"
-models = ["gemini-1.5-flash"]
-"#;
-    let model_content = r#"
-default_provider = "gemini"
-model = "gemini-1.5-flash"
-prompt_template = "Template"
-system_prompt = "Be helpful and concise."
-"#;
-    let path = write_configs(dir.path(), client_content, model_content, minimal_ui());
-
-    let config = AppConfig::load(Some(&path)).expect("load config");
-    let raw = config.to_raw_toml();
-
-    assert!(raw.contains("system_prompt = \"Be helpful and concise.\""));
-}
+// Split into 5 parts for consistent test organization.
+include!("toml_tests/part_01.rs");
+include!("toml_tests/part_02.rs");
+include!("toml_tests/part_03.rs");
+include!("toml_tests/part_04.rs");
+include!("toml_tests/part_05.rs");

@@ -1,38 +1,10 @@
-//! Command detection tests
+﻿//! Command detection tests
 
 use antikythera_core::tui::screens::chat::ChatState;
 
-#[test]
-fn test_is_command_with_slash() {
-    let mut state = ChatState::new();
-    state.input = "/help".to_string();
-    assert!(state.is_command());
-}
-
-#[test]
-fn test_is_command_with_colon() {
-    let mut state = ChatState::new();
-    state.input = ":config".to_string();
-    assert!(state.is_command());
-}
-
-#[test]
-fn test_is_not_command() {
-    let mut state = ChatState::new();
-    state.input = "Hello there".to_string();
-    assert!(!state.is_command());
-}
-
-#[test]
-fn test_get_command() {
-    let mut state = ChatState::new();
-    state.input = "/agent on".to_string();
-    assert_eq!(state.get_command(), Some("agent"));
-}
-
-#[test]
-fn test_get_command_none() {
-    let mut state = ChatState::new();
-    state.input = "regular text".to_string();
-    assert_eq!(state.get_command(), None);
-}
+// Split into 5 parts for consistent test organization.
+include!("command_tests/part_01.rs");
+include!("command_tests/part_02.rs");
+include!("command_tests/part_03.rs");
+include!("command_tests/part_04.rs");
+include!("command_tests/part_05.rs");

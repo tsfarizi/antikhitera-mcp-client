@@ -1,24 +1,10 @@
-//! ChatMessage tests
+﻿//! ChatMessage tests
 
 use antikythera_core::tui::screens::chat::{ChatMessage, MessageRole};
 
-#[test]
-fn test_message_user() {
-    let msg = ChatMessage::user("Hello");
-    assert_eq!(msg.role, MessageRole::User);
-    assert_eq!(msg.content, "Hello");
-}
-
-#[test]
-fn test_message_assistant() {
-    let msg = ChatMessage::assistant("Hi there!");
-    assert_eq!(msg.role, MessageRole::Assistant);
-    assert_eq!(msg.content, "Hi there!");
-}
-
-#[test]
-fn test_message_system() {
-    let msg = ChatMessage::system("Welcome");
-    assert_eq!(msg.role, MessageRole::System);
-    assert_eq!(msg.content, "Welcome");
-}
+// Split into 5 parts for consistent test organization.
+include!("message_tests/part_01.rs");
+include!("message_tests/part_02.rs");
+include!("message_tests/part_03.rs");
+include!("message_tests/part_04.rs");
+include!("message_tests/part_05.rs");
