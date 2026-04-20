@@ -268,6 +268,12 @@ interface agent-runner {
     /// Use `none` to evaluate against current clock, or pass explicit millis for
     /// deterministic tests/replays.
     sweep-idle-sessions(now-unix-ms: option<s64>) -> result<u32, string>;
+
+    /// Returns actionable SLO metrics for rapid incident debugging.
+    ///
+    /// Snapshot contains success rate, retry ratio, tool error rate, and p95
+    /// prepare/commit latency for the session.
+    get-slo-snapshot(session-id: string) -> result<string, string>;
 }
 
 /// JSON Schema validation

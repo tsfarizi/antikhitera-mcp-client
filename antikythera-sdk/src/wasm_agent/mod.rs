@@ -36,7 +36,7 @@ pub mod types;
 // Re-export main types
 pub use types::{
     AgentAction, AgentConfig as WasmAgentConfig, AgentMessage, AgentState, ContextPolicy,
-    ContextSummary, PromptVariables, StreamEvent, StreamEventKind, TelemetrySnapshot, ToolCall,
+    ContextSummary, PromptVariables, SloSnapshot, StreamEvent, StreamEventKind, TelemetrySnapshot, ToolCall,
     ToolDefinition, ToolParameterSchema, ToolRegistry, ToolResult, ToolValidationError,
     TruncationStrategy,
 };
@@ -48,7 +48,7 @@ pub use processor::{
 
 pub use runner::{
     append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events, get_state,
-    get_telemetry_snapshot, get_tools_prompt, hydrate_session, init, prepare_user_turn,
+    get_slo_snapshot, get_telemetry_snapshot, get_tools_prompt, hydrate_session, init, prepare_user_turn,
     process_llm_response_for_session, process_tool_result_for_session,
     register_tools, report_session_restore_progress, reset_session, set_context_policy,
     sweep_idle_sessions,

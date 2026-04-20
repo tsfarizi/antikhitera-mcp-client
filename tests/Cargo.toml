@@ -40,6 +40,14 @@ path = "sdk/wasm_agent/processor_tests.rs"
 name = "wasm_agent_runner_tests"
 path = "sdk/wasm_agent/runner_tests.rs"
 
+[[test]]
+name = "deterministic_harness_tests"
+path = "sdk/wasm_agent/deterministic_harness_tests.rs"
+
+[[test]]
+name = "contract_compatibility_tests"
+path = "contract/compatibility_tests.rs"
+
 # ============================================================================
 # Multi-Agent Hardening Tests
 # ============================================================================

@@ -1,0 +1,34 @@
+{
+  "prepared_turn_keys": [
+    "correlation_id",
+    "force_json",
+    "messages_json",
+    "metadata_json",
+    "prompt",
+    "session_id",
+    "step",
+    "summary_handoff",
+    "system_prompt"
+  ],
+  "commit_result_keys": [
+    "action",
+    "content",
+    "session_id",
+    "step",
+    "tool_input",
+    "tool_name"
+  ],
+  "tool_result_keys": [
+    "next_message",
+    "session_id",
+    "step",
+    "tool_result"
+  ],
+  "tool_result_inner_keys": [
+    "error",
+    "name",
+    "output",
+    "step_id",
+    "success"
+  ]
+}

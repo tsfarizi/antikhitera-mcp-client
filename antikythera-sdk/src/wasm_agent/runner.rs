@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use super::processor::{build_llm_messages, process_llm_response, process_tool_result, validate_tool_call};
 use super::types::{
-    AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary, StreamEvent,
-    StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolRegistry, ToolResult,
-    TruncationStrategy,
+    AgentAction, AgentConfig, AgentMessage, AgentState, ContextPolicy, ContextSummary, SloSnapshot,
+    StreamEvent, StreamEventKind, TelemetryCounters, TelemetrySnapshot, ToolCall, ToolRegistry,
+    ToolResult, TruncationStrategy,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +63,7 @@ struct ToolResultInput {
     pub success: bool,
     pub output_json: String,
     pub error_message: Option<String>,
+    pub correlation_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +83,8 @@ struct SessionRuntime {
     events: Vec<StreamEvent>,
     seq: u64,
     last_touched_ms: i64,
+    prepare_latencies_ms: Vec<u64>,
+    commit_latencies_ms: Vec<u64>,
     telemetry: TelemetrySnapshot,
 }
 
@@ -95,6 +98,8 @@ impl SessionRuntime {
             events: Vec::new(),
             seq: 0,
             last_touched_ms: now_ms,
+            prepare_latencies_ms: Vec::new(),
+            commit_latencies_ms: Vec::new(),
             telemetry: TelemetrySnapshot {
                 session_id,
                 correlation_id: None,
@@ -156,6 +161,16 @@ impl Default for AgentRunnerRuntime {
 }
 
 impl AgentRunnerRuntime {
+    fn p95(values: &[u64]) -> u64 {
+        if values.is_empty() {
+            return 0;
+        }
+        let mut sorted = values.to_vec();
+        sorted.sort_unstable();
+        let idx = ((sorted.len() - 1) * 95) / 100;
+        sorted[idx]
+    }
+
     fn emit_pending_event(
         &mut self,
         session_id: &str,
@@ -503,7 +518,9 @@ impl AgentRunnerRuntime {
         ]));
 
         runtime.telemetry.counters.turns_prepared += 1;
-        runtime.telemetry.total_prepare_latency_ms += started.elapsed().as_millis() as u64;
+        let prepare_latency_ms = started.elapsed().as_millis() as u64;
+        runtime.telemetry.total_prepare_latency_ms += prepare_latency_ms;
+        runtime.prepare_latencies_ms.push(prepare_latency_ms);
         runtime.emit_event(
             StreamEventKind::UserTurnPrepared,
             input.correlation_id.clone(),
@@ -579,7 +596,9 @@ impl AgentRunnerRuntime {
 
         let action = process_llm_response(&mut runtime.state, llm_response_json)?;
         runtime.telemetry.counters.llm_commits += 1;
-        runtime.telemetry.total_commit_latency_ms += started.elapsed().as_millis() as u64;
+        let commit_latency_ms = started.elapsed().as_millis() as u64;
+        runtime.telemetry.total_commit_latency_ms += commit_latency_ms;
+        runtime.commit_latencies_ms.push(commit_latency_ms);
         runtime.emit_event(
             StreamEventKind::LlmCommitted,
             prepared.correlation_id.clone(),
@@ -650,14 +669,17 @@ impl AgentRunnerRuntime {
                     tool_input: Some(input),
                 }
             }
-            AgentAction::Retry { error } => CommitResult {
-                session_id: runtime.state.session_id.clone(),
-                step: runtime.state.current_step,
-                action: "retry".to_string(),
-                content: Some(error),
-                tool_name: None,
-                tool_input: None,
-            },
+            AgentAction::Retry { error } => {
+                runtime.telemetry.counters.llm_retries += 1;
+                CommitResult {
+                    session_id: runtime.state.session_id.clone(),
+                    step: runtime.state.current_step,
+                    action: "retry".to_string(),
+                    content: Some(error),
+                    tool_name: None,
+                    tool_input: None,
+                }
+            }
         };
 
         runtime.pending_llm_chunks.clear();
@@ -708,9 +730,15 @@ impl AgentRunnerRuntime {
         )?;
 
         runtime.telemetry.counters.tool_results += 1;
+        if !input.success {
+            runtime.telemetry.counters.tool_errors += 1;
+        }
         runtime.emit_event(
             StreamEventKind::ToolResult,
-            runtime.telemetry.correlation_id.clone(),
+            input
+                .correlation_id
+                .clone()
+                .or_else(|| runtime.telemetry.correlation_id.clone()),
             serde_json::json!({
                 "tool": input.tool_name,
                 "success": input.success,
@@ -764,6 +792,42 @@ impl AgentRunnerRuntime {
         );
         serde_json::to_string(&runtime.telemetry)
             .map_err(|e| format!("Failed to encode telemetry snapshot: {e}"))
+    }
+
+    fn slo_snapshot(&mut self, session_id: &str) -> Result<String, String> {
+        let _ = self.sweep_idle_sessions(now_unix_ms())?;
+        let runtime = self
+            .sessions
+            .get(session_id)
+            .ok_or_else(|| format!("Session not found: {session_id}"))?;
+
+        let commits = runtime.telemetry.counters.llm_commits as f64;
+        let tool_results = runtime.telemetry.counters.tool_results as f64;
+        let retries = runtime.telemetry.counters.llm_retries as f64;
+
+        let success_rate = if commits > 0.0 {
+            runtime.telemetry.counters.final_responses as f64 / commits
+        } else {
+            0.0
+        };
+        let tool_error_rate = if tool_results > 0.0 {
+            runtime.telemetry.counters.tool_errors as f64 / tool_results
+        } else {
+            0.0
+        };
+        let retry_ratio = if commits > 0.0 { retries / commits } else { 0.0 };
+
+        let snapshot = SloSnapshot {
+            session_id: runtime.state.session_id.clone(),
+            correlation_id: runtime.telemetry.correlation_id.clone(),
+            success_rate,
+            tool_error_rate,
+            retry_ratio,
+            p95_prepare_latency_ms: Self::p95(&runtime.prepare_latencies_ms),
+            p95_commit_latency_ms: Self::p95(&runtime.commit_latencies_ms),
+        };
+
+        serde_json::to_string(&snapshot).map_err(|e| format!("Failed to encode SLO snapshot: {e}"))
     }
 
     fn hydrate_session(&mut self, session_id: &str, state_json: &str) -> Result<bool, String> {
@@ -893,6 +957,10 @@ pub fn drain_events(session_id: &str) -> Result<String, String> {
 
 pub fn get_telemetry_snapshot(session_id: &str) -> Result<String, String> {
     with_runtime(|rt| rt.telemetry_snapshot(session_id))
+}
+
+pub fn get_slo_snapshot(session_id: &str) -> Result<String, String> {
+    with_runtime(|rt| rt.slo_snapshot(session_id))
 }
 
 pub fn get_state(session_id: &str) -> Result<String, String> {

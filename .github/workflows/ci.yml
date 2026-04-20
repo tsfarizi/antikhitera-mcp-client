@@ -25,6 +25,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test --workspace --verbose
+      - name: Contract compatibility gate (breaking detector)
+        run: cargo test -p antikythera-tests --test contract_compatibility_tests --verbose
+      - name: Deterministic integration harness
+        run: cargo test -p antikythera-tests --test deterministic_harness_tests --verbose
 
   fmt:
     name: Rustfmt

@@ -46,13 +46,11 @@ cargo test --workspace --lib test_environment_check -- --nocapture
 
 ✅ Configuration files found
 ❌ Ollama server not running
-   → Run: ollama serve
 
 ✅ Gemini API key set
 ℹ️  OpenAI API key not set (optional)
 ℹ️  Anthropic API key not set (optional)
 
-⚠️  Some prerequisites are missing.
 
 📋 Test Setup Instructions:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -62,10 +60,6 @@ cargo test --workspace --lib test_environment_check -- --nocapture
    cp config.example/model.toml config/model.toml
 
 2. Local Provider (Ollama):
-   # Install from https://ollama.ai
-   ollama serve
-   ollama pull llama3
-
 3. Cloud Providers (Optional):
    export GEMINI_API_KEY=<your-gemini-key>
    export OPENAI_API_KEY=<your-openai-key>
@@ -363,6 +357,27 @@ For CI environments, you can:
    ```
 
 ### Force Running Tests
+
+## Contract Compatibility Gates
+
+To prevent host integration regressions, CI runs `contract_compatibility_tests`.
+
+- WIT signature golden snapshot: `tests/fixtures/contracts/wit_signatures.golden.txt`
+- Host/WASM payload shape golden snapshot: `tests/fixtures/contracts/payload_contract.golden.json`
+
+If these tests fail, treat it as a potential breaking-contract change and review
+host compatibility before merging.
+
+## Deterministic Integration Harness
+
+`deterministic_harness_tests` replays fixed traces and failure modes:
+
+- replay flow: `prepare -> commit -> tool_result -> commit`
+- malformed tool-result payload rejection
+- partial output stream commit behavior
+- timeout archive + hydrate restore path
+
+This harness keeps behavior stable across internal refactors and version bumps.
 
 To force a test to run even if prerequisites might not be met:
 

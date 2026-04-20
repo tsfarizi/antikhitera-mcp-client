@@ -189,6 +189,22 @@ WASM session lifecycle hardening APIs are also available for host persistence:
 - `hydrate_session(session_id, state_json)`
 - `report_session_restore_progress(session_id, progress_json)`
 
+Actionable observability is exposed via:
+
+- `get_slo_snapshot(session_id)`
+
+SLO payload includes:
+
+- `success_rate`
+- `tool_error_rate`
+- `retry_ratio`
+- `p95_prepare_latency_ms`
+- `p95_commit_latency_ms`
+
+Correlation ID is propagated end-to-end from `prepare_user_turn` through
+`commit_llm_response` and `process_tool_result` event emission so host logs and
+user-facing feedback streams can be traced consistently during incidents.
+
 When in-memory capacity is exceeded (`max_in_memory_sessions`) or timeout policy
 marks a session as inactive, the runner emits stream events that hosts can
 forward to telemetry/UI:
