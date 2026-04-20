@@ -10,6 +10,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use antikythera_cli::domain::use_cases::{render_wasm_stream_report, run_wasm_stream_probe};
 use antikythera_cli::infrastructure::llm::{
     build_provider_from_configs, install_terminal_stream_sink,
 };
@@ -94,13 +95,41 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let llm_payload = cli.wasm_llm_response.unwrap_or(default_response);
 
     let runner = WasmAgentRunner::from_file("cli-wasm-harness", Path::new(&wasm_path))?;
-    let handler = Arc::new(move |_req: String| llm_payload.clone());
+    let llm_payload_for_host = llm_payload.clone();
+    let handler = Arc::new(move |_req: String| llm_payload_for_host.clone());
 
     let task = AgentTask::new(task_input);
-    let result = runner.run_task(task, handler).await;
+    let sandbox_result = runner.run_task(task, handler).await;
 
-    println!("{}", serde_json::to_string_pretty(&result)?);
-    if !result.success {
+    // In harness mode we force stream diagnostics on to expose all runtime phases.
+    if !cli.stream {
+        eprintln!("[wasm-harness] enabling stream diagnostics for dev tooling output");
+    }
+    let stream_report = run_wasm_stream_probe(
+        cli.task
+            .as_deref()
+            .unwrap_or("WASM harness smoke test for stream diagnostics"),
+        &llm_payload,
+        true,
+    )?;
+
+    println!("== WASM Sandbox Execution ==");
+    println!("artifact: {}", wasm_path);
+    println!("{}", serde_json::to_string_pretty(&sandbox_result)?);
+    println!();
+    println!("{}", render_wasm_stream_report(&stream_report)?);
+
+    println!("\n== WASM Dev Summary JSON ==");
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "artifact": wasm_path,
+            "sandbox": sandbox_result,
+            "ffi_stream_probe": stream_report,
+        }))?
+    );
+
+    if !sandbox_result.success {
         std::process::exit(1);
     }
 
