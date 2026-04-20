@@ -4,8 +4,8 @@
 //! request and return the result through the framework boundary.
 
 use crate::domain::use_cases::chat_use_case::LlmProvider;
+use crate::error::{CliError, CliResult};
 use async_trait::async_trait;
-use std::error::Error;
 
 pub struct GeminiProvider {
     #[allow(dead_code)]
@@ -25,11 +25,10 @@ impl LlmProvider for GeminiProvider {
         &self,
         _messages: &[crate::domain::entities::Message],
         _system_prompt: &str,
-    ) -> Result<String, Box<dyn Error + Send + Sync>> {
-        Err(std::io::Error::other(format!(
+    ) -> CliResult<String> {
+        Err(CliError::Unsupported(format!(
             "Direct Gemini model invocation is disabled for model '{}'. The host must perform the call and hand the response back to the framework.",
             self.model
-        ))
-        .into())
+        )))
     }
 }

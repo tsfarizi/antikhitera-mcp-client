@@ -14,13 +14,15 @@ use antikythera_cli::infrastructure::llm::{
     build_provider_from_configs, install_terminal_stream_sink,
 };
 use antikythera_core::application::stdio;
+use antikythera_core::application::agent::multi_agent::task::AgentTask;
 use antikythera_core::cli::{Cli, RunMode};
+use antikythera_core::infrastructure::wasm::WasmAgentRunner;
 use antikythera_core::{AppConfig, ClientConfig, McpClient};
 use clap::Parser;
 
 #[cfg(feature = "multi-agent")]
 use antikythera_core::application::agent::multi_agent::{
-    AgentProfile, AgentTask, DirectRouter, ExecutionMode, MultiAgentOrchestrator, RoundRobinRouter,
+    AgentProfile, DirectRouter, ExecutionMode, MultiAgentOrchestrator, RoundRobinRouter,
 };
 
 #[tokio::main]
@@ -69,6 +71,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         RunMode::MultiAgent => {
             run_multi_agent(cli, client).await?;
         }
+        RunMode::WasmHarness => {
+            run_wasm_harness(cli).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+    let wasm_path = cli
+        .wasm
+        .unwrap_or_else(|| "target/wasm32-wasip1/release/antikythera_sdk.wasm".to_string());
+
+    let task_input = if let Some(t) = cli.task.as_deref() {
+        t.to_string()
+    } else {
+        "WASM harness smoke test".to_string()
+    };
+
+    let default_response = r#"{"content":"harness-ok","model":"wasm-harness"}"#.to_string();
+    let llm_payload = cli.wasm_llm_response.unwrap_or(default_response);
+
+    let runner = WasmAgentRunner::from_file("cli-wasm-harness", Path::new(&wasm_path))?;
+    let handler = Arc::new(move |_req: String| llm_payload.clone());
+
+    let task = AgentTask::new(task_input);
+    let result = runner.run_task(task, handler).await;
+
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    if !result.success {
+        std::process::exit(1);
     }
 
     Ok(())

@@ -17,6 +17,7 @@ pub use antikythera_core::config::postcard_config::{
     AgentConfig, AppConfig, CONFIG_PATH, DocServerConfig, ModelConfig, ModelInfo, PromptsConfig,
     ProviderConfig, ServerConfig,
 };
+use crate::error::{CliError, CliResult};
 
 /// Type alias kept for backward compatibility within the CLI crate.
 /// Prefer using `AppConfig` directly in new code.
@@ -31,33 +32,51 @@ pub type CliProviderConfig = ProviderConfig;
 use std::path::Path;
 
 /// Serialize `AppConfig` to Postcard binary.
-pub fn config_to_postcard(config: &AppConfig) -> Result<Vec<u8>, String> {
+pub fn config_to_postcard(config: &AppConfig) -> CliResult<Vec<u8>> {
     antikythera_core::config::postcard_config::config_to_postcard(config)
+        .map_err(CliError::Config)
 }
 
 /// Deserialize `AppConfig` from Postcard binary.
-pub fn config_from_postcard(data: &[u8]) -> Result<AppConfig, String> {
+pub fn config_from_postcard(data: &[u8]) -> CliResult<AppConfig> {
     antikythera_core::config::postcard_config::config_from_postcard(data)
+        .map_err(CliError::Config)
 }
 
 /// Load `AppConfig` from `path` (defaults to [`CONFIG_PATH`] = `app.pc`).
-pub fn load_config(path: Option<&Path>) -> Result<AppConfig, String> {
+pub fn load_app_config(path: Option<&Path>) -> CliResult<AppConfig> {
     let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
     if !config_path.exists() {
-        return Err(format!("Config not found: {}", config_path.display()));
+        return Err(CliError::Config(format!(
+            "Config not found: {}",
+            config_path.display()
+        )));
     }
-    let data = std::fs::read(config_path).map_err(|e| format!("Read error: {}", e))?;
+    let data = std::fs::read(config_path)?;
     config_from_postcard(&data)
 }
 
+/// Deprecated compatibility alias.
+#[deprecated(note = "use load_app_config instead")]
+pub fn load_config(path: Option<&Path>) -> CliResult<AppConfig> {
+    load_app_config(path)
+}
+
 /// Save `AppConfig` to `path` (defaults to [`CONFIG_PATH`] = `app.pc`).
-pub fn save_config(config: &AppConfig, path: Option<&Path>) -> Result<(), String> {
+pub fn save_app_config(config: &AppConfig, path: Option<&Path>) -> CliResult<()> {
     let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
     if let Some(parent) = config_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("Create dir error: {}", e))?;
+        std::fs::create_dir_all(parent)?;
     }
     let data = config_to_postcard(config)?;
-    std::fs::write(config_path, &data).map_err(|e| format!("Write error: {}", e))
+    std::fs::write(config_path, &data)?;
+    Ok(())
+}
+
+/// Deprecated compatibility alias.
+#[deprecated(note = "use save_app_config instead")]
+pub fn save_config(config: &AppConfig, path: Option<&Path>) -> CliResult<()> {
+    save_app_config(config, path)
 }
 
 /// Returns `true` if the config file already exists at the default path.
@@ -66,8 +85,37 @@ pub fn config_exists() -> bool {
 }
 
 /// Create and persist a default `AppConfig` at [`CONFIG_PATH`].
-pub fn init_default_config() -> Result<AppConfig, String> {
+pub fn init_default_config() -> CliResult<AppConfig> {
     let config = AppConfig::default();
-    save_config(&config, None)?;
+    save_app_config(&config, None)?;
     Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_postcard_uses_typed_result() {
+        let config = AppConfig::default();
+        let bytes = config_to_postcard(&config).expect("serialize");
+        let decoded = config_from_postcard(&bytes).expect("deserialize");
+        assert_eq!(decoded.model.default_provider, config.model.default_provider);
+    }
+
+    #[test]
+    fn missing_file_returns_typed_error() {
+        let missing = Path::new("definitely-not-exists-app.pc");
+        let err = load_app_config(Some(missing)).expect_err("missing file should error");
+        assert!(err.to_string().contains("configuration error"));
+    }
+
+    #[test]
+    fn deprecated_aliases_delegate_to_new_names() {
+        let missing = Path::new("definitely-not-exists-app.pc");
+        let e1 = load_app_config(Some(missing)).expect_err("expected error").to_string();
+        #[allow(deprecated)]
+        let e2 = load_config(Some(missing)).expect_err("expected error").to_string();
+        assert_eq!(e1, e2);
+    }
 }

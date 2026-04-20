@@ -5,6 +5,7 @@
 //! a single Postcard blob.
 
 use antikythera_cli::config::*;
+use antikythera_cli::error::{CliError, CliResult};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -51,7 +52,7 @@ pub enum ConfigCommand {
     Status,
 }
 
-pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
+pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
     match command {
         ConfigCommand::Init => {
             if config_exists() {
@@ -65,24 +66,23 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
         }
 
         ConfigCommand::Show => {
-            let config = load_config(None)?;
-            let json = serde_json::to_string_pretty(&config)
-                .map_err(|e| format!("Failed to serialize: {}", e))?;
+            let config = load_app_config(None)?;
+            let json = serde_json::to_string_pretty(&config)?;
             println!("{}", json);
             Ok(())
         }
 
         ConfigCommand::Get { field } => {
-            let config = load_config(None)?;
+            let config = load_app_config(None)?;
             let value = get_field(&config, &field)?;
             println!("{}", value);
             Ok(())
         }
 
         ConfigCommand::Set { field, value } => {
-            let mut config = load_config(None)?;
+            let mut config = load_app_config(None)?;
             set_field(&mut config, &field, &value)?;
-            save_config(&config, None)?;
+            save_app_config(&config, None)?;
             println!("✓ Set '{}' = '{}'", field, value);
             Ok(())
         }
@@ -93,10 +93,10 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
             endpoint,
             api_key,
         } => {
-            let mut config = load_config(None)?;
+            let mut config = load_app_config(None)?;
 
             if config.providers.iter().any(|p| p.id == id) {
-                return Err(format!("Provider '{}' already exists", id));
+                return Err(CliError::Validation(format!("Provider '{}' already exists", id)));
             }
 
             config.providers.push(ProviderConfig {
@@ -107,56 +107,58 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
                 models: Vec::new(),
             });
 
-            save_config(&config, None)?;
+            save_app_config(&config, None)?;
             println!("✓ Provider '{}' added", id);
             Ok(())
         }
 
         ConfigCommand::RemoveProvider { id } => {
-            let mut config = load_config(None)?;
+            let mut config = load_app_config(None)?;
             let initial_len = config.providers.len();
             config.providers.retain(|p| p.id != id);
 
             if config.providers.len() == initial_len {
-                Err(format!("Provider '{}' not found", id))
+                Err(CliError::Validation(format!("Provider '{}' not found", id)))
             } else {
-                save_config(&config, None)?;
+                save_app_config(&config, None)?;
                 println!("✓ Provider '{}' removed", id);
                 Ok(())
             }
         }
 
         ConfigCommand::SetModel { provider, model } => {
-            let mut config = load_config(None)?;
+            let mut config = load_app_config(None)?;
 
             if !config.providers.iter().any(|p| p.id == provider) {
-                return Err(format!("Provider '{}' not found", provider));
+                return Err(CliError::Validation(format!(
+                    "Provider '{}' not found",
+                    provider
+                )));
             }
 
             config.model.default_provider = provider.clone();
             config.model.model = model.clone();
 
-            save_config(&config, None)?;
+            save_app_config(&config, None)?;
             println!("✓ Default model set: {} / {}", provider, model);
             Ok(())
         }
 
         ConfigCommand::SetBind { address } => {
-            let mut config = load_config(None)?;
+            let mut config = load_app_config(None)?;
             config.server.bind = address.clone();
-            save_config(&config, None)?;
+            save_app_config(&config, None)?;
             println!("✓ Bind address set to: {}", address);
             Ok(())
         }
 
         ConfigCommand::Export { output } => {
-            let config = load_config(None)?;
-            let json = serde_json::to_string_pretty(&config)
-                .map_err(|e| format!("Failed to serialize: {}", e))?;
+            let config = load_app_config(None)?;
+            let json = serde_json::to_string_pretty(&config)?;
 
             match output {
                 Some(path) => {
-                    std::fs::write(&path, &json).map_err(|e| format!("Failed to write: {}", e))?;
+                    std::fs::write(&path, &json)?;
                     println!("✓ Exported to: {}", path);
                 }
                 None => println!("{}", json),
@@ -165,13 +167,11 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
         }
 
         ConfigCommand::Import { input } => {
-            let json =
-                std::fs::read_to_string(&input).map_err(|e| format!("Failed to read: {}", e))?;
+            let json = std::fs::read_to_string(&input)?;
 
-            let config: AppConfig =
-                serde_json::from_str(&json).map_err(|e| format!("Invalid JSON: {}", e))?;
+            let config: AppConfig = serde_json::from_str(&json)?;
 
-            save_config(&config, None)?;
+            save_app_config(&config, None)?;
             println!("✓ Imported from: {}", input);
             Ok(())
         }
@@ -185,7 +185,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
 
         ConfigCommand::Status => {
             if config_exists() {
-                let config = load_config(None)?;
+                let config = load_app_config(None)?;
                 println!("✓ Config exists at: {}", CONFIG_PATH);
                 println!("  Providers: {}", config.providers.len());
                 println!(
@@ -202,19 +202,17 @@ pub fn execute_config_cli(command: ConfigCommand) -> Result<(), String> {
     }
 }
 
-fn get_field(config: &AppConfig, field: &str) -> Result<String, String> {
+fn get_field(config: &AppConfig, field: &str) -> CliResult<String> {
     match field {
         "default_provider" => Ok(config.model.default_provider.clone()),
         "model" => Ok(config.model.model.clone()),
         "server.bind" => Ok(config.server.bind.clone()),
-        "providers" => {
-            serde_json::to_string(&config.providers).map_err(|e| format!("Serialize error: {}", e))
-        }
-        _ => Err(format!("Unknown field: {}", field)),
+        "providers" => Ok(serde_json::to_string(&config.providers)?),
+        _ => Err(CliError::Validation(format!("Unknown field: {}", field))),
     }
 }
 
-fn set_field(config: &mut AppConfig, field: &str, value: &str) -> Result<(), String> {
+fn set_field(config: &mut AppConfig, field: &str, value: &str) -> CliResult<()> {
     match field {
         "default_provider" => {
             config.model.default_provider = value.to_string();
@@ -228,7 +226,7 @@ fn set_field(config: &mut AppConfig, field: &str, value: &str) -> Result<(), Str
             config.server.bind = value.to_string();
             Ok(())
         }
-        _ => Err(format!("Unknown field: {}", field)),
+        _ => Err(CliError::Validation(format!("Unknown field: {}", field))),
     }
 }
 

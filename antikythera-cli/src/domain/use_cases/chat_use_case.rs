@@ -4,25 +4,18 @@
 //! This is the domain logic - it depends on ports (interfaces), not implementations.
 
 use crate::domain::entities::*;
-use std::error::Error;
+use crate::error::{CliError, CliResult};
 
 /// LLM provider port (dependency injection)
 #[async_trait::async_trait]
 pub trait LlmProvider: Send + Sync {
-    async fn call(
-        &self,
-        messages: &[Message],
-        system_prompt: &str,
-    ) -> Result<String, Box<dyn Error + Send + Sync>>;
+    async fn call(&self, messages: &[Message], system_prompt: &str) -> CliResult<String>;
 }
 
 /// Tool executor port
 #[async_trait::async_trait]
 pub trait ToolExecutor: Send + Sync {
-    async fn execute(
-        &self,
-        tool_call: &ToolCall,
-    ) -> Result<ToolResult, Box<dyn Error + Send + Sync>>;
+    async fn execute(&self, tool_call: &ToolCall) -> CliResult<ToolResult>;
 }
 
 /// Chat use case
@@ -52,7 +45,7 @@ impl ChatUseCase {
     pub async fn send_message(
         &mut self,
         user_input: &str,
-    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+    ) -> CliResult<String> {
         // Add user message
         self.session.add_message(Message::user(user_input));
 
@@ -66,7 +59,7 @@ impl ChatUseCase {
     }
 
     /// Simple chat (no tool calling)
-    async fn simple_chat(&mut self) -> Result<String, Box<dyn Error + Send + Sync>> {
+    async fn simple_chat(&mut self) -> CliResult<String> {
         let response = self
             .llm
             .call(&self.session.messages, &self.system_prompt)
@@ -76,7 +69,7 @@ impl ChatUseCase {
     }
 
     /// Agent mode: loop with tool calls
-    async fn run_agent_loop(&mut self) -> Result<String, Box<dyn Error + Send + Sync>> {
+    async fn run_agent_loop(&mut self) -> CliResult<String> {
         loop {
             // Check max steps
             if self.session.is_max_steps_exceeded() {
@@ -130,22 +123,22 @@ impl ChatUseCase {
 }
 
 /// Parse agent action from LLM response
-fn parse_agent_action(response: &str) -> Result<AgentAction, String> {
+fn parse_agent_action(response: &str) -> CliResult<AgentAction> {
     // Try parse as JSON
-    let value: serde_json::Value =
-        serde_json::from_str(response).map_err(|e| format!("Invalid JSON: {}", e))?;
+    let value: serde_json::Value = serde_json::from_str(response)
+        .map_err(|e| CliError::Validation(format!("Invalid JSON: {}", e)))?;
 
     let action = value
         .get("action")
         .and_then(|v| v.as_str())
-        .ok_or("Missing 'action' field")?;
+        .ok_or_else(|| CliError::Validation("Missing 'action' field".to_string()))?;
 
     match action {
         "call_tool" => {
             let tool = value
                 .get("tool")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing 'tool' field")?
+                .ok_or_else(|| CliError::Validation("Missing 'tool' field".to_string()))?
                 .to_string();
 
             let input = value
@@ -164,12 +157,12 @@ fn parse_agent_action(response: &str) -> Result<AgentAction, String> {
             let content = value
                 .get("response")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing 'response' field")?
+                .ok_or_else(|| CliError::Validation("Missing 'response' field".to_string()))?
                 .to_string();
 
             Ok(AgentAction::FinalResponse(content))
         }
 
-        _ => Err(format!("Unknown action: {}", action)),
+        _ => Err(CliError::Validation(format!("Unknown action: {}", action))),
     }
 }

@@ -47,6 +47,16 @@ pub struct Cli {
     /// Enable token streaming output in CLI mode.
     #[arg(long)]
     pub stream: bool,
+
+    /// Path to WASM module used by `--mode wasm-harness`.
+    #[arg(long)]
+    pub wasm: Option<String>,
+
+    /// Stub LLM response returned by host callback in `--mode wasm-harness`.
+    ///
+    /// If omitted, a deterministic JSON stub response is used.
+    #[arg(long)]
+    pub wasm_llm_response: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
@@ -58,4 +68,7 @@ pub enum RunMode {
     /// Multi-agent orchestrator test harness
     #[value(name = "multi-agent")]
     MultiAgent,
+    /// Execute a local WASM artifact through the host runtime bridge
+    #[value(name = "wasm-harness")]
+    WasmHarness,
 }

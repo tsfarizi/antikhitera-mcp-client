@@ -12,6 +12,7 @@ flowchart LR
     MAIN --> STDIO[mode: stdio]
     MAIN --> SETUP[mode: setup]
     MAIN --> MULTI[mode: multi-agent]
+    MAIN --> HARNESS[mode: wasm-harness]
     CONFIG --> PC[app.pc]
 ```
 
@@ -35,6 +36,7 @@ The main binary accepts a `--mode` flag:
 | `stdio` | ✅ | Interactive TUI chat session |
 | `setup` | | Configuration wizard for providers and servers |
 | `multi-agent` | | Multi-agent orchestrator harness |
+| `wasm-harness` | | Execute a WASM module through host runtime bridge for parity testing |
 
 ### Execution flow
 
@@ -46,9 +48,11 @@ flowchart TD
     PARSE --> STDIO[mode = stdio]
     PARSE --> SETUP[mode = setup]
     PARSE --> MULTI[mode = multi-agent]
+    PARSE --> HARNESS[mode = wasm-harness]
     STDIO --> CHAT[Interactive STDIO loop]
     SETUP --> WIZARD[Config wizard menu]
     MULTI --> ORCH[MultiAgentOrchestrator dispatch]
+    HARNESS --> WASM[WasmAgentRunner task execution]
 ```
 
 ### Run it
@@ -61,6 +65,7 @@ cargo run -p antikythera-cli --bin antikythera
 cargo run -p antikythera-cli --bin antikythera -- --mode stdio
 cargo run -p antikythera-cli --bin antikythera -- --mode setup
 cargo run -p antikythera-cli --bin antikythera -- --mode multi-agent --agents agents.json --task "Write a summary"
+cargo run -p antikythera-cli --bin antikythera -- --mode wasm-harness --wasm target/wasm32-wasip1/release/antikythera_sdk.wasm --task "Smoke test"
 ```
 
 ### Common flags
@@ -71,6 +76,8 @@ cargo run -p antikythera-cli --bin antikythera -- --mode multi-agent --agents ag
 | `--config <path>` | Path to `app.pc` config file |
 | `--system <prompt>` | Override system prompt |
 | `--ollama-url <url>` | Override Ollama endpoint (default: `http://127.0.0.1:11434`) |
+| `--wasm <path>` | Path to wasm module used by `wasm-harness` |
+| `--wasm-llm-response <json>` | Host callback response stub for `wasm-harness` |
 
 ### Multi-agent flags
 
@@ -173,6 +180,17 @@ cargo run -p antikythera-cli --bin antikythera-config -- status
 ### Provider limitations
 
 Provider types supported: `gemini` and `ollama`.
+
+## API consistency rules
+
+To keep CLI discoverability and public contracts stable:
+
+| Concern | Convention |
+|:--------|:-----------|
+| Root error type | `CliError` and `CliResult<T>` for public APIs |
+| Config loaders | `load_app_config` / `save_app_config` |
+| Factory/builders | `build_*` for constructors and adapters |
+| Backward compatibility | old names retained as deprecated aliases only |
 
 ## Related documents
 

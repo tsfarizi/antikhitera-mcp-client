@@ -16,6 +16,9 @@ pub mod domain;
 // Infrastructure layer (implements domain ports)
 pub mod infrastructure;
 
+// Root error contract for CLI public APIs.
+pub mod error;
+
 // Presentation layer (TUI)
 pub mod presentation;
 
@@ -24,3 +27,4 @@ pub mod config;
 
 // Re-exports for convenience
 pub use config::CliConfig;
+pub use error::{CliError, CliResult};

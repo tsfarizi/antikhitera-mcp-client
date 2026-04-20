@@ -4,8 +4,8 @@
 //! request and return the result through the framework boundary.
 
 use crate::domain::use_cases::chat_use_case::LlmProvider;
+use crate::error::{CliError, CliResult};
 use async_trait::async_trait;
-use std::error::Error;
 
 pub struct OllamaProvider {
     model: String,
@@ -36,12 +36,11 @@ impl LlmProvider for OllamaProvider {
         &self,
         _messages: &[crate::domain::entities::Message],
         _system_prompt: &str,
-    ) -> Result<String, Box<dyn Error + Send + Sync>> {
-        Err(std::io::Error::other(format!(
+    ) -> CliResult<String> {
+        Err(CliError::Unsupported(format!(
             "Direct Ollama model invocation is disabled for model '{}' at '{}'. The host must perform the call and hand the response back to the framework.",
             self.model,
             self.endpoint
-        ))
-        .into())
+        )))
     }
 }

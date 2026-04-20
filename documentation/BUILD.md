@@ -19,7 +19,7 @@ flowchart TD
 | Workspace crates | ✅ | `cargo build --workspace` |
 | `antikythera` native binary | ✅ | stdio, setup, and multi-agent modes |
 | `antikythera-config` native binary | ✅ | Provider and server config management |
-| `antikythera-sdk` component build | ✅ | Uses `cargo-component` with `wasm32-wasip1` |
+| `antikythera-sdk` component build | ✅ | Single WASM output via `cargo-component` + `wasm32-wasip1` |
 
 ## Prerequisites
 
@@ -87,6 +87,32 @@ Expected component output is produced under:
 
 ```text
 target/wasm32-wasip1/release/
+```
+
+Canonical artifact name for CI/release packaging:
+
+```text
+dist/antikythera-sdk.wasm
+```
+
+## CLI harness against WASM
+
+Use the CLI to execute the generated WASM via host runtime bridge (`WasmAgentRunner`):
+
+```bash
+cargo run -p antikythera-cli --bin antikythera -- \
+    --mode wasm-harness \
+    --wasm target/wasm32-wasip1/release/antikythera_sdk.wasm \
+    --task "Smoke test"
+```
+
+Optional deterministic host callback payload:
+
+```bash
+cargo run -p antikythera-cli --bin antikythera -- \
+    --mode wasm-harness \
+    --wasm target/wasm32-wasip1/release/antikythera_sdk.wasm \
+    --wasm-llm-response '{"content":"ok","model":"stub"}'
 ```
 
 ## Docs site build

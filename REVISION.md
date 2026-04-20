@@ -179,16 +179,21 @@ Target: Production-grade observability, resilience, and enterprise deployment.
 - **Deliverables**: Code + tests + WIT contract update + clippy ✅
 
 **Priority 7: Architecture Consistency Remediation (Critical Findings)**
-- ✅ **Modules**: `antikythera-sdk::agents`, `antikythera-core::application`, `antikythera-core::config`
+- ✅ **Modules**: `antikythera-sdk::agents`, `antikythera-core::{application,config,domain}`, `antikythera-cli::{domain,config,infrastructure,bin}`
 - **Scope**:
   - Removed C-style pointer API surface from `antikythera-sdk::agents` and migrated to Rust-native typed APIs (`&str`, structs, `Result`)
   - Replaced panic-prone registry locking with typed lock-error handling and an explicit `AgentRegistry` service
   - Added `application::model_provider` port and migrated application modules away from direct `infrastructure::model` import paths
   - Introduced explicit postcard config canonical names (`PostcardAppConfig`, `PostcardServerConfig`) while retaining compatibility aliases
   - Updated config loader/wizard/prompt paths to use explicit postcard types for disambiguation
+  - Moved CLI domain entities into `antikythera-core::domain::cli_entities` and changed CLI entities module to thin re-export/adaptor
+  - Standardized CLI public error contract to one root type (`CliError`/`CliResult`) and removed mixed `String`/`Box<dyn Error>` APIs
+  - Standardized naming style for loader/factory APIs: `load_app_config`, `save_app_config`, `build_llm_provider`, `build_active_provider_config` with deprecated aliases for migration
+  - Consolidated WASM build lane to a single component artifact and added CLI `wasm-harness` mode to run host↔WASM parity tests through `WasmAgentRunner`
 - **Backward compatibility**:
   - Existing serialized config shape remains unchanged
   - Compatibility aliases kept for postcard config types
+  - Compatibility aliases kept for renamed CLI loader/factory functions
 - **Verification**:
   - `cargo test --workspace --lib --tests` ✅
 

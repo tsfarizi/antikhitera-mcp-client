@@ -20,7 +20,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown,wasm32-wasip1
+          targets: wasm32-wasip1
 
       - name: Install cargo-component
         uses: taiki-e/install-action@v2
@@ -30,9 +30,6 @@ jobs:
       - name: Generate WIT
         run: cargo run -p build-scripts --release -- wit
 
-      - name: Build browser WASM
-        run: cargo build -p antikythera-sdk --release --target wasm32-unknown-unknown --no-default-features --features wasm
-
       - name: Build component WASM
         run: cargo component build -p antikythera-sdk --release --target wasm32-wasip1 --no-default-features --features component
 
@@ -41,7 +38,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp target/wasm32-unknown-unknown/release/antikythera_sdk.wasm dist/antikythera-sdk-browser.wasm
 
           component_file=""
           for candidate in \
@@ -60,7 +56,7 @@ jobs:
             exit 1
           fi
 
-          cp "$component_file" dist/antikythera-sdk-component.wasm
+          cp "$component_file" dist/antikythera-sdk.wasm
           cp wit/antikythera.wit dist/antikythera.wit
 
       - name: Upload WASM artifacts
