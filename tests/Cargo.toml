@@ -12,6 +12,10 @@ publish = false
 name = "log_tests"
 path = "log/logger_tests.rs"
 
+[[test]]
+name = "comprehensive_logging_tests"
+path = "log/comprehensive_logging_tests.rs"
+
 # ============================================================================
 # Session Module Tests
 # ============================================================================
@@ -20,6 +24,10 @@ path = "log/logger_tests.rs"
 name = "session_tests"
 path = "session/session_tests.rs"
 
+[[test]]
+name = "comprehensive_session_tests"
+path = "session/comprehensive_session_tests.rs"
+
 # ============================================================================
 # SDK Module Tests
 # ============================================================================
@@ -27,6 +35,10 @@ path = "session/session_tests.rs"
 [[test]]
 name = "sdk_config"
 path = "sdk/config/config_tests.rs"
+
+[[test]]
+name = "comprehensive_config_security_tests"
+path = "config/comprehensive_config_security_tests.rs"
 
 # ============================================================================
 # WASM Agent Tests (requires component feature)
@@ -67,6 +79,10 @@ path = "hooks/hook_tests.rs"
 [[test]]
 name = "streaming_tests"
 path = "streaming/streaming_tests.rs"
+
+[[test]]
+name = "comprehensive_streaming_tests"
+path = "streaming/comprehensive_streaming_tests.rs"
 
 # ============================================================================
 # Resilience Module Tests

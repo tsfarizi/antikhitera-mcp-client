@@ -13,6 +13,8 @@ vars:
   WASM_TARGET: wasm32-wasip1
   WASM_BINARY: target/{{.WASM_TARGET}}/release/antikythera_sdk.wasm
   CLI_BINARY: target/release/antikythera{{exeExt}}
+  CONFIG_BINARY: target/release/antikythera-config{{exeExt}}
+  APP_CONFIG: app.pc
 
 tasks:
 
@@ -26,7 +28,9 @@ tasks:
         echo "Antikythera MCP Framework - Available Tasks"
         echo ""
         echo "  task run           - Run CLI application"
+        echo "  task run-wasm      - Build and run CLI in WASM harness mode"
         echo "  task build         - Build WASM component"
+        echo "  task build-wasm-harness - Build WASM artifact for CLI harness"
         echo "  task build-cli     - Build native CLI binary"
         echo "  task build-all     - Build both CLI and WASM"
         echo "  task wit           - Generate WIT from Rust code"
@@ -57,7 +61,18 @@ tasks:
       - echo "Building WASM component..."
       - cargo component build --target {{.WASM_TARGET}} --release
       - echo ""
-      - echo "✓ WASM component built: {{.WASM_BINARY}}"
+      - 'echo "OK WASM component built: {{.WASM_BINARY}}"'
+      - task: size
+
+  build-wasm-harness:
+    desc: Build WASM artifact for CLI harness (component lane)
+    deps:
+      - wit
+    cmds:
+      - echo "Building WASM harness artifact..."
+      - cargo component build -p antikythera-sdk --target {{.WASM_TARGET}} --release --no-default-features --features component
+      - echo ""
+      - 'echo "OK WASM harness artifact built: {{.WASM_BINARY}}"'
       - task: size
 
   build-cli:
@@ -66,7 +81,7 @@ tasks:
       - echo "Building CLI binary..."
       - cargo build -p antikythera-cli --release
       - echo ""
-      - echo "✓ CLI binary built: {{.CLI_BINARY}}"
+      - 'echo "OK CLI binary built: {{.CLI_BINARY}}"'
       - task: size
 
   build-all:
@@ -89,6 +104,24 @@ tasks:
     desc: Run CLI application
     cmds:
       - cargo run -p antikythera-cli {{.CLI_ARGS}}
+
+  run-wasm:
+    desc: Build and run CLI in WASM harness mode automatically
+    deps:
+      - build-wasm-harness
+      - build-cli
+    vars:
+      WASM_TASK: '{{default "WASM harness smoke test" .WASM_TASK}}'
+    cmds:
+      - echo "Running CLI in WASM harness mode..."
+      - |
+        if [ ! -f "{{.APP_CONFIG}}" ]; then
+          echo "Config {{.APP_CONFIG}} not found, bootstrapping default config..."
+          {{.CONFIG_BINARY}} init
+          {{.CONFIG_BINARY}} add-provider local-ollama ollama http://127.0.0.1:11434
+          {{.CONFIG_BINARY}} set-model local-ollama llama3.2
+        fi
+      - '{{.CLI_BINARY}} --mode wasm-harness --wasm {{.WASM_BINARY}} --task "{{.WASM_TASK}}" --stream {{.CLI_ARGS}}'
 
   # ===========================================================================
   # Test Tasks

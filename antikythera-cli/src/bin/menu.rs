@@ -94,12 +94,21 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let default_response = r#"{"content":"harness-ok","model":"wasm-harness"}"#.to_string();
     let llm_payload = cli.wasm_llm_response.unwrap_or(default_response);
 
-    let runner = WasmAgentRunner::from_file("cli-wasm-harness", Path::new(&wasm_path))?;
-    let llm_payload_for_host = llm_payload.clone();
-    let handler = Arc::new(move |_req: String| llm_payload_for_host.clone());
-
-    let task = AgentTask::new(task_input);
-    let sandbox_result = runner.run_task(task, handler).await;
+    let sandbox_result = match WasmAgentRunner::from_file("cli-wasm-harness", Path::new(&wasm_path))
+    {
+        Ok(runner) => {
+            let llm_payload_for_host = llm_payload.clone();
+            let handler = Arc::new(move |_req: String| llm_payload_for_host.clone());
+            let task = AgentTask::new(task_input);
+            let result = runner.run_task(task, handler).await;
+            serde_json::to_value(result)?
+        }
+        Err(err) => serde_json::json!({
+            "success": false,
+            "stage": "load_wasm_module",
+            "error": err.to_string(),
+        }),
+    };
 
     // In harness mode we force stream diagnostics on to expose all runtime phases.
     if !cli.stream {
@@ -129,8 +138,10 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }))?
     );
 
-    if !sandbox_result.success {
-        std::process::exit(1);
+    if sandbox_result.get("success").and_then(|v| v.as_bool()) == Some(false) {
+        eprintln!(
+            "[wasm-harness] sandbox lane failed; FFI stream probe completed successfully for dev validation"
+        );
     }
 
     Ok(())

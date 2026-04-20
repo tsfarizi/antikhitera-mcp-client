@@ -1,532 +1,69 @@
-/// Antikythera MCP Framework - WASM Component Interface
-///
-/// WASM hanya menerima response LLM dari host, TIDAK memanggil API langsung.
-/// Host bertanggung jawab untuk:
-/// - LLM API calls (OpenAI, Anthropic, Gemini, Ollama, dll)
-/// - API key management
-/// - Rate limiting & retry logic
-/// - MCP tool execution
+package antikythera:mcp-framework@1.0.0;
 
-// ============================================================================
-// Host Imports (disediakan oleh host runtime)
-// ============================================================================
-
-/// LLM request dari WASM ke host
+/// LlmRequest
 record llm-request {
-    /// Provider identifier chosen by the framework (optional, host may ignore)
-    provider: option<string>,
-    /// Model name requested by the framework (optional, host may override)
-    model: option<string>,
-    /// Session ID managed by the framework/WASM so the host can correlate state
-    session-id: option<string>,
-    /// Prompt messages (JSON encoded)
-    messages-json: string,
-    /// Force structured JSON behavior when the caller expects structured output
-    force-json: bool,
-    /// Temperature (0.0 - 2.0)
-    temperature: option<f32>,
-    /// Max tokens
-    max-tokens: option<u32>,
-    /// Expected response schema name (optional)
-    schema-name: option<string>,
-    /// Optional extra context/metadata supplied by the framework as JSON
-    metadata-json: option<string>,
+  provider: option<string>,
+  model: option<string>,
+  session-id: option<string>,
+  messages-json: string,
+  force-json: bool,
+  temperature: option<float32>,
+  max-tokens: option<u32>,
+  schema-name: option<string>,
+  metadata-json: option<string>,
 }
 
-/// LLM response dari host ke WASM
+/// LlmResponse
 record llm-response {
-    /// Response content. Plain text is allowed.
-    content: string,
-    /// Optional JSON-encoded assistant message if the host has already shaped
-    /// the provider response into the framework's message structure.
-    message-json: option<string>,
-    /// Model yang digunakan
-    model: option<string>,
-    /// Session ID after host processing (optional)
-    session-id: option<string>,
-    /// Tokens used
-    tokens-used: option<u32>,
-    /// Finish reason
-    finish-reason: option<string>,
-    /// Optional raw provider JSON for debugging or host-specific replay
-    raw-response-json: option<string>,
+  content: string,
+  model: option<string>,
+  session-id: option<string>,
+  message-json: option<string>,
+  tokens-used: option<u32>,
+  finish-reason: option<string>,
+  raw-response-json: option<string>,
 }
 
-/// Tool call event dari WASM ke host
+/// ToolCallEvent
 record tool-call-event {
-    /// Tool name
-    tool-name: string,
-    /// Tool arguments (JSON encoded)
-    arguments-json: string,
-    /// Session ID for tracking
-    session-id: option<string>,
-    /// Step ID for ordering
-    step-id: u32,
+  tool-name: string,
+  arguments-json: string,
+  session-id: option<string>,
+  step-id: u32,
 }
 
-/// Tool execution result dari host ke WASM
+/// ToolExecutionResult
 record tool-execution-result {
-    /// Tool name
-    tool-name: string,
-    /// Success status
-    success: bool,
-    /// Output (JSON encoded)
-    output-json: string,
-    /// Error message if failed
-    error-message: option<string>,
-    /// Step ID
-    step-id: u32,
+  tool-name: string,
+  success: bool,
+  output-json: string,
+  error-message: option<string>,
+  step-id: u32,
 }
 
-/// Log event dari WASM ke host
+/// LogEvent
 record log-event {
-    /// Log level (debug, info, warn, error)
-    level: string,
-    /// Message
-    message: string,
-    /// Timestamp (ISO 8601)
-    timestamp: option<string>,
+  level: string,
+  message: string,
+  timestamp: option<string>,
 }
 
-/// State persistence
+/// DelegatingAgent<H: HostImports>
+record delegating-agent<-h: -host-imports> {
+  host: h,
+  session-id: option<string>,
+  step-counter: u32,
+  max-steps: u32,
+}
+
+/// HostImports
 interface host-imports {
-    /// Call LLM API (host responsibility)
-    call-llm(request: llm-request) -> result<llm-response, string>;
-
-    /// Execute tool call via MCP (host responsibility)
-    emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
-
-    /// List tools available from the MCP server.
-    ///
-    /// Called by WASM to refresh its local registry after session init or on demand.
-    /// The host is responsible for fetching the tool list from the MCP server and
-    /// returning it as a JSON-encoded array of tool-definition records.
-    list-mcp-tools() -> result<string, string>;
-
-    /// Log message to host
-    log-message(event: log-event);
-
-    /// Save agent state (host decides storage backend)
-    save-state(session-id: string, state-json: string) -> result<_, string>;
-
-    /// Load agent state (host decides storage backend)
-    load-state(session-id: string) -> result<option<string>, string>;
+  log-message(event: log-event);
 }
 
-// ============================================================================
-// WASM Exports (disediakan oleh WASM component)
-// ============================================================================
-
-/// Agent action result dari WASM
-variant agent-action {
-    /// Call a tool
-    call-tool(tool-call-event),
-    /// Final response to user
-    final-response(string),
-    /// Need retry with error feedback
-    retry-with-error(string),
-}
-
-/// Agent processing result
-record agent-outcome {
-    /// Action to take
-    action: agent-action,
-    /// Current step number
-    step: u32,
-    /// Session ID
-    session-id: string,
-}
-
-/// Agent configuration (minimal, tanpa provider info)
-record agent-config {
-    /// Maximum steps
-    max-steps: u32,
-    /// Verbose logging
-    verbose: bool,
-    /// Auto-execute tools
-    auto-execute-tools: bool,
-    /// Session timeout (seconds)
-    session-timeout-secs: u32,
-}
-
-/// JSON Schema for validation (WASM enforce consistency)
-record json-schema-def {
-    /// Schema name
-    name: string,
-    /// Schema definition (JSON encoded)
-    schema-json: string,
-    /// Whether to enforce
-    enforced: bool,
-}
-
-/// Agent session state
-record agent-state {
-    /// Session ID
-    session-id: string,
-    /// Current step
-    current-step: u32,
-    /// Message history (JSON encoded)
-    message-history: string,
-    /// Tool call results (JSON encoded)
-    tool-results: string,
-    /// Metadata (JSON encoded)
-    metadata: string,
-}
-
-/// Agent interface
-interface agent-runner {
-    /// Initialize agent with config
-    init(config-json: string) -> result<string, string>;
-
-    /// Prepare a user turn for host-side model execution.
-    ///
-    /// `request-json` is expected to contain:
-    /// ```json
-    /// {
-    ///   "prompt": "User message",
-    ///   "attachments": [],
-    ///   "system_prompt": null,
-    ///   "session_id": null,
-    ///   "raw_mode": false,
-    ///   "bypass_template": false,
-    ///   "force_json": false
-    /// }
-    /// ```
-    ///
-    /// Returns a JSON-encoded prepared turn containing the resolved
-    /// `session_id`, provider/model choice, the assembled message list to send
-    /// to the host-owned LLM call, and internal logging metadata.
-    prepare-user-turn(request-json: string) -> result<string, string>;
-
-    /// Process LLM response and determine next action.
-    ///
-    /// The host may pass either:
-    /// - plain text, which will be treated as a final assistant response, or
-    /// - structured JSON with `action`, `response`, `content`, etc.
-    process-llm-response(
-        session-id: string,
-        llm-response-json: string,
-    ) -> result<string, string>;
-
-    /// Commit a host-produced LLM response back into the framework-managed
-    /// history/state for a previously prepared turn.
-    ///
-    /// `prepared-turn-json` must be the JSON returned by `prepare-user-turn`.
-    /// `llm-response-json` may encode either a plain text body or a structured
-    /// assistant message envelope.
-    ///
-    /// Returns a JSON-encoded chat result with final `session_id`, `content`,
-    /// provider/model identity, and collected logs.
-    commit-llm-response(
-        prepared-turn-json: string,
-        llm-response-json: string,
-    ) -> result<string, string>;
-
-    /// Process tool execution result
-    process-tool-result(
-        session-id: string,
-        tool-result-json: string,
-    ) -> result<string, string>;
-
-    /// Get current agent state
-    get-state(session-id: string) -> result<string, string>;
-
-    /// Reset agent session
-    reset-session(session-id: string) -> result<bool, string>;
-
-    /// Register MCP tool definitions for WASM-side validation.
-    ///
-    /// `tools-json` is a JSON array of tool definition objects, typically
-    /// obtained from `host-imports.list-mcp-tools()` or built by the host
-    /// after calling `tools/list` on the MCP server.
-    ///
-    /// Returns the number of tools registered.  Pass an empty array `[]` to
-    /// clear the registry.  When the registry is non-empty, any LLM-requested
-    /// `call_tool` action will be validated against it before the host is asked
-    /// to execute it.
-    register-tools(tools-json: string) -> result<u32, string>;
-
-    /// Returns a formatted tool-list block for injection into a system prompt.
-    ///
-    /// The block lists tool names, parameter names (required params marked
-    /// with `*`), and descriptions.  Returns an empty string when the registry
-    /// is empty.
-    get-tools-prompt() -> result<string, string>;
-
-    /// Hydrate an archived session back into WASM memory.
-    ///
-    /// Hosts call this after loading the session snapshot from durable storage.
-    hydrate-session(session-id: string, state-json: string) -> result<bool, string>;
-
-    /// Emit restore progress so host and users can receive loading feedback.
-    ///
-    /// `progress-json` is free-form JSON payload (stage, percent, message, etc.).
-    report-session-restore-progress(session-id: string, progress-json: string) -> result<bool, string>;
-
-    /// Sweep idle sessions using timeout policy and archive timed-out sessions.
-    ///
-    /// Use `none` to evaluate against current clock, or pass explicit millis for
-    /// deterministic tests/replays.
-    sweep-idle-sessions(now-unix-ms: option<s64>) -> result<u32, string>;
-
-    /// Returns actionable SLO metrics for rapid incident debugging.
-    ///
-    /// Snapshot contains success rate, retry ratio, tool error rate, and p95
-    /// prepare/commit latency for the session.
-    get-slo-snapshot(session-id: string) -> result<string, string>;
-}
-
-/// JSON Schema validation
-interface json-schema-validator {
-    /// Register a schema
-    register-schema(schema-json: string) -> result<string, string>;
-
-    /// Validate JSON against registered schema
-    validate-json(schema-name: string, json-string: string) -> result<string, string>;
-
-    /// Generate example JSON from schema
-    generate-example(schema-name: string) -> result<string, string>;
-
-    /// Get schema prompt instruction
-    get-schema-prompt(schema-name: string) -> result<string, string>;
-}
-
-/// Prompt template management
-interface prompt-manager {
-    /// Get prompt template by name
-    get-prompt(name: string) -> result<string, string>;
-
-    /// Set prompt template
-    set-prompt(name: string, value: string) -> result<bool, string>;
-
-    /// Render prompt with variables
-    render-prompt(template: string, variables-json: string) -> result<string, string>;
-}
-
-/// Session management
-interface session-manager {
-    /// Create a new session
-    create-session(user-id: string, model: string) -> result<string, string>;
-
-    /// Get session by ID
-    get-session(session-id: string) -> result<string, string>;
-
-    /// List all sessions
-    list-sessions() -> result<string, string>;
-
-    /// Add message to session
-    add-message(session-id: string, role: string, content: string) -> result<string, string>;
-
-    /// Get chat history
-    get-history(session-id: string) -> result<string, string>;
-
-    /// Export session to hex-encoded Postcard
-    export-session(session-id: string) -> result<string, string>;
-
-    /// Import session from hex-encoded Postcard
-    import-session(export-data: string) -> result<string, string>;
-
-    /// Delete session
-    delete-session(session-id: string) -> result<string, string>;
-
-    /// Clear session messages
-    clear-session(session-id: string) -> result<string, string>;
-
-    /// Export all sessions as batch
-    batch-export() -> result<string, string>;
-
-    /// Import batch of sessions
-    batch-import(export-data: string) -> result<string, string>;
-
-    /// Get logs for a session
-    get-session-logs(session-id: string) -> result<string, string>;
-
-    /// Export session logs to hex-encoded Postcard
-    export-session-logs(session-id: string) -> result<string, string>;
-
-    /// Import session logs from hex-encoded Postcard
-    import-session-logs(export-data: string) -> result<string, string>;
-
-    /// Export all session logs as batch
-    batch-export-logs() -> result<string, string>;
-
-    /// Import batch of session logs
-    batch-import-logs(export-data: string) -> result<string, string>;
-}
-
-// ============================================================================
-// World definition
-// ============================================================================
-
-/// Multi-agent orchestration runner (FFI-facing).
-///
-/// All parameters and return values are JSON strings so the interface stays
-/// WASM-component-friendly.  The host language specifies execution preferences
-/// via the `orchestrator-config` JSON rather than managing threads directly.
-///
-/// # Execution mode string format
-///
-/// - `"auto"`         — default; tokio concurrency, efficient on any thread count
-/// - `"sequential"`   — tasks run one after another in order
-/// - `"concurrent"`   — concurrent async on the calling thread (no spawning)
-/// - `"parallel:N"`   — spawn N concurrent tasks (e.g. `"parallel:4"`)
-interface multi-agent-runner {
-    /// Initialise (or re-initialise) the orchestrator.
-    ///
-    /// `config-json` must deserialise to:
-    /// ```json
-    /// { "execution_mode": "auto" }
-    /// ```
-    /// Returns `true` on success.
-    init-orchestrator(config-json: string) -> result<bool, string>;
-
-    /// Register an agent profile.
-    ///
-    /// `profile-json` must deserialise to:
-    /// ```json
-    /// {
-    ///   "id": "reviewer",
-    ///   "name": "Code Reviewer",
-    ///   "role": "code-review",
-    ///   "system_prompt": "You are an expert code reviewer.",
-    ///   "max_steps": 10
-    /// }
-    /// ```
-    register-agent(profile-json: string) -> result<bool, string>;
-
-    /// Dispatch a single task and return the JSON-encoded `TaskResult`.
-    ///
-    /// `task-json` must deserialise to:
-    /// ```json
-    /// {
-    ///   "task_id": "uuid",
-    ///   "agent_id": "reviewer",
-    ///   "input": "Review my PR",
-    ///   "session_id": null,
-    ///   "max_steps": null
-    /// }
-    /// ```
-    dispatch-task(task-json: string) -> result<string, string>;
-
-    /// Dispatch multiple tasks.
-    ///
-    /// `tasks-json` is a JSON array of task objects (same schema as
-    /// `dispatch-task`).  Returns a JSON array of `TaskResult` objects.
-    dispatch-tasks(tasks-json: string) -> result<string, string>;
-
-    /// Execute tasks as a sequential pipeline.
-    ///
-    /// Each task's output is injected as context into the next task's input.
-    /// Returns a JSON-encoded `PipelineResult`.
-    pipeline-tasks(tasks-json: string) -> result<string, string>;
-
-    /// Configure orchestrator hardening controls at runtime.
-    ///
-    /// `options-json` follows SDK `OrchestratorOptions` shape:
-    /// ```json
-    /// {
-    ///   "max_concurrent_tasks": 4,
-    ///   "max_total_steps": 200,
-    ///   "max_total_tasks": 50,
-    ///   "default_retry_condition": "on_transient"
-    /// }
-    /// ```
-    configure-hardening(options-json: string) -> result<bool, string>;
-
-    /// Trigger cooperative cancellation for in-flight and future dispatches.
-    cancel-orchestrator() -> result<bool, string>;
-
-    /// Return orchestrator monitor snapshot as JSON.
-    ///
-    /// Expected shape mirrors `OrchestratorMonitorSnapshot`:
-    /// consumed/dispatched counters, limits, exhaustion flags, and cancellation.
-    get-monitor-snapshot() -> result<string, string>;
-
-    /// Decode a serialized `TaskResult` into `TaskResultDetail` JSON.
-    task-result-detail(task-result-json: string) -> result<string, string>;
-
-    /// Return a JSON object with orchestrator status:
-    /// `{ "agent_count": N, "execution_mode": "auto" }`
-    get-status() -> result<string, string>;
-}
-
-/// Resilience management — exported by the WASM component, queried by the host.
-///
-/// Hosts use this interface to inspect runtime health and configure retry /
-/// timeout policies at runtime without recompiling the component.
-///
-/// All functions that accept or return structured data use JSON strings so the
-/// interface stays forward-compatible and host-language-agnostic.
-interface resilience {
-    /// Return the current resilience config as a JSON string.
-    ///
-    /// JSON schema (all fields present):
-    /// ```json
-    /// {
-    ///   "retry": {
-    ///     "max_attempts": 3,
-    ///     "initial_delay_ms": 200,
-    ///     "max_delay_ms": 10000,
-    ///     "backoff_factor": 2.0
-    ///   },
-    ///   "timeout": {
-    ///     "llm_timeout_ms": 30000,
-    ///     "tool_timeout_ms": 10000
-    ///   }
-    /// }
-    /// ```
-    get-config() -> string;
-
-    /// Overwrite the resilience config from a JSON string (same schema as
-    /// `get-config`).
-    ///
-    /// Returns `ok(true)` when the config was accepted, or `err(reason)` if
-    /// the JSON is malformed or contains invalid field values.
-    set-config(config-json: string) -> result<bool, string>;
-
-    /// Return a JSON array of `ComponentHealth` objects for every component
-    /// that has recorded at least one call.
-    ///
-    /// Returns an empty array (`[]`) when no calls have been recorded yet.
-    ///
-    /// Each array element has the shape:
-    /// ```json
-    /// {
-    ///   "component_id": "gemini-flash",
-    ///   "status": "healthy",
-    ///   "total_calls": 42,
-    ///   "successful_calls": 41,
-    ///   "error_rate": 0.024,
-    ///   "avg_latency_ms": 312.5,
-    ///   "last_error": null
-    /// }
-    /// ```
-    get-health() -> string;
-
-    /// Reset all accumulated health statistics for all tracked components.
-    reset-health();
-
-    /// Estimate the token count for `text` using the built-in heuristic
-    /// (1 token ≈ 4 characters).
-    estimate-tokens(text: string) -> u32;
-
-    /// Prune a JSON-encoded array of `ChatMessage` objects so the token
-    /// budget `max-tokens - reserve-tokens` is not exceeded.
-    ///
-    /// Returns the pruned array as a JSON string in the same format as the
-    /// input.  Returns an error string if the input is not a valid JSON array.
-    prune-messages(messages-json: string, max-tokens: u32, reserve-tokens: u32) -> result<string, string>;
-}
-
-world antikythera-agent {
-    /// Import dari host (I/O operations - host responsibility)
-    import host-imports;
-
-    /// Export ke host (agent logic - WASM responsibility)
-    export agent-runner;
-    export json-schema-validator;
-    export prompt-manager;
-    export session-manager;
-    export multi-agent-runner;
-    export resilience;
+/// Combined world exporting both interfaces
+world antikythera-mcp {
+  export prompt-manager;
+  export mcp-client;
+  export ffi-server;
 }
