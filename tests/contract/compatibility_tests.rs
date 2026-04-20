@@ -30,12 +30,13 @@ fn extract_wit_signatures(wit_content: &str) -> Vec<String> {
 
     for line in wit_content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("interface host-imports") {
-            current_interface = Some("host-imports");
-            continue;
-        }
-        if trimmed.starts_with("interface agent-runner") {
-            current_interface = Some("agent-runner");
+        if trimmed.starts_with("interface ") {
+            let interface_name = trimmed
+                .trim_start_matches("interface ")
+                .split_whitespace()
+                .next()
+                .map(|name| name.trim_end_matches('{'));
+            current_interface = interface_name;
             continue;
         }
         if trimmed == "}" {
@@ -55,13 +56,11 @@ fn extract_wit_signatures(wit_content: &str) -> Vec<String> {
             decl_buffer.push_str(trimmed);
             if trimmed.ends_with(';') {
                 in_decl = false;
-                if decl_buffer.contains("-> result<") {
-                    output.push(format!(
-                        "{}::{}",
-                        current_interface.unwrap_or_default(),
-                        normalize_decl(&decl_buffer)
-                    ));
-                }
+                output.push(format!(
+                    "{}::{}",
+                    current_interface.unwrap_or_default(),
+                    normalize_decl(&decl_buffer)
+                ));
             }
             continue;
         }
@@ -71,13 +70,11 @@ fn extract_wit_signatures(wit_content: &str) -> Vec<String> {
             decl_buffer.push_str(trimmed);
             if trimmed.ends_with(';') {
                 in_decl = false;
-                if decl_buffer.contains("-> result<") {
-                    output.push(format!(
-                        "{}::{}",
-                        current_interface.unwrap_or_default(),
-                        normalize_decl(&decl_buffer)
-                    ));
-                }
+                output.push(format!(
+                    "{}::{}",
+                    current_interface.unwrap_or_default(),
+                    normalize_decl(&decl_buffer)
+                ));
             }
         }
     }

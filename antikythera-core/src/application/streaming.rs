@@ -367,20 +367,15 @@ impl StreamingResponse for InMemoryStreamingResponse {
 /// let batch = buf.flush();
 /// assert_eq!(batch.len(), 3);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum BufferPolicy {
     /// Every event is yielded immediately — lowest latency, highest per-event overhead.
+    #[default]
     Unbuffered,
     /// Events accumulate until `flush_threshold` is reached, then the whole batch is
     /// flushed at once. A `flush_threshold` of `0` is treated as `1`.
     Buffered { flush_threshold: usize },
-}
-
-impl Default for BufferPolicy {
-    fn default() -> Self {
-        Self::Unbuffered
-    }
 }
 
 /// Accumulates [`AgentEvent`]s and flushes them according to a [`BufferPolicy`].

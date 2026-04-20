@@ -29,10 +29,11 @@ use serde::{Deserialize, Serialize};
 /// Truncation strategy for message history.
 ///
 /// Defines how messages are removed when context window exceeds budget.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TruncationStrategy {
     /// Keep only the newest messages, discarding oldest first.
+    #[default]
     KeepNewest,
 
     /// Keep both head (oldest) and tail (newest) of conversation, removing middle messages first.
@@ -46,12 +47,6 @@ pub enum TruncationStrategy {
     /// Summarize older messages to make room for newer ones.
     /// Requires a summarization strategy callback to be registered.
     Summarize,
-}
-
-impl Default for TruncationStrategy {
-    fn default() -> Self {
-        Self::KeepNewest
-    }
 }
 
 /// Summarization strategy callback type.

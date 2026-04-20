@@ -2,6 +2,7 @@
 /config
 /book
 *.txt
+!tests/fixtures/contracts/wit_signatures.golden.txt
 /servers
 .env
 .code-review-graph/

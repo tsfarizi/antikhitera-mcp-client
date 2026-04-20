@@ -9,8 +9,8 @@
 //! - Performance under pressure
 
 use antikythera_core::{
-    AgentEvent, AgentEventStream, BufferPolicy, ClientInputStream, StreamingBuffer,
-    StreamingMode, StreamingRequest, ToolEventPhase,
+    AgentEvent, AgentEventStream, BufferPolicy, ClientInputStream, StreamingBuffer, StreamingMode,
+    StreamingRequest, ToolEventPhase,
 };
 use std::sync::Arc;
 use std::thread;
