@@ -160,6 +160,9 @@ Target: Production-grade observability, resilience, and enterprise deployment.
 - Deprecated API removal (if any)
 - Version compatibility promise
 - Semver enforcement
+- ✅ Deprecation lifecycle policy finalized and published (`documentation/DEPRECATION_POLICY.md`)
+- ✅ Deprecated aliases now include explicit `since` metadata and planned removal version (`2.0.0`)
+- ✅ CI gate added to deny deprecated API usage on production targets (`--lib --bins`)
 
 **Priority 6: WASM MCP Tool Registry Synchronization (Gap Fix)**
 - ✅ **Modules**: `antikythera-sdk::wasm_agent::{types,processor,runner}` + `wit/antikythera.wit`

@@ -57,7 +57,10 @@ pub fn load_app_config(path: Option<&Path>) -> CliResult<AppConfig> {
 }
 
 /// Deprecated compatibility alias.
-#[deprecated(note = "use load_app_config instead")]
+#[deprecated(
+    since = "0.9.9",
+    note = "use load_app_config instead; scheduled removal in 2.0.0"
+)]
 pub fn load_config(path: Option<&Path>) -> CliResult<AppConfig> {
     load_app_config(path)
 }
@@ -74,7 +77,10 @@ pub fn save_app_config(config: &AppConfig, path: Option<&Path>) -> CliResult<()>
 }
 
 /// Deprecated compatibility alias.
-#[deprecated(note = "use save_app_config instead")]
+#[deprecated(
+    since = "0.9.9",
+    note = "use save_app_config instead; scheduled removal in 2.0.0"
+)]
 pub fn save_config(config: &AppConfig, path: Option<&Path>) -> CliResult<()> {
     save_app_config(config, path)
 }

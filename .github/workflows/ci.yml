@@ -52,6 +52,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run clippy (all features)
         run: cargo clippy --workspace --all-features -- -D warnings
+      - name: Deny deprecated API usage (production targets)
+        run: cargo clippy --workspace --lib --bins -- -D warnings -D deprecated
       - name: Run clippy (native lane - default)
         run: cargo clippy -p antikythera-sdk -- -D warnings
       - name: Run clippy (WASM component lane)

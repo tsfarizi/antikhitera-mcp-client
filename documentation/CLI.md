@@ -192,8 +192,21 @@ To keep CLI discoverability and public contracts stable:
 | Factory/builders | `build_*` for constructors and adapters |
 | Backward compatibility | old names retained as deprecated aliases only |
 
+### Deprecated alias map and timeline
+
+Current aliases are maintained for migration compatibility and are planned to be removed in `2.0.0`.
+
+| Deprecated symbol | Replacement |
+|:------------------|:------------|
+| `load_config` | `load_app_config` |
+| `save_config` | `save_app_config` |
+| `load_cli_config` | `load_app_config` |
+| `create_llm_provider` | `build_llm_provider` |
+| `create_provider_config` | `build_active_provider_config` |
+
 ## Related documents
 
 - [`CONFIG.md`](CONFIG.md) for the config format and serialization model
 - [`BUILD.md`](BUILD.md) for build commands and component workflows
 - [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) for deployment targets and feature flags
+- [`DEPRECATION_POLICY.md`](DEPRECATION_POLICY.md) for deprecation lifecycle and CI enforcement

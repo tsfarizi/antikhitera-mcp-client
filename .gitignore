@@ -5,3 +5,4 @@
 /servers
 .env
 .code-review-graph/
+.cargo/

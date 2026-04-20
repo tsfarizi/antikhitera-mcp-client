@@ -15,7 +15,10 @@ pub fn load_app_config(path: Option<&Path>) -> CliResult<AppConfig> {
 }
 
 /// Deprecated compatibility alias.
-#[deprecated(note = "use load_app_config instead")]
+#[deprecated(
+    since = "0.9.9",
+    note = "use load_app_config instead; scheduled removal in 2.0.0"
+)]
 pub fn load_cli_config(path: Option<&Path>) -> CliResult<AppConfig> {
     load_app_config(path)
 }
@@ -40,7 +43,10 @@ pub fn build_llm_provider(
 }
 
 /// Deprecated compatibility alias.
-#[deprecated(note = "use build_llm_provider instead")]
+#[deprecated(
+    since = "0.9.9",
+    note = "use build_llm_provider instead; scheduled removal in 2.0.0"
+)]
 pub fn create_llm_provider(
     config: &AppConfig,
 ) -> CliResult<Box<dyn crate::domain::use_cases::chat_use_case::LlmProvider>> {
@@ -78,7 +84,10 @@ pub fn build_active_provider_config(config: &AppConfig) -> CliResult<ProviderCon
 }
 
 /// Deprecated compatibility alias.
-#[deprecated(note = "use build_active_provider_config instead")]
+#[deprecated(
+    since = "0.9.9",
+    note = "use build_active_provider_config instead; scheduled removal in 2.0.0"
+)]
 pub fn create_provider_config(config: &AppConfig) -> CliResult<ProviderConfig> {
     build_active_provider_config(config)
 }

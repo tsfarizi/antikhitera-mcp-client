@@ -26,3 +26,4 @@
 - [WASM Agent](documentation/WASM_AGENT.md)
 - [Testing](documentation/TESTING.md)
 - [Migration](documentation/MIGRATION.md)
+- [Deprecation Policy](documentation/DEPRECATION_POLICY.md)
