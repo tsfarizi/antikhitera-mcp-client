@@ -47,7 +47,10 @@ pub fn materialize_runtime_config(
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .or_else(|| match config.default_provider.as_str() {
-            "" | "local" => None,
+            // Empty, placeholder, or the generic fallback "ollama" all mean
+            // "not explicitly configured" — let env detection choose the best
+            // provider based on available API keys.
+            "" | "local" | "ollama" => None,
             other => Some(other.to_string()),
         })
         .unwrap_or_else(detect_provider_from_env);

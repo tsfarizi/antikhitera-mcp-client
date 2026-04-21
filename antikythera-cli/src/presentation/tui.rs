@@ -163,6 +163,11 @@ async fn run_loop(
         }
 
         if let Event::Key(key) = event::read()? {
+            // On Windows crossterm emits both Press and Release events.
+            // Only process Press (and Repeat for held keys) to avoid doubles.
+            if key.kind == crossterm::event::KeyEventKind::Release {
+                continue;
+            }
             match handle_key_event(key, &mut app) {
                 KeyAction::None => {}
                 KeyAction::Submit => {
