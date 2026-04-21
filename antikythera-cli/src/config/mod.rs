@@ -31,6 +31,77 @@ pub type CliProviderConfig = ProviderConfig;
 
 use std::path::Path;
 
+fn default_provider_catalog() -> Vec<ProviderConfig> {
+    vec![
+        ProviderConfig {
+            id: "ollama".to_string(),
+            provider_type: "ollama".to_string(),
+            endpoint: "http://127.0.0.1:11434".to_string(),
+            api_key: String::new(),
+            models: vec![ModelInfo {
+                name: "llama3.2".to_string(),
+                display_name: "Llama 3.2".to_string(),
+            }],
+        },
+        ProviderConfig {
+            id: "gemini".to_string(),
+            provider_type: "gemini".to_string(),
+            endpoint: "https://generativelanguage.googleapis.com".to_string(),
+            api_key: "GEMINI_API_KEY".to_string(),
+            models: vec![ModelInfo {
+                name: "gemini-2.0-flash".to_string(),
+                display_name: "Gemini 2.0 Flash".to_string(),
+            }],
+        },
+        ProviderConfig {
+            id: "openai".to_string(),
+            provider_type: "openai".to_string(),
+            endpoint: "https://api.openai.com".to_string(),
+            api_key: "OPENAI_API_KEY".to_string(),
+            models: vec![ModelInfo {
+                name: "gpt-4o-mini".to_string(),
+                display_name: "GPT-4o Mini".to_string(),
+            }],
+        },
+    ]
+}
+
+pub fn recommended_default_config() -> AppConfig {
+    AppConfig {
+        providers: default_provider_catalog(),
+        model: ModelConfig {
+            default_provider: "ollama".to_string(),
+            model: "llama3.2".to_string(),
+        },
+        ..AppConfig::default()
+    }
+}
+
+pub fn normalize_provider_type(provider_type: &str) -> String {
+    match provider_type.trim().to_ascii_lowercase().as_str() {
+        "google" | "google-ai" => "gemini".to_string(),
+        "localai" => "ollama".to_string(),
+        other => other.to_string(),
+    }
+}
+
+pub fn default_models_for_provider(provider_type: &str) -> Vec<ModelInfo> {
+    match normalize_provider_type(provider_type).as_str() {
+        "gemini" => vec![ModelInfo {
+            name: "gemini-2.0-flash".to_string(),
+            display_name: "Gemini 2.0 Flash".to_string(),
+        }],
+        "openai" => vec![ModelInfo {
+            name: "gpt-4o-mini".to_string(),
+            display_name: "GPT-4o Mini".to_string(),
+        }],
+        _ => vec![ModelInfo {
+            name: "llama3.2".to_string(),
+            display_name: "Llama 3.2".to_string(),
+        }],
+    }
+}
+
 /// Serialize `AppConfig` to Postcard binary.
 pub fn config_to_postcard(config: &AppConfig) -> CliResult<Vec<u8>> {
     antikythera_core::config::postcard_config::config_to_postcard(config).map_err(CliError::Config)
@@ -90,7 +161,7 @@ pub fn config_exists() -> bool {
 
 /// Create and persist a default `AppConfig` at [`CONFIG_PATH`].
 pub fn init_default_config() -> CliResult<AppConfig> {
-    let config = AppConfig::default();
+    let config = recommended_default_config();
     save_app_config(&config, None)?;
     Ok(config)
 }
@@ -128,5 +199,27 @@ mod tests {
             .expect_err("expected error")
             .to_string();
         assert_eq!(e1, e2);
+    }
+
+    #[test]
+    fn recommended_default_config_includes_primary_providers() {
+        let config = recommended_default_config();
+        let ids: Vec<&str> = config
+            .providers
+            .iter()
+            .map(|provider| provider.id.as_str())
+            .collect();
+        assert!(ids.contains(&"gemini"));
+        assert!(ids.contains(&"openai"));
+        assert!(ids.contains(&"ollama"));
+        assert_eq!(config.model.default_provider, "ollama");
+    }
+
+    #[test]
+    fn normalize_provider_type_maps_known_aliases() {
+        assert_eq!(normalize_provider_type("GEMINI"), "gemini");
+        assert_eq!(normalize_provider_type("google-ai"), "gemini");
+        assert_eq!(normalize_provider_type("LOCALAI"), "ollama");
+        assert_eq!(normalize_provider_type("openai"), "openai");
     }
 }

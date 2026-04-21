@@ -25,6 +25,12 @@ pub mod presentation;
 // Config module (for CLI testing)
 pub mod config;
 
+// Runtime wiring owned by the CLI layer.
+pub mod runtime;
+
+// CLI argument parsing (owned by CLI crate, not core).
+pub mod cli;
+
 // Re-exports for convenience
 pub use config::CliConfig;
 pub use error::{CliError, CliResult};

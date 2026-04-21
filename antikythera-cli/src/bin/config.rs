@@ -60,8 +60,15 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 println!("Use 'reset' to overwrite.");
                 return Ok(());
             }
-            init_default_config()?;
+            let config = init_default_config()?;
             println!("✓ Default configuration created at: {}", CONFIG_PATH);
+            println!("  Providers tersedia: {}", config.providers.len());
+            for provider in &config.providers {
+                println!(
+                    "  - {} [{}] -> {}",
+                    provider.id, provider.provider_type, provider.endpoint
+                );
+            }
             Ok(())
         }
 
@@ -102,12 +109,14 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 )));
             }
 
+            let provider_type = normalize_provider_type(&provider_type);
+            let models = default_models_for_provider(&provider_type);
             config.providers.push(ProviderConfig {
                 id: id.clone(),
                 provider_type,
                 endpoint,
                 api_key: api_key.unwrap_or_default(),
-                models: Vec::new(),
+                models,
             });
 
             save_app_config(&config, None)?;

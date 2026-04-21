@@ -23,7 +23,7 @@ cache = []
 
 # Interactive configuration wizard (terminal UI + Clap argument parsing).
 # ✅ STABLE: Component model is complete; suitable for production use.
-wizard = ["dep:crossterm", "dep:ratatui", "dep:clap"]
+wizard = ["dep:crossterm", "dep:ratatui"]
 
 # Multi-Agent orchestration support.
 # ✅ STABLE: Full orchestration with scheduling, routing, and pipeline execution.
@@ -82,8 +82,6 @@ chrono.workspace = true
 sysinfo = { workspace = true, optional = true }
 dotenvy.workspace = true
 shellexpand.workspace = true
-clap = { workspace = true, optional = true }
-
 # TUI and wizard (optional)
 crossterm = { workspace = true, optional = true }
 ratatui = { workspace = true, optional = true }

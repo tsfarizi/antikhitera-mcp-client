@@ -104,6 +104,7 @@ path = "observability/observability_tests.rs"
 antikythera-log = { path = "../antikythera-log" }
 antikythera-session = { path = "../antikythera-session" }
 antikythera-core = { path = "../antikythera-core", features = ["full"] }
+antikythera-cli = { path = "../antikythera-cli" }
 antikythera-sdk = { path = "../antikythera-sdk", features = ["component", "multi-agent"] }
 serde_json.workspace = true
 chrono.workspace = true

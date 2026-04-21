@@ -1,4 +1,4 @@
-pub mod cli_entities;
+pub mod entities;
 pub mod content;
 pub mod sanitize;
 pub mod types;

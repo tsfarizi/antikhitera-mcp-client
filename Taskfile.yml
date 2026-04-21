@@ -30,7 +30,7 @@ tasks:
       - |
         echo "Antikythera MCP Framework - Available Tasks"
         echo ""
-        echo "  task run           - Run CLI as WASM FFI host harness"
+        echo "  task run           - Run interactive TUI CLI with auto-bootstrap config"
         echo "  task run-wasm      - Run CLI as WASM FFI host harness"
         echo "  task run-interactive - Run interactive CLI (stdio mode)"
         echo "  task run-tui       - Alias for interactive TUI-friendly CLI"
@@ -96,45 +96,40 @@ tasks:
   # Run Tasks
   # ===========================================================================
 
+  ensure-config:
+    internal: true
+    desc: Ensure app.pc exists with seeded provider defaults
+    cmds:
+      - |
+        if [ ! -f "{{.APP_CONFIG}}" ]; then
+          echo "Config {{.APP_CONFIG}} not found, creating default multi-provider config..."
+          cargo run -p antikythera-cli --bin antikythera-config -- init
+        fi
+
   run:
-    desc: Run CLI as WASM FFI host harness (default run path)
+    desc: Run interactive TUI CLI (default run path)
+    deps:
+      - ensure-config
+    cmds:
+      - echo "Running interactive TUI CLI..."
+      - 'cargo run -p antikythera-cli --bin antikythera -- --mode stdio {{.CLI_ARGS}}'
+
+  run-wasm:
+    desc: Run CLI as WASM FFI host harness
     deps:
       - build-wasm-harness
     vars:
       WASM_TASK: '{{default "WASM harness smoke test" .WASM_TASK}}'
     cmds:
       - echo "Running CLI as WASM FFI host harness..."
-      - |
-        if [ ! -f "{{.APP_CONFIG}}" ]; then
-          echo "Config {{.APP_CONFIG}} not found, bootstrapping selected provider config..."
-          cargo run -p antikythera-cli --bin antikythera-config -- init
-
-          if [ -n "{{.PROVIDER_API_KEY}}" ]; then
-            cargo run -p antikythera-cli --bin antikythera-config -- add-provider {{.PROVIDER_ID}} {{.PROVIDER_TYPE}} {{.PROVIDER_ENDPOINT}} {{.PROVIDER_API_KEY}}
-          else
-            cargo run -p antikythera-cli --bin antikythera-config -- add-provider {{.PROVIDER_ID}} {{.PROVIDER_TYPE}} {{.PROVIDER_ENDPOINT}}
-          fi
-
-          cargo run -p antikythera-cli --bin antikythera-config -- set-model {{.PROVIDER_ID}} {{.MODEL_NAME}}
-
-          echo "Configured provider: id={{.PROVIDER_ID}} type={{.PROVIDER_TYPE}} endpoint={{.PROVIDER_ENDPOINT}} model={{.MODEL_NAME}}"
-          if [ -n "{{.PROVIDER_API_KEY}}" ]; then
-            echo "API key env var: {{.PROVIDER_API_KEY}}"
-          fi
-        fi
       - 'cargo run -p antikythera-cli --bin antikythera -- --mode wasm-harness --wasm {{.WASM_BINARY}} --task "{{.WASM_TASK}}" --stream {{.CLI_ARGS}}'
-
-  run-wasm:
-    desc: Alias of run (WASM FFI host harness)
-    cmds:
-      - task: run
 
   run-interactive:
     desc: Run interactive CLI (stdio mode)
     deps:
-      - wit
+      - ensure-config
     cmds:
-      - cargo run -p antikythera-cli --bin antikythera -- --mode stdio {{.CLI_ARGS}}
+      - task: run CLI_ARGS='{{.CLI_ARGS}}'
 
   run-tui:
     desc: Alias of run-interactive (TUI-friendly)

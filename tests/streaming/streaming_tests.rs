@@ -1,4 +1,4 @@
-﻿use antikythera_core::cli::Cli;
+﻿use antikythera_cli::cli::Cli;
 use antikythera_core::{
     AgentEvent, BufferPolicy, ClientInputStream, InMemoryStreamingResponse, StreamingBuffer,
     StreamingPhase2Options, StreamingRequest, StreamingResponse,

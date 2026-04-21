@@ -25,6 +25,8 @@ The CLI crate exposes two binaries:
 | `antikythera` | Main runtime entry point: interactive chat, setup wizard, and multi-agent orchestration |
 | `antikythera-config` | Lightweight config manager for provider and server configuration |
 
+Runtime provider and model selection are owned by the CLI layer. `antikythera-core` stays model-agnostic and only executes against the runtime client configuration that the CLI has already materialized.
+
 ## `antikythera`
 
 ### Runtime modes
@@ -36,7 +38,7 @@ The main binary accepts a `--mode` flag:
 | `stdio` | ✅ | Interactive TUI chat session |
 | `setup` | | Configuration wizard for providers and servers |
 | `multi-agent` | | Multi-agent orchestrator harness |
-| `wasm-harness` | | Execute a WASM module through host runtime bridge for parity testing |
+| `wasm-harness` | | Execute host-FFI WASM probe (runtime/session/telemetry/slo/tool-registry validation) |
 
 ### Execution flow
 
@@ -49,11 +51,22 @@ flowchart TD
     PARSE --> SETUP[mode = setup]
     PARSE --> MULTI[mode = multi-agent]
     PARSE --> HARNESS[mode = wasm-harness]
-    STDIO --> CHAT[Interactive STDIO loop]
+    STDIO --> CHAT[Interactive ratatui chat workspace]
     SETUP --> WIZARD[Config wizard menu]
     MULTI --> ORCH[MultiAgentOrchestrator dispatch]
-    HARNESS --> WASM[WasmAgentRunner task execution]
+    HARNESS --> WASM[Host-FFI probe over WASM runtime exports]
 ```
+
+  ### Interactive TUI UX
+
+  The `stdio` mode now launches a ratatui-based workspace with:
+
+  1. A conversation panel that keeps the latest chat and tool trace visible.
+  2. A context sidebar showing provider, model, session, and configured backends.
+  3. A prompt box with slash-command recommendations as soon as the input starts with `/`.
+  4. Inline commands such as `/help`, `/providers`, `/use <provider> [model]`, `/model <name>`, `/config`, `/tools`, `/agent`, `/reset`, and `/exit`.
+
+  Use `Tab` to autocomplete the first command suggestion, `Enter` to submit, and `Esc` to quit.
 
 ### Run it
 
@@ -63,10 +76,21 @@ cargo run -p antikythera-cli --bin antikythera
 
 # Explicit mode selection
 cargo run -p antikythera-cli --bin antikythera -- --mode stdio
+cargo run -p antikythera-cli --bin antikythera -- --mode stdio --provider gemini --model gemini-2.0-flash
+cargo run -p antikythera-cli --bin antikythera -- --mode stdio --provider openai --model gpt-4o-mini
+cargo run -p antikythera-cli --bin antikythera -- --mode stdio --provider ollama --model llama3.2 --provider-endpoint http://127.0.0.1:11434
 cargo run -p antikythera-cli --bin antikythera -- --mode setup
 cargo run -p antikythera-cli --bin antikythera -- --mode multi-agent --agents agents.json --task "Write a summary"
 cargo run -p antikythera-cli --bin antikythera -- --mode wasm-harness --wasm target/wasm32-wasip1/release/antikythera_sdk.wasm --task "Smoke test"
+
+# Task shortcuts
+task run-tui
+task run
+task run-wasm
+task setup-config PROVIDER_ID=openai PROVIDER_TYPE=openai PROVIDER_ENDPOINT=https://api.openai.com PROVIDER_API_KEY=OPENAI_API_KEY MODEL_NAME=gpt-4o-mini
 ```
+
+`task run` now bootstraps `app.pc` automatically when needed and opens the interactive TUI directly. Change provider/model from inside the TUI with commands such as `/use gemini gemini-2.0-flash` or `/model gpt-4o-mini` instead of passing runtime shell arguments.
 
 ### Common flags
 
@@ -75,6 +99,9 @@ cargo run -p antikythera-cli --bin antikythera -- --mode wasm-harness --wasm tar
 | `--mode <mode>` | Runtime mode (default: `stdio`) |
 | `--config <path>` | Path to `app.pc` config file |
 | `--system <prompt>` | Override system prompt |
+| `--provider <id>` | Override active provider without editing config |
+| `--model <name>` | Override active model without editing config |
+| `--provider-endpoint <url>` | Override endpoint for the selected provider |
 | `--ollama-url <url>` | Override Ollama endpoint (default: `http://127.0.0.1:11434`) |
 | `--wasm <path>` | Path to wasm module used by `wasm-harness` |
 | `--wasm-llm-response <json>` | Host callback response stub for `wasm-harness` |
@@ -110,7 +137,7 @@ Agent profile JSON format:
 | Item | Value |
 |:-----|:------|
 | Default config file | `app.pc` |
-| Supported provider types | `gemini`, `ollama` |
+| Supported provider types | `gemini`, `openai`, `ollama` |
 | Config format | Postcard on disk, JSON for import/export and display |
 
 ### Config workflow
@@ -167,11 +194,11 @@ cargo run -p antikythera-cli --bin antikythera-config -- --help
 # Create default file
 cargo run -p antikythera-cli --bin antikythera-config -- init
 
-# Add an Ollama provider
-cargo run -p antikythera-cli --bin antikythera-config -- add-provider ollama ollama http://127.0.0.1:11434
+# Add an OpenAI provider
+cargo run -p antikythera-cli --bin antikythera-config -- add-provider openai openai https://api.openai.com OPENAI_API_KEY
 
 # Set the default model
-cargo run -p antikythera-cli --bin antikythera-config -- set-model ollama llama3
+cargo run -p antikythera-cli --bin antikythera-config -- set-model openai gpt-4o-mini
 
 # Check current status
 cargo run -p antikythera-cli --bin antikythera-config -- status
@@ -179,7 +206,7 @@ cargo run -p antikythera-cli --bin antikythera-config -- status
 
 ### Provider limitations
 
-Provider types supported: `gemini` and `ollama`.
+`antikythera-config init` now seeds provider templates for `gemini`, `openai`, and `ollama`, including their common default endpoints and model presets. `add-provider` also normalizes aliases such as `google-ai` -> `gemini` and `localai` -> `ollama`.
 
 ## API consistency rules
 

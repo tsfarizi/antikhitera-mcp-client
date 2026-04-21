@@ -3,8 +3,6 @@
 //! Core MCP protocol implementation, transport layers, and agent runtime.
 
 pub mod application;
-#[cfg(feature = "wizard")]
-pub mod cli;
 pub mod config;
 pub mod constants;
 pub mod domain;
@@ -47,10 +45,6 @@ pub use config::AppConfig;
 pub use infrastructure::model::{
     DynamicModelProvider, HostModelClient, HostModelResponse, HostModelTransport, ModelProvider,
 };
-
-// Re-export CLI argument types so binary crates don't need a direct `cli` dep.
-#[cfg(feature = "wizard")]
-pub use cli::{Cli, RunMode};
 
 /// Re-export logging for easy access
 pub use logging::{

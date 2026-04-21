@@ -2,13 +2,22 @@ use clap::{Parser, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "mcp",
+    name = "antikythera",
     version,
-    about = "MCP client dengan penyedia model yang dapat dikonfigurasi"
+    about = "Antikythera MCP client dengan penyedia model yang dapat dikonfigurasi"
 )]
 pub struct Cli {
     #[arg(long, default_value = "http://127.0.0.1:11434")]
     pub ollama_url: String,
+    /// Override the active provider ID without editing app.pc.
+    #[arg(long)]
+    pub provider: Option<String>,
+    /// Override the active model name without editing app.pc.
+    #[arg(long)]
+    pub model: Option<String>,
+    /// Override the endpoint for the selected provider.
+    #[arg(long)]
+    pub provider_endpoint: Option<String>,
     #[arg(long)]
     pub config: Option<String>,
     #[arg(long)]
@@ -61,7 +70,7 @@ pub struct Cli {
 
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum RunMode {
-    /// Interactive STDIO mode
+    /// Interactive TUI mode
     Stdio,
     /// Configuration wizard/setup menu
     Setup,

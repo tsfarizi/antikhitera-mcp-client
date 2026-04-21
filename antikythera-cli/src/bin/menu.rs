@@ -11,13 +11,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use antikythera_cli::domain::use_cases::{render_wasm_stream_report, run_wasm_stream_probe};
-use antikythera_cli::infrastructure::llm::{
-    build_provider_from_configs, install_terminal_stream_sink,
-};
+use antikythera_cli::infrastructure::llm::install_terminal_stream_sink;
+use antikythera_cli::presentation::tui;
+use antikythera_cli::runtime::{build_runtime_client, materialize_runtime_config};
 use antikythera_core::application::agent::multi_agent::task::AgentTask;
-use antikythera_core::application::stdio;
-use antikythera_core::cli::{Cli, RunMode};
-use antikythera_core::{AppConfig, ClientConfig, McpClient};
+use antikythera_cli::cli::{Cli, RunMode};
+use antikythera_core::infrastructure::model::DynamicModelProvider;
+use antikythera_core::{AppConfig, McpClient};
 use clap::Parser;
 
 #[cfg(feature = "multi-agent")]
@@ -27,40 +27,32 @@ use antikythera_core::application::agent::multi_agent::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load .env at process startup so GEMINI_API_KEY / OPENAI_API_KEY are
+    // available for provider auto-detection. Missing .env file is fine.
+    let _ = dotenvy::dotenv();
+
     let cli = Cli::parse();
 
     let config_path = cli.config.as_deref().map(Path::new);
     let config = AppConfig::load(config_path)?;
+    let runtime_config = materialize_runtime_config(
+        &config,
+        cli.provider.as_deref(),
+        cli.model.as_deref(),
+        cli.provider_endpoint.as_deref(),
+        Some(cli.ollama_url.as_str()),
+        cli.system.as_deref().or(config.system_prompt.as_deref()),
+    )?;
 
-    let mut providers = config.providers.clone();
-    // Apply the --ollama-url CLI flag to all Ollama provider endpoints
-    for p in providers.iter_mut() {
-        if p.is_ollama() {
-            p.endpoint = cli.ollama_url.clone();
-        }
-    }
-
-    let provider = build_provider_from_configs(&providers)?;
     if cli.stream {
         install_terminal_stream_sink();
     }
-    let mut client_cfg = ClientConfig::new(config.default_provider.clone(), config.model.clone())
-        .with_tools(config.tools.clone())
-        .with_servers(config.servers.clone())
-        .with_prompts(config.prompts.clone())
-        .with_providers(providers.clone());
-
-    if let Some(system) = cli.system.clone().or(config.system_prompt.clone()) {
-        client_cfg = client_cfg.with_system_prompt(system);
-    }
-
-    let client = Arc::new(McpClient::new(provider, client_cfg));
 
     let mode = cli.mode.unwrap_or(RunMode::Stdio);
 
     match mode {
         RunMode::Stdio => {
-            stdio::run(client).await?;
+            tui::run_chat_app(runtime_config).await?;
         }
         RunMode::Setup => {
             eprintln!(
@@ -69,6 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         RunMode::MultiAgent => {
+            let client = build_runtime_client(&runtime_config)?;
             run_multi_agent(cli, client).await?;
         }
         RunMode::WasmHarness => {
@@ -97,11 +90,7 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     if !cli.stream {
         eprintln!("[wasm-harness] enabling stream diagnostics for dev tooling output");
     }
-    let stream_report = run_wasm_stream_probe(
-        &task_input,
-        &llm_payload,
-        true,
-    )?;
+    let stream_report = run_wasm_stream_probe(&task_input, &llm_payload, true)?;
 
     println!("== WASM Host FFI Harness ==");
     println!("artifact: {}", wasm_path);
@@ -128,7 +117,7 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "multi-agent")]
 async fn run_multi_agent(
     cli: Cli,
-    client: Arc<McpClient<impl antikythera_core::infrastructure::model::ModelProvider + 'static>>,
+    client: Arc<McpClient<DynamicModelProvider>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // ----------------------------------------------------------------
     // Parse execution mode

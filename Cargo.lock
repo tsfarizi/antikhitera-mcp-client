@@ -135,7 +135,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
- "clap",
  "crossterm",
  "dotenvy",
  "futures",
@@ -210,6 +209,7 @@ dependencies = [
 name = "antikythera-tests"
 version = "1.0.0"
 dependencies = [
+ "antikythera-cli",
  "antikythera-core",
  "antikythera-log",
  "antikythera-sdk",

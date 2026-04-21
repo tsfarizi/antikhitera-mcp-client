@@ -88,6 +88,25 @@ enum LoopControl {
     Exit,
 }
 
+const ACCENT: &str = "\x1b[36m";
+const SUCCESS: &str = "\x1b[32m";
+const WARN: &str = "\x1b[33m";
+const DIM: &str = "\x1b[2m";
+const RESET: &str = "\x1b[0m";
+
+const KNOWN_COMMANDS: [&str; 10] = [
+    "help",
+    "config",
+    "config edit",
+    "log",
+    "steps",
+    "agent",
+    "reset",
+    "reload",
+    "exit",
+    "quit",
+];
+
 pub async fn run<P>(client: Arc<McpClient<P>>) -> Result<(), StdioError>
 where
     P: ModelProvider + 'static,
@@ -147,7 +166,10 @@ async fn handle_command<P: ModelProvider>(
     debug!(command = %name, "Processing STDIO command");
 
     match name.as_str() {
-        "" => Ok(LoopControl::Continue),
+        "" => {
+            print_command_recommendations(stdout, "").await?;
+            Ok(LoopControl::Continue)
+        }
         "help" | "?" => {
             print_help(stdout).await?;
             Ok(LoopControl::Continue)
@@ -277,6 +299,7 @@ async fn handle_command<P: ModelProvider>(
                 &format!("Perintah '{other}' tidak dikenal. Gunakan /help untuk bantuan."),
             )
             .await?;
+            print_command_recommendations(stdout, other).await?;
             Ok(LoopControl::Continue)
         }
     }
@@ -596,6 +619,21 @@ async fn print_logs(stdout: &mut io::Stdout, logs: &[String]) -> io::Result<()> 
 }
 
 async fn print_banner(stdout: &mut io::Stdout) -> io::Result<()> {
+    write_line(
+        stdout,
+        &format!("{ACCENT}============================================================{RESET}"),
+    )
+    .await?;
+    write_line(
+        stdout,
+        &format!("{ACCENT}Antikythera Interactive CLI (STDIO / TUI-Style){RESET}"),
+    )
+    .await?;
+    write_line(
+        stdout,
+        &format!("{ACCENT}============================================================{RESET}"),
+    )
+    .await?;
     write_line(stdout, "Mode STDIO interaktif siap digunakan.").await?;
     write_line(
         stdout,
@@ -604,11 +642,18 @@ async fn print_banner(stdout: &mut io::Stdout) -> io::Result<()> {
     .await?;
     write_line(stdout, "Ketik pesan lalu tekan Enter untuk mengirim.").await?;
     write_line(stdout, "Gunakan /help untuk daftar perintah.").await?;
+    write_line(
+        stdout,
+        &format!(
+            "{DIM}Tip: ketik '/' lalu nama perintah sebagian (contoh: /co) untuk rekomendasi.{RESET}"
+        ),
+    )
+    .await?;
     Ok(())
 }
 
 async fn print_help(stdout: &mut io::Stdout) -> io::Result<()> {
-    write_line(stdout, "\nPerintah yang tersedia:").await?;
+    write_line(stdout, &format!("\n{ACCENT}Perintah yang tersedia:{RESET}")).await?;
     write_line(stdout, "  /help               Tampilkan bantuan ini").await?;
     write_line(stdout, "  /config             Lihat konfigurasi MCP aktif").await?;
     write_line(
@@ -647,16 +692,26 @@ async fn print_help(stdout: &mut io::Stdout) -> io::Result<()> {
         "Ketik pesan tanpa awalan / untuk mengirim ke model.",
     )
     .await?;
+    write_line(
+        stdout,
+        &format!("{DIM}Rekomendasi cepat: '/', '/he', '/co', '/ag'.{RESET}"),
+    )
+    .await?;
     Ok(())
 }
 
 async fn prompt(stdout: &mut io::Stdout, state: &SessionState) -> io::Result<()> {
-    let label = if state.agent_mode {
-        "agent> "
-    } else {
-        "chat> "
-    };
-    stdout.write_all(label.as_bytes()).await?;
+    let label = if state.agent_mode { "agent" } else { "chat" };
+    let session_chip = state
+        .session_id
+        .as_ref()
+        .map(|id| {
+            let short = id.chars().take(10).collect::<String>();
+            format!(" {DIM}[session:{short}]{RESET}")
+        })
+        .unwrap_or_default();
+    let rendered = format!("{SUCCESS}{label}{RESET}>{session_chip} ");
+    stdout.write_all(rendered.as_bytes()).await?;
     stdout.flush().await
 }
 
@@ -745,4 +800,69 @@ fn preview(text: &str) -> String {
         result.push(ch);
     }
     result
+}
+
+fn suggest_commands(prefix: &str) -> Vec<&'static str> {
+    let normalized = prefix.trim().to_ascii_lowercase();
+    let mut suggestions: Vec<&'static str> = if normalized.is_empty() {
+        KNOWN_COMMANDS.to_vec()
+    } else {
+        KNOWN_COMMANDS
+            .iter()
+            .copied()
+            .filter(|cmd| cmd.starts_with(&normalized) || cmd.contains(&normalized))
+            .collect()
+    };
+    suggestions.sort_unstable();
+    suggestions.truncate(6);
+    suggestions
+}
+
+async fn print_command_recommendations(
+    stdout: &mut io::Stdout,
+    prefix: &str,
+) -> Result<(), StdioError> {
+    let suggestions = suggest_commands(prefix);
+    if suggestions.is_empty() {
+        write_line(
+            stdout,
+            &format!("{WARN}Tidak ada rekomendasi perintah untuk '/{prefix}'.{RESET}"),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    write_line(
+        stdout,
+        &format!(
+            "{ACCENT}Rekomendasi perintah:{RESET} {}",
+            suggestions.join(", ")
+        ),
+    )
+    .await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::suggest_commands;
+
+    #[test]
+    fn suggest_commands_returns_defaults_for_empty_prefix() {
+        let suggestions = suggest_commands("");
+        assert!(!suggestions.is_empty());
+        assert!(suggestions.contains(&"help"));
+    }
+
+    #[test]
+    fn suggest_commands_matches_partial_input() {
+        let suggestions = suggest_commands("co");
+        assert!(suggestions.iter().any(|value| value.starts_with("config")));
+    }
+
+    #[test]
+    fn suggest_commands_returns_empty_for_unknown_prefix() {
+        let suggestions = suggest_commands("zzzzz");
+        assert!(suggestions.is_empty());
+    }
 }
