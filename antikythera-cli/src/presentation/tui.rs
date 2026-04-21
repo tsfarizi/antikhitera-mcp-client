@@ -7,6 +7,7 @@ use antikythera_core::application::client::{
     ChatRequest, ChatResult, ClientConfigSnapshot, McpClient,
 };
 use antikythera_core::config::{AppConfig, ModelProviderConfig, loader as config_loader};
+use antikythera_core::get_latest_logs;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
@@ -68,12 +69,17 @@ struct ChatApp {
     model: String,
     session_id: Option<String>,
     input: String,
+    /// When true, F2 is active and keystrokes edit `model_input` instead of `input`.
+    editing_model: bool,
+    model_input: String,
     agent_mode: bool,
     status: String,
     tools: usize,
     providers: Vec<ModelProviderConfig>,
     snapshot: ClientConfigSnapshot,
     messages: Vec<UiMessage>,
+    /// Recent log lines pulled from the core logging system (WASM FFI source).
+    log_lines: Vec<String>,
     loading: bool,
     should_quit: bool,
 }
@@ -85,13 +91,16 @@ impl ChatApp {
             model: runtime_config.model.clone(),
             session_id: None,
             input: String::new(),
+            editing_model: false,
+            model_input: String::new(),
             agent_mode: true,
-            status: "Siap. Ketik pesan atau gunakan /help.".to_string(),
+            status: "Siap. Ketik pesan atau gunakan /help. F2 = edit model.".to_string(),
             tools,
             providers: runtime_config.providers.clone(),
             runtime_config,
             snapshot,
             messages: Vec::new(),
+            log_lines: Vec::new(),
             loading: false,
             should_quit: false,
         };
@@ -152,6 +161,20 @@ async fn run_loop(
     mut app: ChatApp,
 ) -> CliResult<()> {
     loop {
+        // Refresh log panel from the core logging system on every frame tick.
+        // This captures entries written by WASM FFI callbacks and agent steps.
+        let session_key = app.session_id.as_deref().unwrap_or("global");
+        let raw_logs = get_latest_logs(session_key, 40);
+        app.log_lines = raw_logs
+            .into_iter()
+            .rev()
+            .map(|entry| {
+                let level = format!("{:?}", entry.level);
+                let source = entry.source.as_deref().unwrap_or("core");
+                format!("[{level:<5}][{source}] {}", entry.message)
+            })
+            .collect();
+
         terminal.draw(|frame| draw(frame, &app))?;
 
         if app.should_quit {
@@ -176,6 +199,28 @@ async fn run_loop(
                     submit_input(&mut client, &mut app).await;
                     app.loading = false;
                 }
+                KeyAction::ApplyModel => {
+                    let new_model = app.model_input.trim().to_string();
+                    app.model_input.clear();
+                    if new_model.is_empty() {
+                        app.status = "Model tidak berubah (input kosong).".to_string();
+                    } else {
+                        match apply_model_selection(&mut app, &new_model.clone()) {
+                            Ok(_) => {
+                                if let Err(err) = reconfigure_runtime(&mut app, &mut client) {
+                                    app.status =
+                                        format!("Gagal menerapkan model: {}", err);
+                                } else {
+                                    app.status =
+                                        format!("Model diperbarui ke {}.", app.model);
+                                }
+                            }
+                            Err(err) => {
+                                app.status = format!("Gagal ganti model: {}", err);
+                            }
+                        }
+                    }
+                }
                 KeyAction::Quit => app.should_quit = true,
             }
         }
@@ -187,12 +232,51 @@ async fn run_loop(
 enum KeyAction {
     None,
     Submit,
+    ApplyModel,
     Quit,
 }
 
 fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
     if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
         return KeyAction::Quit;
+    }
+
+    // F2 toggles model-edit mode.
+    if key.code == KeyCode::F(2) {
+        if app.editing_model {
+            // Pressing F2 again cancels without applying.
+            app.editing_model = false;
+            app.model_input.clear();
+            app.status = "Edit model dibatalkan.".to_string();
+        } else {
+            app.editing_model = true;
+            app.model_input = app.model.clone();
+            app.status = "Edit model aktif. Enter = terapkan, Esc = batal.".to_string();
+        }
+        return KeyAction::None;
+    }
+
+    // While editing model: Enter applies, Esc cancels, other keys edit the model buffer.
+    if app.editing_model {
+        match key.code {
+            KeyCode::Enter => {
+                app.editing_model = false;
+                return KeyAction::ApplyModel;
+            }
+            KeyCode::Esc => {
+                app.editing_model = false;
+                app.model_input.clear();
+                app.status = "Edit model dibatalkan.".to_string();
+            }
+            KeyCode::Backspace => {
+                app.model_input.pop();
+            }
+            KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.model_input.push(ch);
+            }
+            _ => {}
+        }
+        return KeyAction::None;
     }
 
     match key.code {
@@ -476,21 +560,34 @@ fn process_command(
 }
 
 fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
+    // ── Vertical skeleton ───────────────────────────────────────────────────
+    //  [0] header (3 rows)
+    //  [1] content area (min 16 rows)
+    //  [2] prompt / model-edit bar (3 rows)
+    //  [3] footer / status (2 rows)
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
             Constraint::Min(16),
-            Constraint::Length(5),
+            Constraint::Length(3),
             Constraint::Length(2),
         ])
         .split(frame.area());
 
+    // ── Horizontal split: chat | right panel ───────────────────────────────
     let content = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(68), Constraint::Percentage(32)])
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(layout[1]);
 
+    // Right panel: context (top 40%) + WASM/FFI log (bottom 60%)
+    let right_panel = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
+        .split(content[1]);
+
+    // ── Header ──────────────────────────────────────────────────────────────
     let header = Paragraph::new(Line::from(vec![
         Span::styled(
             " Antikythera CLI ",
@@ -508,17 +605,14 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         ),
         Span::raw("  "),
         Span::styled(
-            if app.agent_mode {
-                "Agent Loop"
-            } else {
-                "Direct Chat"
-            },
+            if app.agent_mode { "Agent Loop" } else { "Direct Chat" },
             Style::default().fg(Color::Yellow),
         ),
     ]))
     .block(Block::default().borders(Borders::ALL).title("Session"));
     frame.render_widget(header, layout[0]);
 
+    // ── Conversation ────────────────────────────────────────────────────────
     let messages = app
         .messages
         .iter()
@@ -530,24 +624,69 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         .wrap(Wrap { trim: false });
     frame.render_widget(conversation, content[0]);
 
+    // ── Context sidebar ─────────────────────────────────────────────────────
     let sidebar_items = build_sidebar_items(app)
         .into_iter()
         .map(ListItem::new)
         .collect::<Vec<_>>();
     let sidebar =
         List::new(sidebar_items).block(Block::default().borders(Borders::ALL).title("Context"));
-    frame.render_widget(sidebar, content[1]);
+    frame.render_widget(sidebar, right_panel[0]);
 
-    let input = Paragraph::new(app.input.as_str())
-        .block(Block::default().borders(Borders::ALL).title("Prompt"))
-        .style(if app.loading {
-            Style::default().fg(Color::Yellow)
+    // ── WASM / FFI log panel ────────────────────────────────────────────────
+    let log_items: Vec<ListItem<'_>> = app
+        .log_lines
+        .iter()
+        .map(|line| {
+            let style = if line.contains("[Error]") || line.contains("[ERROR]") {
+                Style::default().fg(Color::Red)
+            } else if line.contains("[Warn]") || line.contains("[WARN]") {
+                Style::default().fg(Color::Yellow)
+            } else if line.contains("[Debug]") || line.contains("[DEBUG]") {
+                Style::default().fg(Color::DarkGray)
+            } else {
+                Style::default().fg(Color::Gray)
+            };
+            ListItem::new(Span::styled(line.clone(), style))
+        })
+        .collect();
+    let log_panel = List::new(log_items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("WASM / FFI Logs")
+            .title_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+    );
+    frame.render_widget(log_panel, right_panel[1]);
+
+    // ── Prompt / model-edit bar ─────────────────────────────────────────────
+    if app.editing_model {
+        let model_bar = Paragraph::new(app.model_input.as_str())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Edit Model  [Enter = terapkan | Esc / F2 = batal]")
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD));
+        frame.render_widget(model_bar, layout[2]);
+    } else {
+        let prompt_title = if app.loading {
+            "Prompt  [mengirim...]"
         } else {
-            Style::default()
-        });
-    frame.render_widget(input, layout[2]);
+            "Prompt  [F2 = edit model]"
+        };
+        let input_widget = Paragraph::new(app.input.as_str())
+            .block(Block::default().borders(Borders::ALL).title(prompt_title))
+            .style(if app.loading {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default()
+            });
+        frame.render_widget(input_widget, layout[2]);
+    }
 
-    if app.input.starts_with('/') {
+    // ── Command autocomplete overlay ────────────────────────────────────────
+    if !app.editing_model && app.input.starts_with('/') {
         let suggestions = app
             .suggestions()
             .into_iter()
@@ -565,27 +704,15 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         );
     }
 
+    // ── Footer / status ──────────────────────────────────────────────────────
     let footer = Paragraph::new(Line::from(vec![
-        Span::styled(
-            "Tab",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" autocomplete  "),
-        Span::styled(
-            "Enter",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" submit  "),
-        Span::styled(
-            "Esc",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled("F2", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+        Span::raw(" edit model  "),
+        Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" quit  "),
         Span::styled(app.status.as_str(), Style::default().fg(Color::Gray)),
     ]))
