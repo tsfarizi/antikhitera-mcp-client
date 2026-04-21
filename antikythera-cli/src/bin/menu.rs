@@ -17,7 +17,6 @@ use antikythera_cli::infrastructure::llm::{
 use antikythera_core::application::agent::multi_agent::task::AgentTask;
 use antikythera_core::application::stdio;
 use antikythera_core::cli::{Cli, RunMode};
-use antikythera_core::infrastructure::wasm::WasmAgentRunner;
 use antikythera_core::{AppConfig, ClientConfig, McpClient};
 use clap::Parser;
 
@@ -94,37 +93,19 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let default_response = r#"{"content":"harness-ok","model":"wasm-harness"}"#.to_string();
     let llm_payload = cli.wasm_llm_response.unwrap_or(default_response);
 
-    let sandbox_result = match WasmAgentRunner::from_file("cli-wasm-harness", Path::new(&wasm_path))
-    {
-        Ok(runner) => {
-            let llm_payload_for_host = llm_payload.clone();
-            let handler = Arc::new(move |_req: String| llm_payload_for_host.clone());
-            let task = AgentTask::new(task_input);
-            let result = runner.run_task(task, handler).await;
-            serde_json::to_value(result)?
-        }
-        Err(err) => serde_json::json!({
-            "success": false,
-            "stage": "load_wasm_module",
-            "error": err.to_string(),
-        }),
-    };
-
     // In harness mode we force stream diagnostics on to expose all runtime phases.
     if !cli.stream {
         eprintln!("[wasm-harness] enabling stream diagnostics for dev tooling output");
     }
     let stream_report = run_wasm_stream_probe(
-        cli.task
-            .as_deref()
-            .unwrap_or("WASM harness smoke test for stream diagnostics"),
+        &task_input,
         &llm_payload,
         true,
     )?;
 
-    println!("== WASM Sandbox Execution ==");
+    println!("== WASM Host FFI Harness ==");
     println!("artifact: {}", wasm_path);
-    println!("{}", serde_json::to_string_pretty(&sandbox_result)?);
+    println!("mode: ffi-host-probe");
     println!();
     println!("{}", render_wasm_stream_report(&stream_report)?);
 
@@ -133,16 +114,9 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
             "artifact": wasm_path,
-            "sandbox": sandbox_result,
             "ffi_stream_probe": stream_report,
         }))?
     );
-
-    if sandbox_result.get("success").and_then(|v| v.as_bool()) == Some(false) {
-        eprintln!(
-            "[wasm-harness] sandbox lane failed; FFI stream probe completed successfully for dev validation"
-        );
-    }
 
     Ok(())
 }

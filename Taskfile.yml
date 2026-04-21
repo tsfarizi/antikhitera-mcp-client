@@ -12,7 +12,6 @@ dotenv:
 vars:
   WASM_TARGET: wasm32-wasip1
   WASM_BINARY: target/{{.WASM_TARGET}}/release/antikythera_sdk.wasm
-  CLI_BINARY: target/release/antikythera{{exeExt}}
   APP_CONFIG: app.pc
 
 tasks:
@@ -28,17 +27,17 @@ tasks:
         echo ""
         echo "  task run           - Run CLI as WASM FFI host harness"
         echo "  task run-wasm      - Run CLI as WASM FFI host harness"
+        echo "  task run-interactive - Run interactive CLI (stdio mode)"
         echo "  task build         - Build WASM component"
         echo "  task build-wasm-harness - Build WASM artifact for FFI host harness"
-        echo "  task build-cli     - Build native CLI binary"
-        echo "  task build-all     - Build both CLI and WASM"
+        echo "  task build-all     - Build all WASM artifacts"
         echo "  task wit           - Generate WIT from Rust code"
         echo "  task clean         - Clean all build artifacts"
         echo "  task clean-wasm    - Clean WASM build artifacts"
-        echo "  task clean-cli     - Clean CLI build artifacts"
         echo "  task check         - Check code without building"
         echo "  task check-wasm    - Check WASM compilation"
         echo "  task test          - Run all tests"
+        echo "  task test-cli-wasm-host - Run CLI host-FFI WASM smoke test"
         echo "  task test-sdk      - Run SDK tests"
         echo "  task test-ffi      - Run FFI tests"
         echo "  task test-component - Run component tests"
@@ -74,22 +73,11 @@ tasks:
       - 'echo "OK WASM harness artifact built: {{.WASM_BINARY}}"'
       - task: size
 
-  build-cli:
-    desc: Build native CLI binary
-    deps:
-      - wit
-    cmds:
-      - echo "Building CLI binary..."
-      - cargo build -p antikythera-cli --release
-      - echo ""
-      - 'echo "OK CLI binary built: {{.CLI_BINARY}}"'
-      - task: size
-
   build-all:
-    desc: Build WASM component and optional native CLI binary
+    desc: Build all WASM artifacts
     cmds:
       - task: build
-      - task: build-cli
+      - task: build-wasm-harness
 
   wit:
     desc: Generate WIT from Rust code
@@ -116,12 +104,19 @@ tasks:
           cargo run -p antikythera-cli --bin antikythera-config -- add-provider local-ollama ollama http://127.0.0.1:11434
           cargo run -p antikythera-cli --bin antikythera-config -- set-model local-ollama llama3.2
         fi
-      - 'cargo run -p antikythera-cli -- --mode wasm-harness --wasm {{.WASM_BINARY}} --task "{{.WASM_TASK}}" --stream {{.CLI_ARGS}}'
+      - 'cargo run -p antikythera-cli --bin antikythera -- --mode wasm-harness --wasm {{.WASM_BINARY}} --task "{{.WASM_TASK}}" --stream {{.CLI_ARGS}}'
 
   run-wasm:
     desc: Alias of run (WASM FFI host harness)
     cmds:
       - task: run
+
+  run-interactive:
+    desc: Run interactive CLI (stdio mode)
+    deps:
+      - wit
+    cmds:
+      - cargo run -p antikythera-cli --bin antikythera -- --mode stdio {{.CLI_ARGS}}
 
   # ===========================================================================
   # Test Tasks
@@ -134,8 +129,19 @@ tasks:
     cmds:
       - echo "Running all tests..."
       - cargo test --workspace
+      - task: test-cli-wasm-host
       - echo ""
       - echo "✓ All tests passed"
+
+  test-cli-wasm-host:
+    desc: Run CLI host-FFI integration smoke test against built WASM artifact
+    deps:
+      - build-wasm-harness
+    cmds:
+      - echo "Running CLI host-FFI WASM smoke test..."
+      - 'cargo run -p antikythera-cli --bin antikythera -- --mode wasm-harness --wasm {{.WASM_BINARY}} --task "CLI host-FFI smoke test" --wasm-llm-response "{\"content\":\"cli-ffi-ok\",\"model\":\"harness\"}" --stream'
+      - echo ""
+      - echo "✓ CLI host-FFI WASM smoke test passed"
 
   test-sdk:
     desc: Run SDK tests
@@ -203,13 +209,6 @@ tasks:
       - rm -rf target/{{.WASM_TARGET}}
       - echo "✓ WASM clean complete"
 
-  clean-cli:
-    desc: Clean CLI build artifacts
-    cmds:
-      - echo "Cleaning CLI artifacts..."
-      - rm -f {{.CLI_BINARY}}
-      - echo "✓ CLI clean complete"
-
   # ===========================================================================
   # Quality Tasks
   # ===========================================================================
@@ -245,17 +244,11 @@ tasks:
       - wasm-tools component wit {{.WASM_BINARY}} || echo "wasm-tools not installed"
 
   size:
-    desc: Show binary sizes
+    desc: Show WASM artifact sizes
     cmds:
       - |
         echo "Binary Sizes:"
         echo "─────────────────────────────────"
-        if [ -f "{{.CLI_BINARY}}" ]; then
-          CLI_SIZE=$(stat -f%z "{{.CLI_BINARY}}" 2>/dev/null || stat -c%s "{{.CLI_BINARY}}" 2>/dev/null || echo "?")
-          echo "  CLI:    $CLI_SIZE bytes"
-        else
-          echo "  CLI:    not built"
-        fi
         if [ -f "{{.WASM_BINARY}}" ]; then
           WASM_SIZE=$(stat -f%z "{{.WASM_BINARY}}" 2>/dev/null || stat -c%s "{{.WASM_BINARY}}" 2>/dev/null || echo "?")
           echo "  WASM:   $WASM_SIZE bytes"
