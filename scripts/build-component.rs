@@ -391,7 +391,7 @@ mod wit_from_rust {
                 continue;
             }
 
-            if trimmed.starts_with("fn ") {
+            if trimmed.starts_with("fn ") || trimmed.starts_with("async fn ") {
                 if let Some(func_wit) = parse_function_signature(trimmed, &pending_doc) {
                     result.push_str(&func_wit);
                 }
@@ -416,6 +416,12 @@ mod wit_from_rust {
             .trim();
 
         // Extract function name and signature
+        let func_line = if let Some(stripped) = func_line.strip_prefix("async ") {
+            stripped.trim_start()
+        } else {
+            func_line
+        };
+
         if !func_line.starts_with("fn ") {
             return None;
         }

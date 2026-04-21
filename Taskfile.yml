@@ -13,7 +13,6 @@ vars:
   WASM_TARGET: wasm32-wasip1
   WASM_BINARY: target/{{.WASM_TARGET}}/release/antikythera_sdk.wasm
   CLI_BINARY: target/release/antikythera{{exeExt}}
-  CONFIG_BINARY: target/release/antikythera-config{{exeExt}}
   APP_CONFIG: app.pc
 
 tasks:
@@ -27,10 +26,10 @@ tasks:
       - |
         echo "Antikythera MCP Framework - Available Tasks"
         echo ""
-        echo "  task run           - Run CLI application"
-        echo "  task run-wasm      - Build and run CLI in WASM harness mode"
+        echo "  task run           - Run CLI as WASM FFI host harness"
+        echo "  task run-wasm      - Run CLI as WASM FFI host harness"
         echo "  task build         - Build WASM component"
-        echo "  task build-wasm-harness - Build WASM artifact for CLI harness"
+        echo "  task build-wasm-harness - Build WASM artifact for FFI host harness"
         echo "  task build-cli     - Build native CLI binary"
         echo "  task build-all     - Build both CLI and WASM"
         echo "  task wit           - Generate WIT from Rust code"
@@ -77,6 +76,8 @@ tasks:
 
   build-cli:
     desc: Build native CLI binary
+    deps:
+      - wit
     cmds:
       - echo "Building CLI binary..."
       - cargo build -p antikythera-cli --release
@@ -85,7 +86,7 @@ tasks:
       - task: size
 
   build-all:
-    desc: Build both CLI and WASM component
+    desc: Build WASM component and optional native CLI binary
     cmds:
       - task: build
       - task: build-cli
@@ -101,27 +102,26 @@ tasks:
   # ===========================================================================
 
   run:
-    desc: Run CLI application
-    cmds:
-      - cargo run -p antikythera-cli {{.CLI_ARGS}}
-
-  run-wasm:
-    desc: Build and run CLI in WASM harness mode automatically
+    desc: Run CLI as WASM FFI host harness (default run path)
     deps:
       - build-wasm-harness
-      - build-cli
     vars:
       WASM_TASK: '{{default "WASM harness smoke test" .WASM_TASK}}'
     cmds:
-      - echo "Running CLI in WASM harness mode..."
+      - echo "Running CLI as WASM FFI host harness..."
       - |
         if [ ! -f "{{.APP_CONFIG}}" ]; then
           echo "Config {{.APP_CONFIG}} not found, bootstrapping default config..."
-          {{.CONFIG_BINARY}} init
-          {{.CONFIG_BINARY}} add-provider local-ollama ollama http://127.0.0.1:11434
-          {{.CONFIG_BINARY}} set-model local-ollama llama3.2
+          cargo run -p antikythera-cli --bin antikythera-config -- init
+          cargo run -p antikythera-cli --bin antikythera-config -- add-provider local-ollama ollama http://127.0.0.1:11434
+          cargo run -p antikythera-cli --bin antikythera-config -- set-model local-ollama llama3.2
         fi
-      - '{{.CLI_BINARY}} --mode wasm-harness --wasm {{.WASM_BINARY}} --task "{{.WASM_TASK}}" --stream {{.CLI_ARGS}}'
+      - 'cargo run -p antikythera-cli -- --mode wasm-harness --wasm {{.WASM_BINARY}} --task "{{.WASM_TASK}}" --stream {{.CLI_ARGS}}'
+
+  run-wasm:
+    desc: Alias of run (WASM FFI host harness)
+    cmds:
+      - task: run
 
   # ===========================================================================
   # Test Tasks
@@ -129,6 +129,8 @@ tasks:
 
   test:
     desc: Run all tests
+    deps:
+      - wit
     cmds:
       - echo "Running all tests..."
       - cargo test --workspace
@@ -165,6 +167,8 @@ tasks:
 
   check:
     desc: Check code without building
+    deps:
+      - wit
     cmds:
       - echo "Checking code..."
       - cargo check --workspace
@@ -173,6 +177,8 @@ tasks:
 
   check-wasm:
     desc: Check WASM compilation
+    deps:
+      - wit
     cmds:
       - echo "Checking WASM compilation..."
       - cargo check -p antikythera-sdk --target {{.WASM_TARGET}}

@@ -58,7 +58,11 @@ record delegating-agent<-h: -host-imports> {
 
 /// HostImports
 interface host-imports {
+  call-llm(request: llm-request) -> result<llm-response, string>;
+  emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
   log-message(event: log-event);
+  save-state(context-id: string, state-json: string) -> result<_, string>;
+  load-state(context-id: string) -> result<option<string>, string>;
 }
 
 /// Combined world exporting both interfaces
