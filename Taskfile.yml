@@ -13,6 +13,11 @@ vars:
   WASM_TARGET: wasm32-wasip1
   WASM_BINARY: target/{{.WASM_TARGET}}/release/antikythera_sdk.wasm
   APP_CONFIG: app.pc
+  PROVIDER_ID: '{{default "local-ollama" .PROVIDER_ID}}'
+  PROVIDER_TYPE: '{{default "ollama" .PROVIDER_TYPE}}'
+  PROVIDER_ENDPOINT: '{{default "http://127.0.0.1:11434" .PROVIDER_ENDPOINT}}'
+  PROVIDER_API_KEY: '{{default "" .PROVIDER_API_KEY}}'
+  MODEL_NAME: '{{default "llama3.2" .MODEL_NAME}}'
 
 tasks:
 
@@ -28,6 +33,8 @@ tasks:
         echo "  task run           - Run CLI as WASM FFI host harness"
         echo "  task run-wasm      - Run CLI as WASM FFI host harness"
         echo "  task run-interactive - Run interactive CLI (stdio mode)"
+        echo "  task run-tui       - Alias for interactive TUI-friendly CLI"
+        echo "  task setup-config  - Setup app.pc with selectable provider"
         echo "  task build         - Build WASM component"
         echo "  task build-wasm-harness - Build WASM artifact for FFI host harness"
         echo "  task build-all     - Build all WASM artifacts"
@@ -99,10 +106,21 @@ tasks:
       - echo "Running CLI as WASM FFI host harness..."
       - |
         if [ ! -f "{{.APP_CONFIG}}" ]; then
-          echo "Config {{.APP_CONFIG}} not found, bootstrapping default config..."
+          echo "Config {{.APP_CONFIG}} not found, bootstrapping selected provider config..."
           cargo run -p antikythera-cli --bin antikythera-config -- init
-          cargo run -p antikythera-cli --bin antikythera-config -- add-provider local-ollama ollama http://127.0.0.1:11434
-          cargo run -p antikythera-cli --bin antikythera-config -- set-model local-ollama llama3.2
+
+          if [ -n "{{.PROVIDER_API_KEY}}" ]; then
+            cargo run -p antikythera-cli --bin antikythera-config -- add-provider {{.PROVIDER_ID}} {{.PROVIDER_TYPE}} {{.PROVIDER_ENDPOINT}} {{.PROVIDER_API_KEY}}
+          else
+            cargo run -p antikythera-cli --bin antikythera-config -- add-provider {{.PROVIDER_ID}} {{.PROVIDER_TYPE}} {{.PROVIDER_ENDPOINT}}
+          fi
+
+          cargo run -p antikythera-cli --bin antikythera-config -- set-model {{.PROVIDER_ID}} {{.MODEL_NAME}}
+
+          echo "Configured provider: id={{.PROVIDER_ID}} type={{.PROVIDER_TYPE}} endpoint={{.PROVIDER_ENDPOINT}} model={{.MODEL_NAME}}"
+          if [ -n "{{.PROVIDER_API_KEY}}" ]; then
+            echo "API key env var: {{.PROVIDER_API_KEY}}"
+          fi
         fi
       - 'cargo run -p antikythera-cli --bin antikythera -- --mode wasm-harness --wasm {{.WASM_BINARY}} --task "{{.WASM_TASK}}" --stream {{.CLI_ARGS}}'
 
@@ -117,6 +135,27 @@ tasks:
       - wit
     cmds:
       - cargo run -p antikythera-cli --bin antikythera -- --mode stdio {{.CLI_ARGS}}
+
+  run-tui:
+    desc: Alias of run-interactive (TUI-friendly)
+    cmds:
+      - task: run-interactive
+
+  setup-config:
+    desc: Setup app.pc with selectable provider/model parameters
+    deps:
+      - wit
+    cmds:
+      - echo "Setting up configuration..."
+      - cargo run -p antikythera-cli --bin antikythera-config -- init || true
+      - |
+        if [ -n "{{.PROVIDER_API_KEY}}" ]; then
+          cargo run -p antikythera-cli --bin antikythera-config -- add-provider {{.PROVIDER_ID}} {{.PROVIDER_TYPE}} {{.PROVIDER_ENDPOINT}} {{.PROVIDER_API_KEY}}
+        else
+          cargo run -p antikythera-cli --bin antikythera-config -- add-provider {{.PROVIDER_ID}} {{.PROVIDER_TYPE}} {{.PROVIDER_ENDPOINT}}
+        fi
+      - cargo run -p antikythera-cli --bin antikythera-config -- set-model {{.PROVIDER_ID}} {{.MODEL_NAME}}
+      - cargo run -p antikythera-cli --bin antikythera-config -- status
 
   # ===========================================================================
   # Test Tasks
