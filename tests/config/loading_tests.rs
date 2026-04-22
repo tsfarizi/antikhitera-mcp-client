@@ -1,54 +1,34 @@
-﻿// Config loading tests - testing AppConfig::load error handling
+﻿// Config loading tests - testing AppConfig::load behavior.
 //
-// Tests focused on configuration file loading and validation errors.
-// Updated to use split config: client.toml + model.toml
+// The application stores all configuration as a single Postcard binary (app.pc).
+// Tests verify: file-not-found error, self-heal on corrupt data, and correct
+// field values on a valid binary.
 
 use antikythera_core::config::{AppConfig, ConfigError};
+use antikythera_core::config::postcard_config::{
+    ModelConfig, PostcardAppConfig, config_to_postcard,
+};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
 
-/// Write client.toml, model.toml, and ui.toml to the temp directory
-fn write_configs(
-    dir: &Path,
-    client_content: &str,
-    model_content: &str,
-    ui_content: &str,
-) -> std::path::PathBuf {
-    let client_path = dir.join("client.toml");
-    let model_path = dir.join("model.toml");
-    let ui_path = dir.join("ui.toml");
-    fs::write(&client_path, client_content).expect("Failed to write client.toml");
-    fs::write(&model_path, model_content).expect("Failed to write model.toml");
-    fs::write(&ui_path, ui_content).expect("Failed to write ui.toml");
-    client_path
+/// Serialize a `PostcardAppConfig` to a temp file and return the path.
+fn write_postcard_config(dir: &Path, config: &PostcardAppConfig) -> std::path::PathBuf {
+    let path = dir.join("app.pc");
+    let data = config_to_postcard(config).expect("Failed to serialize PostcardAppConfig");
+    fs::write(&path, &data).expect("Failed to write app.pc");
+    path
 }
 
-fn minimal_ui() -> &'static str {
-    r#"
-[components.text]
-required_fields = ["content"]
-field_types = { content = "string" }
-is_container = false
-"#
-}
-
-fn minimal_client() -> &'static str {
-    r#"
-[[providers]]
-id = "gemini"
-type = "gemini"
-endpoint = "https://example.com"
-models = ["test"]
-"#
-}
-
-fn minimal_model() -> &'static str {
-    r#"
-default_provider = "gemini"
-model = "test-model"
-prompt_template = "test"
-"#
+/// A minimal valid `PostcardAppConfig` for testing.
+fn minimal_postcard_config() -> PostcardAppConfig {
+    PostcardAppConfig {
+        model: ModelConfig {
+            default_provider: "test-provider".to_string(),
+            model: "test-model".to_string(),
+        },
+        ..Default::default()
+    }
 }
 
 // Split into 5 parts for consistent test organization.

@@ -1,29 +1,25 @@
 ﻿#[test]
-fn uses_default_template_when_prompts_missing() {
+fn uses_default_template_when_prompts_field_is_empty() {
     let dir = tempdir().expect("tempdir");
-    // model.toml without "[prompts]" section
-    let model_content = r#"
-model = "test-model"
-default_provider = "gemini"
-"#;
-    let path = write_configs(dir.path(), minimal_client(), model_content, minimal_ui());
+    // PostcardAppConfig::default() leaves template as the built-in default string.
+    let pc = minimal_postcard_config();
+    let path = write_postcard_config(dir.path(), &pc);
 
-    let config = AppConfig::load(Some(&path)).expect("should load with default template");
+    let config = AppConfig::load(Some(&path)).expect("load config");
     assert!(
         !config.prompt_template().is_empty(),
         "default template should not be empty"
     );
 }
 
-
 #[test]
-fn returns_error_when_no_providers() {
+fn loads_custom_prompt_template_from_postcard() {
     let dir = tempdir().expect("tempdir");
-    // Empty client.toml (no providers)
-    let client_content = r#""#;
-    let path = write_configs(dir.path(), client_content, minimal_model(), minimal_ui());
+    let mut pc = minimal_postcard_config();
+    pc.prompts.template = "Custom system prompt.".to_string();
+    let path = write_postcard_config(dir.path(), &pc);
 
-    let result = AppConfig::load(Some(&path));
-    assert!(matches!(result, Err(ConfigError::NoProvidersConfigured)));
+    let config = AppConfig::load(Some(&path)).expect("load config");
+    assert_eq!(config.prompt_template(), "Custom system prompt.");
 }
 

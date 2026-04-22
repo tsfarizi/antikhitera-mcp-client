@@ -1,12 +1,9 @@
 ﻿#[test]
 fn parses_minimal_valid_config() {
     let dir = tempdir().expect("tempdir");
-    let path = write_configs(
-        dir.path(),
-        minimal_client_config(),
-        minimal_model_config(),
-        minimal_ui_config(),
-    );
+    let mut pc = minimal_postcard_config();
+    pc.prompts.template = "You are a helpful assistant.".to_string();
+    let path = write_postcard_config(dir.path(), &pc);
 
     let config = AppConfig::load(Some(&path)).expect("load config");
 

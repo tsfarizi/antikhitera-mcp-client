@@ -41,6 +41,15 @@ impl ModelProviderConfig {
         )
     }
 
+    /// Returns `true` when the provider type indicates a Gemini / Google AI
+    /// backend.
+    pub fn is_gemini(&self) -> bool {
+        matches!(
+            self.provider_type.to_lowercase().as_str(),
+            "gemini" | "google" | "google-ai"
+        )
+    }
+
     /// Ensure the given model name appears in the models list.
     /// Appends it if it is absent, so the runtime never rejects the selection.
     pub fn ensure_model(&mut self, model: &str) {

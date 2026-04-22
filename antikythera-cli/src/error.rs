@@ -55,7 +55,7 @@ mod tests {
     #[test]
     fn cli_result_ok_wraps_value() {
         let result: CliResult<i32> = Ok(42);
-        assert_eq!(result.unwrap(), 42);
+        assert_eq!(result.ok(), Some(42));
     }
 
     #[test]

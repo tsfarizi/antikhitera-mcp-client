@@ -1,29 +1,25 @@
 ﻿#[test]
-fn returns_error_when_model_missing() {
+fn self_heals_when_postcard_data_is_corrupt() {
     let dir = tempdir().expect("tempdir");
-    // model.toml without "model" field
-    let model_content = r#"
-default_provider = "gemini"
-prompt_template = "test"
-"#;
-    let path = write_configs(dir.path(), minimal_client(), model_content, minimal_ui());
+    let path = dir.path().join("app.pc");
+    fs::write(&path, b"not valid postcard data").expect("write");
 
-    let result = AppConfig::load(Some(&path));
-    assert!(matches!(result, Err(ConfigError::MissingModel)));
+    // Corrupt data triggers self-heal — returns a fresh default rather than an error.
+    let config = AppConfig::load(Some(&path)).expect("self-heal should succeed");
+    assert!(!config.model.is_empty());
+    assert!(!config.default_provider.is_empty());
 }
 
-
 #[test]
-fn returns_error_when_default_provider_missing() {
+fn loads_routing_strings_from_postcard() {
     let dir = tempdir().expect("tempdir");
-    // model.toml without "default_provider" field
-    let model_content = r#"
-model = "test-model"
-prompt_template = "test"
-"#;
-    let path = write_configs(dir.path(), minimal_client(), model_content, minimal_ui());
+    let mut pc = minimal_postcard_config();
+    pc.model.default_provider = "gemini".to_string();
+    pc.model.model = "gemini-1.5-flash".to_string();
+    let path = write_postcard_config(dir.path(), &pc);
 
-    let result = AppConfig::load(Some(&path));
-    assert!(matches!(result, Err(ConfigError::MissingDefaultProvider)));
+    let config = AppConfig::load(Some(&path)).expect("load config");
+    assert_eq!(config.default_provider, "gemini");
+    assert_eq!(config.model, "gemini-1.5-flash");
 }
 
