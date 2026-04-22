@@ -22,7 +22,7 @@
 //! ```
 
 use super::tooling::{ServerManager, ToolServerInterface};
-use crate::config::{AppConfig, ModelProviderConfig, PromptsConfig, ServerConfig, ToolConfig};
+use crate::config::{AppConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::domain::types::MessagePart;
 use crate::domain::types::{ChatMessage, MessageRole};
 use crate::infrastructure::model::{
@@ -61,8 +61,6 @@ pub struct ClientConfig {
     pub tools: Vec<ToolConfig>,
     /// MCP server configurations
     pub servers: Vec<ServerConfig>,
-    /// Available model providers
-    pub providers: Vec<ModelProviderConfig>,
     /// Configurable prompts for agent behavior
     pub prompts: PromptsConfig,
 }
@@ -76,7 +74,6 @@ impl ClientConfig {
             default_system_prompt: None,
             tools: Vec::new(),
             servers: Vec::new(),
-            providers: Vec::new(),
             prompts: PromptsConfig::default(),
         }
     }
@@ -99,21 +96,10 @@ impl ClientConfig {
         self
     }
 
-    /// Set the available model providers.
-    pub fn with_providers(mut self, providers: Vec<ModelProviderConfig>) -> Self {
-        self.providers = providers;
-        self
-    }
-
     /// Set the prompts configuration.
     pub fn with_prompts(mut self, prompts: PromptsConfig) -> Self {
         self.prompts = prompts;
         self
-    }
-
-    /// Get the list of providers.
-    pub fn providers(&self) -> &[ModelProviderConfig] {
-        &self.providers
     }
 
     /// Get the prompt template from prompts config.
@@ -129,7 +115,6 @@ impl ClientConfig {
             system_prompt: self.default_system_prompt.clone(),
             tools: self.tools.clone(),
             servers: self.servers.clone(),
-            providers: self.providers.clone(),
             rest_server: Default::default(),
             prompts: self.prompts.clone(),
         }
@@ -212,7 +197,6 @@ pub struct ClientConfigSnapshot {
     pub prompt_template: String,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
-    pub providers: Vec<ModelProviderConfig>,
     pub raw: String,
 }
 
@@ -262,13 +246,8 @@ impl<P: ModelProvider> McpClient<P> {
             prompt_template,
             tools: app_config.tools.clone(),
             servers: app_config.servers.clone(),
-            providers: app_config.providers.clone(),
             raw,
         }
-    }
-
-    pub fn providers(&self) -> &[ModelProviderConfig] {
-        self.config.providers()
     }
 
     pub fn prompts(&self) -> &PromptsConfig {

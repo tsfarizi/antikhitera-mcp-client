@@ -8,8 +8,9 @@
 //! [`ProviderFactory::create`] is the primary entry point, dispatching on
 //! `provider_type` to instantiate the appropriate concrete client.
 
-use antikythera_core::config::ModelProviderConfig;
 use antikythera_core::infrastructure::model::traits::ModelClient;
+
+use super::types::ModelProviderConfig;
 use std::env;
 use tracing::warn;
 

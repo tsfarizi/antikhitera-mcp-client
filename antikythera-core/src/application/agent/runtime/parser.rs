@@ -1,6 +1,6 @@
 use super::{AgentDirective, AgentError, ToolRuntime, Value};
 use std::time::Instant;
-use tracing::debug;
+use tracing::{debug, warn};
 
 impl ToolRuntime {
     pub fn parse_agent_action(&self, content: &str) -> Result<AgentDirective, AgentError> {
@@ -46,14 +46,45 @@ impl ToolRuntime {
                                 response: response.as_str().unwrap_or("").to_string(),
                             })
                         }
-                        other => Err(AgentError::InvalidResponse(format!(
-                            "unknown action value: {other}"
-                        ))),
+                        other => {
+                            // Unknown action: try to extract a response string using
+                            // the configurable fallback keys.  Extra fields the model
+                            // may add are simply ignored — developers can add proper
+                            // variants to AgentDirective when they need to handle a
+                            // new action type explicitly.
+                            let response = self
+                                .fallback_response_keys
+                                .iter()
+                                .find_map(|k| map.get(k.as_str()).and_then(Value::as_str))
+                                .map(str::to_string)
+                                .unwrap_or_else(|| {
+                                    serde_json::to_string(&Value::Object(map.clone()))
+                                        .unwrap_or_default()
+                                });
+                            warn!(
+                                action = other,
+                                "Unknown action value — treating as final response"
+                            );
+                            Ok(AgentDirective::Final { response })
+                        }
                     }
                 } else {
-                    Err(AgentError::InvalidResponse(
-                        "missing action field in agent response".into(),
-                    ))
+                    // No `action` field: probe the same configurable fallback keys
+                    // before giving up.
+                    let response = self
+                        .fallback_response_keys
+                        .iter()
+                        .find_map(|k| map.get(k.as_str()).and_then(Value::as_str))
+                        .map(str::to_string);
+
+                    if let Some(r) = response {
+                        warn!("No action field in agent response — treating as final response");
+                        Ok(AgentDirective::Final { response: r })
+                    } else {
+                        Err(AgentError::InvalidResponse(
+                            "missing action field in agent response".into(),
+                        ))
+                    }
                 }
             }
             Value::String(text) => self.parse_agent_action(&text),

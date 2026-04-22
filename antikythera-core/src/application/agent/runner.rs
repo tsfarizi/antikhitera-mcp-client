@@ -22,9 +22,15 @@ impl<P: ModelProvider> Agent<P> {
     pub fn new(client: Arc<McpClient<P>>) -> Self {
         let tools = client.tools().to_vec();
         let bridge = client.server_bridge();
+        let fallback_keys: Vec<String> = client
+            .prompts()
+            .fallback_response_keys()
+            .into_iter()
+            .map(str::to_string)
+            .collect();
         Self {
             client,
-            runtime: ToolRuntime::new(tools, bridge),
+            runtime: ToolRuntime::new(tools, bridge).with_fallback_keys(fallback_keys),
         }
     }
 

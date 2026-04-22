@@ -198,7 +198,6 @@ async fn handle_command<P: ModelProvider>(
                         ),
                     )
                     .await?;
-                    write_line(stdout, &format!("- Providers: {}", config.providers.len())).await?;
                     write_line(stdout, &format!("- Servers: {}", config.servers.len())).await?;
                     write_line(stdout, &format!("- Tools: {}", config.tools.len())).await?;
                     write_line(stdout, "").await?;
@@ -505,26 +504,7 @@ async fn show_config<P: ModelProvider>(
         }
     }
 
-    if snapshot.providers.is_empty() {
-        write_line(stdout, "- Providers        : (tidak ada)").await?;
-    } else {
-        write_line(stdout, "- Providers:").await?;
-        for provider in &snapshot.providers {
-            let mut line = format!(
-                "  - {} [{}] -> {}",
-                provider.id, provider.provider_type, provider.endpoint
-            );
-            if !provider.models.is_empty() {
-                let names: Vec<&str> = provider
-                    .models
-                    .iter()
-                    .map(|model| model.name.as_str())
-                    .collect();
-                line.push_str(&format!(" (models: {})", names.join(", ")));
-            }
-            write_line(stdout, &line).await?;
-        }
-    }
+    write_line(stdout, "- Providers        : (dikelola oleh CLI)").await?;
 
     write_line(
         stdout,

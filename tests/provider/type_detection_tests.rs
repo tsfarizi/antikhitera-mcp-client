@@ -1,8 +1,9 @@
 ﻿// Provider config tests - testing ModelProviderConfig behavior
 //
 // Tests for provider type detection and helper methods.
-// Updated to use split config: client.toml + model.toml
+// Updated to use CLI's ModelProviderConfig directly.
 
+use antikythera_cli::infrastructure::llm::{ModelInfo, ModelProviderConfig};
 use antikythera_core::config::AppConfig;
 use std::fs;
 use std::path::Path;

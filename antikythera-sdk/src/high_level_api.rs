@@ -11,6 +11,19 @@ use antikythera_core::infrastructure::model::{
 use std::sync::Arc;
 use thiserror::Error;
 
+/// Lightweight provider descriptor used by the SDK to register host transport backends.
+///
+/// Unlike the CLI-owned `ModelProviderConfig`, this struct only carries the
+/// fields the SDK core needs for routing: an ID and an optional list of model
+/// names that the provider accepts.
+#[derive(Debug, Clone, Default)]
+pub struct ProviderEntry {
+    /// Provider ID (must match the `default_provider` field in `AppConfig`).
+    pub id: String,
+    /// Accepted model names. An empty list means "accept any model".
+    pub models: Vec<String>,
+}
+
 /// High-level MCP client wrapper.
 pub struct Client {
     core_client: Arc<McpClient<DynamicModelProvider>>,
@@ -34,24 +47,36 @@ impl Client {
     }
 
     /// Create a new client that delegates all model calls to a host transport.
+    ///
+    /// `providers` specifies the provider IDs and their accepted model lists so
+    /// the routing layer knows which backends are available.  Pass an empty
+    /// `Vec` to register a single catch-all provider for the `default_provider`
+    /// in `config`.
     pub async fn with_host_transport(
         config: AppConfig,
+        providers: Vec<ProviderEntry>,
         transport: Arc<dyn HostModelTransport>,
     ) -> Result<Self, SdkError> {
         let client_config = Self::build_client_config(&config);
         let mut provider = DynamicModelProvider::new();
 
-        for provider_config in &config.providers {
-            let models = provider_config
-                .models
-                .iter()
-                .map(|model| model.name.clone())
-                .collect();
+        let entries = if providers.is_empty() {
+            // Fallback: register the default provider with an empty model allow-list
+            // (accepts any model name).
+            vec![ProviderEntry {
+                id: config.default_provider.clone(),
+                models: Vec::new(),
+            }]
+        } else {
+            providers
+        };
+
+        for entry in &entries {
             provider = provider.register(
-                provider_config.id.clone(),
-                models,
+                entry.id.clone(),
+                entry.models.clone(),
                 Box::new(HostModelClient::new(
-                    provider_config.id.clone(),
+                    entry.id.clone(),
                     transport.clone(),
                 )),
             );
@@ -68,7 +93,6 @@ impl Client {
         ClientConfig::new(config.default_provider.clone(), config.model.clone())
             .with_tools(config.tools.clone())
             .with_servers(config.servers.clone())
-            .with_providers(config.providers.clone())
             .with_prompts(config.prompts.clone())
     }
 

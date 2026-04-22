@@ -9,7 +9,9 @@
 //! - Transport type handling
 //! - Performance under stress
 
-use antikythera_core::config::{ModelInfo, ModelProviderConfig, ServerConfig, TransportType};
+use antikythera_cli::config::{ModelInfo as PcModelInfo, ProviderConfig};
+use antikythera_cli::infrastructure::llm::{ModelInfo, ModelProviderConfig};
+use antikythera_core::config::{ServerConfig, TransportType};
 use std::collections::HashMap;
 use std::path::PathBuf;
 

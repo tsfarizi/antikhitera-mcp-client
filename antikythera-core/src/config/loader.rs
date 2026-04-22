@@ -5,7 +5,6 @@
 use super::app::{PromptsConfig, RestServerConfig};
 use super::error::ConfigError;
 use super::postcard_config;
-use super::provider::ModelProviderConfig;
 use crate::logging::ConfigLogger;
 use dotenvy::from_filename;
 use std::path::Path;
@@ -37,15 +36,37 @@ pub fn load_config(path: Option<&Path>) -> Result<super::AppConfig, ConfigError>
         source: e,
     })?;
 
-    let config = postcard_config::config_from_postcard(&data)
-        .map_err(|e| ConfigError::CacheError(format!("Postcard deserialize error: {}", e)))?;
+    let config = match postcard_config::config_from_postcard(&data) {
+        Ok(c) => c,
+        Err(e) => {
+            // The binary file is from an older schema version (Postcard is
+            // positional — adding fields invalidates existing blobs).
+            // Back up the stale file and write a fresh default so the
+            // application can start without manual intervention.
+            let logger = ConfigLogger::new("config");
+            logger.warn(format!(
+                "Config schema changed; existing file is unreadable ({}). \
+                 Backing up to {}.bak and writing fresh defaults.",
+                e,
+                config_path.display()
+            ));
+
+            let backup_path = config_path.with_extension("pc.bak");
+            let _ = std::fs::copy(config_path, &backup_path);
+
+            let fresh = postcard_config::PostcardAppConfig::default();
+            if let Ok(fresh_data) = postcard_config::config_to_postcard(&fresh) {
+                let _ = std::fs::write(config_path, fresh_data);
+            }
+            fresh
+        }
+    };
 
     // Log successful load
     let logger = ConfigLogger::new("config");
     logger.info(format!("Config loaded from: {}", config_path.display()));
-    logger.debug(format!("  Providers: {}", config.providers.len()));
     logger.debug(format!(
-        "  Default: {}/{}",
+        "  Routing: {}/{}",
         config.model.default_provider, config.model.model
     ));
 
@@ -90,33 +111,6 @@ fn convert_to_app_config(pc: &postcard_config::PostcardAppConfig) -> super::AppC
         system_prompt: None,
         tools: Vec::new(),
         servers: Vec::new(),
-        providers: pc
-            .providers
-            .iter()
-            .map(|p| ModelProviderConfig {
-                id: p.id.clone(),
-                provider_type: p.provider_type.clone(),
-                endpoint: p.endpoint.clone(),
-                api_key: if p.api_key.is_empty() {
-                    None
-                } else {
-                    Some(p.api_key.clone())
-                },
-                api_path: None,
-                models: p
-                    .models
-                    .iter()
-                    .map(|m| crate::config::provider::ModelInfo {
-                        name: m.name.clone(),
-                        display_name: if m.display_name.is_empty() {
-                            None
-                        } else {
-                            Some(m.display_name.clone())
-                        },
-                    })
-                    .collect(),
-            })
-            .collect(),
         rest_server: RestServerConfig {
             bind: pc.server.bind.clone(),
             cors_origins: pc.server.cors_origins.clone(),
@@ -141,6 +135,11 @@ fn convert_to_app_config(pc: &postcard_config::PostcardAppConfig) -> super::AppC
             language_instructions: opt_nonempty(&pc.prompts.language_instructions),
             agent_max_steps_error: opt_nonempty(&pc.prompts.agent_max_steps_error),
             no_tools_guidance: opt_nonempty(&pc.prompts.no_tools_guidance),
+            fallback_response_keys: if pc.prompts.fallback_response_keys.is_empty() {
+                None
+            } else {
+                Some(pc.prompts.fallback_response_keys.clone())
+            },
         },
     }
 }
@@ -153,7 +152,11 @@ fn opt_nonempty(s: &str) -> Option<String> {
     }
 }
 
-/// Convert AppConfig to Postcard config
+/// Convert AppConfig to Postcard config.
+///
+/// Provider/model fields are not stored in core's `AppConfig`; the caller
+/// is responsible for persisting those via the CLI's own config functions.
+/// This conversion preserves only the core-owned fields (server, prompts).
 fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::PostcardAppConfig {
     postcard_config::PostcardAppConfig {
         server: postcard_config::PostcardServerConfig {
@@ -169,24 +172,9 @@ fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::Pos
                 })
                 .collect(),
         },
-        providers: config
-            .providers
-            .iter()
-            .map(|p| postcard_config::ProviderConfig {
-                id: p.id.clone(),
-                provider_type: p.provider_type.clone(),
-                endpoint: p.endpoint.clone(),
-                api_key: p.api_key.clone().unwrap_or_default(),
-                models: p
-                    .models
-                    .iter()
-                    .map(|m| postcard_config::ModelInfo {
-                        name: m.name.clone(),
-                        display_name: m.display_name.clone().unwrap_or_default(),
-                    })
-                    .collect(),
-            })
-            .collect(),
+        // Provider and model lists are CLI concerns — preserve existing postcard
+        // data rather than overwriting with empty defaults.
+        providers: Vec::new(),
         model: postcard_config::ModelConfig {
             default_provider: config.default_provider.clone(),
             model: config.model.clone(),
@@ -222,6 +210,11 @@ fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::Pos
                 .clone()
                 .unwrap_or_default(),
             no_tools_guidance: config.prompts.no_tools_guidance.clone().unwrap_or_default(),
+            fallback_response_keys: config
+                .prompts
+                .fallback_response_keys
+                .clone()
+                .unwrap_or_default(),
         },
         agent: postcard_config::AgentConfig::default(),
         custom: std::collections::HashMap::new(),

@@ -5,8 +5,9 @@
 //! `antikythera-core` so that the core crate compiles cleanly as a WASM
 //! component without any HTTP dependencies.
 
-use antikythera_core::config::ModelProviderConfig;
 use antikythera_core::constants::DEFAULT_GEMINI_API_PATH;
+
+use super::super::types::ModelProviderConfig;
 use antikythera_core::infrastructure::model::traits::ModelClient;
 use antikythera_core::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
 use async_trait::async_trait;

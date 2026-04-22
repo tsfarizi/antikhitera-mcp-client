@@ -1,8 +1,9 @@
 //! Provider builder — CLI's primary entry-point for constructing a
 //! `DynamicModelProvider` from configured providers.
 
-use antikythera_core::config::ModelProviderConfig;
 use antikythera_core::infrastructure::model::{DynamicModelProvider, ModelError};
+
+use super::types::ModelProviderConfig;
 
 use super::factory::ProviderFactory;
 

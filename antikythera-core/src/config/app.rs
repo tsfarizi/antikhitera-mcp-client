@@ -1,5 +1,4 @@
 use super::error::ConfigError;
-use super::provider::ModelProviderConfig;
 use super::server::ServerConfig;
 use super::tool::ToolConfig;
 use serde::{Deserialize, Serialize};
@@ -63,6 +62,9 @@ pub struct PromptsConfig {
     pub agent_max_steps_error: Option<String>,
     /// Guidance when no tools are available or configured
     pub no_tools_guidance: Option<String>,
+    /// Field names probed in fallback when the model returns an unknown action.
+    /// Defaults to ["response", "content", "message"] when absent.
+    pub fallback_response_keys: Option<Vec<String>>,
 }
 
 impl PromptsConfig {
@@ -183,17 +185,37 @@ impl PromptsConfig {
             .as_deref()
             .unwrap_or(Self::default_no_tools_guidance())
     }
+
+    /// Default fallback response key names
+    pub fn default_fallback_response_keys() -> &'static [&'static str] {
+        &["response", "content", "message"]
+    }
+
+    /// Field names probed when the model returns an unknown action
+    pub fn fallback_response_keys(&self) -> Vec<&str> {
+        match &self.fallback_response_keys {
+            Some(keys) if !keys.is_empty() => keys.iter().map(String::as_str).collect(),
+            _ => Self::default_fallback_response_keys().to_vec(),
+        }
+    }
 }
 
-/// Application configuration loaded from client.toml
+/// Application runtime configuration for the MCP client.
+///
+/// This struct holds only the concerns that `antikythera-core` cares about:
+/// MCP server connections, tool definitions, prompt customisation, and the
+/// REST server bind settings.  Provider/model selection is a CLI concern and
+/// is managed via [`super::postcard_config::PostcardAppConfig`] at the
+/// CLI layer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    /// Preferred provider ID (opaque routing string, not a provider definition).
     pub default_provider: String,
+    /// Preferred model name (opaque routing string).
     pub model: String,
     pub system_prompt: Option<String>,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
-    pub providers: Vec<ModelProviderConfig>,
     /// REST server settings (CORS, docs)
     pub rest_server: RestServerConfig,
     /// Configurable prompts for agent behavior
@@ -208,7 +230,6 @@ impl Default for AppConfig {
             system_prompt: None,
             tools: Vec::new(),
             servers: Vec::new(),
-            providers: Vec::new(),
             rest_server: RestServerConfig::default(),
             prompts: PromptsConfig::default(),
         }

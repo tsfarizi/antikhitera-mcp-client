@@ -4,6 +4,7 @@ use crate::infrastructure::model::types::ModelError;
 use reqwest::Client;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::time::Duration;
 
 /// Base HTTP client with shared functionality
 #[derive(Clone)]
@@ -16,12 +17,12 @@ pub struct HttpClientBase {
 
 impl HttpClientBase {
     pub fn new(id: String, endpoint: String, api_key: Option<String>) -> Self {
-        Self {
-            id,
-            endpoint,
-            api_key,
-            http: Client::new(),
-        }
+        let http = Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(120))
+            .build()
+            .unwrap_or_default();
+        Self { id, endpoint, api_key, http }
     }
 
     /// Build URL from endpoint and path
@@ -86,7 +87,7 @@ impl HttpClientBase {
             .map_err(|e| ModelError::network(&self.id, e.to_string()))
     }
 
-    /// Post JSON with query param auth (for Gemini)
+    /// Post JSON with query parameter authentication
     pub async fn post_with_query_key<Req, Res>(
         &self,
         url: &str,
@@ -112,7 +113,7 @@ impl HttpClientBase {
             .map_err(|e| ModelError::network(&self.id, e.to_string()))
     }
 
-    /// Post JSON without auth (for local services like Ollama)
+    /// Post JSON without authentication
     pub async fn post_no_auth<Req, Res>(&self, url: &str, body: &Req) -> Result<Res, ModelError>
     where
         Req: Serialize,

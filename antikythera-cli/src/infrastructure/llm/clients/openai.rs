@@ -4,8 +4,9 @@
 //! chat completions API (OpenAI, Anthropic via proxy, Mistral, Groq, etc.).
 //! This client is the CLI-owned version; the core crate is free of HTTP deps.
 
-use antikythera_core::config::ModelProviderConfig;
 use antikythera_core::infrastructure::model::traits::ModelClient;
+
+use super::super::types::ModelProviderConfig;
 use antikythera_core::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

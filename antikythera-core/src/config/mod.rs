@@ -10,17 +10,16 @@
 //!
 //! ## Key Types
 //!
-//! - [`AppConfig`] - Main configuration struct
-//! - [`ModelProviderConfig`] - API provider configuration (Gemini, OpenAI, Ollama)
+//! - [`AppConfig`] - Main runtime configuration struct (MCP-protocol concerns only)
 //! - [`PromptsConfig`] - Configurable prompts for agent behavior
 //! - [`ToolConfig`] - Tool definition synced from MCP servers
 //! - [`ServerConfig`] - MCP server connection settings
-//! - [`postcard_config::AppConfig`] - Postcard-based unified config
+//! - [`postcard_config::AppConfig`] - Postcard-based unified config (includes CLI
+//!   provider/model fields; consumed directly by the CLI layer)
 
 pub mod app;
 pub mod error;
 pub mod loader;
-pub mod provider;
 pub mod serializer;
 pub mod server;
 pub mod tool;
@@ -40,7 +39,6 @@ pub use crate::constants::{CONFIG_PATH, ENV_PATH};
 
 pub use app::{AppConfig, DocServerConfig, PromptsConfig};
 pub use error::ConfigError;
-pub use provider::{ModelInfo, ModelProviderConfig};
 pub use server::{ServerConfig, TransportType};
 pub use tool::ToolConfig;
 

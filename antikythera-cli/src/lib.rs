@@ -1,31 +1,41 @@
-//! Antikythera CLI
+//! Antikythera CLI Crate
 //!
-//! Clean Architecture:
-//! - domain/ (core entities & use cases)
-//! - infrastructure/ (LLM providers, config loading)
-//! - presentation/ (TUI)
+//! Organises the CLI binary in **Vertical Slice Architecture** (VSA).
+//! Each feature slice is self-contained — its domain logic, infrastructure
+//! adapters, and presentation code live together rather than being spread
+//! across horizontal layers.
 //!
-//! CLI acts as a thin local surface over the framework runtime.
-//! Model API invocation is host-owned and no longer implemented inside this repository.
-//! Any host, including a native CLI shell, must call the LLM externally and feed the
-//! result back through the framework/session boundary.
+//! ## Feature Slices
+//!
+//! | Slice | Module path | Description |
+//! |-------|------------|-------------|
+//! | **Chat** | `domain/use_cases/chat_use_case` + `presentation/tui` | Interactive TUI chat with tool-call agent loop |
+//! | **WASM Harness** | `domain/use_cases/wasm_harness_use_case` | Diagnostic probe for the WASM/FFI SDK surface |
+//! | **Config** | `config` + `infrastructure/config` | Read/write the unified `app.pc` configuration |
+//! | **Runtime** | `runtime` | Provider auto-detection and `McpClient` wiring |
+//!
+//! ## Shared Infrastructure
+//!
+//! - `infrastructure/llm/` — LLM provider adapters (Gemini, Ollama, OpenAI)
+//! - `error` — `CliError` and `CliResult` used by all slices
+//! - `cli` — Clap argument parser (`Cli` struct, `RunMode` enum)
 
-// Domain layer (innermost, no external deps)
+// Domain layer: entities (shared types) + per-slice use cases
 pub mod domain;
 
-// Infrastructure layer (implements domain ports)
+// Infrastructure layer: LLM adapters and config loader implementations
 pub mod infrastructure;
 
-// Root error contract for CLI public APIs.
+// Shared error contract for all feature slices.
 pub mod error;
 
-// Presentation layer (TUI)
+// Chat slice — presentation (full-screen TUI)
 pub mod presentation;
 
-// Config module (for CLI testing)
+// Config slice — shared AppConfig type and serialization helpers.
 pub mod config;
 
-// Runtime wiring owned by the CLI layer.
+// Runtime slice — provider auto-detection and McpClient wiring.
 pub mod runtime;
 
 // CLI argument parsing (owned by CLI crate, not core).

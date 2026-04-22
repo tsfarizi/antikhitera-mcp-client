@@ -4,12 +4,11 @@
 
 #[test]
 fn test_sql_injection_in_provider_id() {
-    let config = ModelProviderConfig {
+    let config = ProviderConfig {
         id: "'; DROP TABLE providers; --".to_string(),
         provider_type: "test".to_string(),
         endpoint: "https://api.example.com".to_string(),
-        api_key: None,
-        api_path: None,
+        api_key: String::new(),
         models: vec![],
     };
 

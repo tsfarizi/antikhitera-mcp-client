@@ -3,20 +3,22 @@ use std::sync::Arc;
 use crate::CliError;
 use crate::CliResult;
 use crate::infrastructure::llm::build_provider_from_configs;
-use antikythera_core::config::{ModelInfo, ModelProviderConfig};
+use crate::infrastructure::llm::{ModelInfo, ModelProviderConfig};
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use antikythera_core::{AppConfig, ClientConfig, McpClient};
 
-pub fn build_runtime_client(config: &AppConfig) -> CliResult<Arc<McpClient<DynamicModelProvider>>> {
-    let provider = build_provider_from_configs(&config.providers)
+pub fn build_runtime_client(
+    config: &AppConfig,
+    providers: &[ModelProviderConfig],
+) -> CliResult<Arc<McpClient<DynamicModelProvider>>> {
+    let provider = build_provider_from_configs(providers)
         .map_err(|error| CliError::Validation(error.user_message()))?;
 
     let mut client_config =
         ClientConfig::new(config.default_provider.clone(), config.model.clone())
             .with_tools(config.tools.clone())
             .with_servers(config.servers.clone())
-            .with_prompts(config.prompts.clone())
-            .with_providers(config.providers.clone());
+            .with_prompts(config.prompts.clone());
 
     if let Some(system) = config.system_prompt.clone() {
         client_config = client_config.with_system_prompt(system);
@@ -27,13 +29,15 @@ pub fn build_runtime_client(config: &AppConfig) -> CliResult<Arc<McpClient<Dynam
 
 pub fn materialize_runtime_config(
     base: &AppConfig,
+    initial_providers: &[ModelProviderConfig],
     provider_override: Option<&str>,
     model_override: Option<&str>,
     provider_endpoint_override: Option<&str>,
     ollama_url: Option<&str>,
     system_override: Option<&str>,
-) -> CliResult<AppConfig> {
+) -> CliResult<(AppConfig, Vec<ModelProviderConfig>)> {
     let mut config = base.clone();
+    let mut providers = initial_providers.to_vec();
 
     if let Some(system) = system_override
         .map(str::trim)
@@ -65,29 +69,26 @@ pub fn materialize_runtime_config(
         })
         .unwrap_or_else(|| default_model_for_provider(&default_provider).to_string());
 
-    if config
-        .providers
+    if providers
         .iter()
         .all(|provider| provider.id != default_provider)
         && let Some(template) = default_provider_template(&default_provider)
     {
-        config.providers.push(template);
+        providers.push(template);
     }
 
     apply_provider_overrides(
-        &mut config.providers,
+        &mut providers,
         &default_provider,
         provider_endpoint_override,
         ollama_url,
     );
 
-    let Some(selected_provider) = config
-        .providers
+    let Some(selected_provider) = providers
         .iter_mut()
         .find(|provider| provider.id == default_provider)
     else {
-        let available = config
-            .providers
+        let available = providers
             .iter()
             .map(|provider| provider.id.as_str())
             .collect::<Vec<_>>()
@@ -117,7 +118,7 @@ pub fn materialize_runtime_config(
     config.default_provider = default_provider;
     config.model = model;
 
-    Ok(config)
+    Ok((config, providers))
 }
 
 fn apply_provider_overrides(
@@ -235,16 +236,20 @@ mod tests {
             system_prompt: None,
             tools: Vec::new(),
             servers: Vec::new(),
-            providers: vec![default_provider_template("ollama").expect("ollama template")],
             rest_server: Default::default(),
             prompts: Default::default(),
         }
     }
 
+    fn sample_providers() -> Vec<ModelProviderConfig> {
+        vec![default_provider_template("ollama").expect("ollama template")]
+    }
+
     #[test]
     fn materialize_runtime_config_can_auto_add_gemini_template() {
-        let runtime = materialize_runtime_config(
+        let (runtime, providers) = materialize_runtime_config(
             &sample_config(),
+            &sample_providers(),
             Some("gemini"),
             Some("gemini-2.0-flash"),
             None,
@@ -255,8 +260,7 @@ mod tests {
         assert_eq!(runtime.default_provider, "gemini");
         assert_eq!(runtime.model, "gemini-2.0-flash");
         assert!(
-            runtime
-                .providers
+            providers
                 .iter()
                 .any(|provider| provider.id == "gemini")
         );
@@ -264,8 +268,9 @@ mod tests {
 
     #[test]
     fn materialize_runtime_config_applies_selected_endpoint_override() {
-        let runtime = materialize_runtime_config(
+        let (runtime, providers) = materialize_runtime_config(
             &sample_config(),
+            &sample_providers(),
             Some("openai"),
             Some("gpt-4o-mini"),
             Some("https://example-openai-proxy.test"),
@@ -273,12 +278,12 @@ mod tests {
             None,
         )
         .expect("runtime config");
-        let provider = runtime
-            .providers
+        let provider = providers
             .iter()
             .find(|provider| provider.id == "openai")
             .expect("openai provider present");
         assert_eq!(provider.endpoint, "https://example-openai-proxy.test");
+        let _ = runtime;
     }
 
     #[test]

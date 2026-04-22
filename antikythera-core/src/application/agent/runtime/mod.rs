@@ -20,6 +20,7 @@ pub struct ToolRuntime {
     index: HashMap<String, ToolConfig>,
     bridge: Arc<dyn ToolServerInterface>,
     execution_semaphore: Arc<Semaphore>,
+    pub(super) fallback_response_keys: Vec<String>,
 }
 
 impl ToolRuntime {
@@ -35,6 +36,15 @@ impl ToolRuntime {
             index,
             bridge,
             execution_semaphore: Arc::new(Semaphore::new(10)), // Default limit to 10 concurrent tools
+            fallback_response_keys: vec!["response".into(), "content".into(), "message".into()],
         }
+    }
+
+    /// Override the fallback response keys used when parsing unknown action values.
+    pub fn with_fallback_keys(mut self, keys: Vec<String>) -> Self {
+        if !keys.is_empty() {
+            self.fallback_response_keys = keys;
+        }
+        self
     }
 }

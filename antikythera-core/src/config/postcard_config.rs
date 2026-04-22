@@ -140,6 +140,8 @@ pub struct PromptsConfig {
     pub language_instructions: String,
     pub agent_max_steps_error: String,
     pub no_tools_guidance: String,
+    /// Field names probed in fallback when the model returns an unknown action
+    pub fallback_response_keys: Vec<String>,
 }
 
 impl Default for PromptsConfig {
@@ -155,6 +157,7 @@ impl Default for PromptsConfig {
             language_instructions: "Detect the user's language automatically and answer using that same language.".to_string(),
             agent_max_steps_error: "agent exceeded the maximum number of tool interactions".to_string(),
             no_tools_guidance: "No additional tools are currently configured.".to_string(),
+            fallback_response_keys: vec!["response".into(), "content".into(), "message".into()],
         }
     }
 }

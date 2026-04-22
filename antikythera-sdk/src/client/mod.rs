@@ -37,16 +37,6 @@ impl WasmClient {
         let config: serde_json::Value = serde_json::from_str(config_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid JSON config: {}", e)))?;
 
-        let providers_value = config.get("providers")
-            .ok_or_else(|| JsValue::from_str("Missing 'providers' in config"))?;
-
-        let providers: Vec<antikythera_core::config::ModelProviderConfig> =
-            serde_json::from_value(providers_value.clone())
-                .map_err(|e| JsValue::from_str(&format!("Invalid providers: {}", e)))?;
-
-        let provider = DynamicModelProvider::from_configs(&providers)
-            .map_err(|e| JsValue::from_str(&format!("Failed to create provider: {}", e)))?;
-
         let default_provider = config.get("default_provider")
             .and_then(|v| v.as_str())
             .unwrap_or("ollama")
@@ -57,6 +47,10 @@ impl WasmClient {
             .unwrap_or("llama3")
             .to_string();
 
+        // Provider registration is handled externally (hosts inject ModelClient
+        // implementations). The WASM browser client starts with an empty provider
+        // that returns errors until a backend is registered via the host bridge.
+        let provider = DynamicModelProvider::new();
         let client_config = ClientConfig::new(default_provider, model);
         let core_client = Arc::new(McpClient::new(provider, client_config));
 

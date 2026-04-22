@@ -1,3 +1,12 @@
+//! WASM Harness Feature Slice — Domain Use Case
+//!
+//! This module is the **domain core** of the WASM Harness diagnostic slice.
+//! It exercises the full SDK/FFI surface in a deterministic, host-side probe
+//! and produces a `WasmStreamProbeReport` that can be rendered for developers.
+//!
+//! All SDK calls are synchronous (the WASM runner is synchronous by design).
+//! No network I/O is performed — the probe drives only in-process state.
+
 use antikythera_sdk::{
     AgentState, PromptVariables, SloSnapshot, StreamEvent, TelemetrySnapshot, ToolRegistry,
     append_llm_chunk, build_llm_messages, build_system_prompt, commit_llm_response,

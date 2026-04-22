@@ -1,16 +1,13 @@
 ﻿#[test]
 fn provider_type_mixed_case() {
-    let dir = tempdir().expect("tempdir");
-    let client_content = r#"
-[[providers]]
-id = "test"
-type = "OlLaMa"
-endpoint = "http://localhost:11434"
-models = ["test"]
-"#;
-    let path = write_configs(dir.path(), client_content, minimal_model(), minimal_ui());
-
-    let config = AppConfig::load(Some(&path)).expect("load config");
-    assert!(config.providers[0].is_ollama());
-    assert!(!config.providers[0].is_gemini());
+    let config = ModelProviderConfig {
+        id: "test".to_string(),
+        provider_type: "OlLaMa".to_string(),
+        endpoint: "http://localhost:11434".to_string(),
+        api_key: None,
+        api_path: None,
+        models: vec![],
+    };
+    assert!(config.is_ollama());
+    assert!(!config.is_gemini());
 }

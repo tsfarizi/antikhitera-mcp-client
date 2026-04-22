@@ -21,9 +21,6 @@ use std::collections::{HashMap, HashSet};
 use super::traits::{ModelClient, ModelProvider};
 use super::types::{ModelError, ModelRequest, ModelResponse};
 
-#[cfg(feature = "http-providers")]
-use crate::config::ModelProviderConfig;
-
 /// Runtime container for a provider backend
 struct ProviderRuntime {
     models: HashSet<String>,
@@ -39,9 +36,7 @@ impl ProviderRuntime {
 /// Dynamic model provider that routes requests to appropriate backends.
 ///
 /// This is a pure routing layer — it contains no HTTP client code.
-/// Use [`register`](Self::register) to add backends directly, or
-/// [`from_configs`](Self::from_configs) (requires `http-providers` feature)
-/// to build the provider from a config list.
+/// Use [`register`](Self::register) to add backends directly.
 #[derive(Default)]
 pub struct DynamicModelProvider {
     backends: HashMap<String, ProviderRuntime>,
@@ -76,18 +71,6 @@ impl DynamicModelProvider {
         };
         self.backends.insert(id.into(), runtime);
         self
-    }
-
-    /// Compatibility shim kept for older call sites.
-    ///
-    /// The framework no longer instantiates HTTP model clients from config.
-    /// Hosts must register a delegated [`ModelClient`] explicitly or use the
-    /// prepare/complete chat flow.
-    #[cfg(feature = "http-providers")]
-    pub fn from_configs(_configs: &[ModelProviderConfig]) -> Result<Self, ModelError> {
-        Err(ModelError::unsupported(
-            "Inisialisasi provider model dari konfigurasi sudah dinonaktifkan. Host harus menyuntikkan ModelClient sendiri atau gunakan alur prepare/complete chat.",
-        ))
     }
 
     /// Check if a backend for the given provider ID is registered.

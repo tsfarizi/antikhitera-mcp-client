@@ -4,12 +4,11 @@
 
 #[test]
 fn test_empty_provider_id() {
-    let config = ModelProviderConfig {
+    let config = ProviderConfig {
         id: "".to_string(),
         provider_type: "test".to_string(),
         endpoint: "https://api.example.com".to_string(),
-        api_key: None,
-        api_path: None,
+        api_key: String::new(),
         models: vec![],
     };
 
@@ -36,12 +35,11 @@ fn test_empty_server_name() {
 
 #[test]
 fn test_model_provider_with_no_models() {
-    let config = ModelProviderConfig {
+    let config = ProviderConfig {
         id: "empty".to_string(),
         provider_type: "test".to_string(),
         endpoint: "https://api.example.com".to_string(),
-        api_key: None,
-        api_path: None,
+        api_key: String::new(),
         models: vec![],
     };
 
@@ -50,11 +48,11 @@ fn test_model_provider_with_no_models() {
 
 #[test]
 fn test_model_info_without_display_name() {
-    let model = ModelInfo {
+    let model = PcModelInfo {
         name: "model".to_string(),
-        display_name: None,
+        display_name: String::new(),
     };
 
-    assert_eq!(model.display_name, None);
+    assert!(model.display_name.is_empty());
 }
 

@@ -5,12 +5,11 @@
 #[test]
 fn test_many_providers_in_config() {
     for i in 0..1000 {
-        let config = ModelProviderConfig {
+        let config = ProviderConfig {
             id: format!("provider-{}", i),
             provider_type: "test".to_string(),
             endpoint: format!("https://api.example.com/provider-{}", i),
-            api_key: Some(format!("key-{}", i)),
-            api_path: Some(format!("/api/v{}", i)),
+            api_key: format!("key-{}", i),
             models: vec![],
         };
 
@@ -42,18 +41,17 @@ fn test_many_servers_in_config() {
 fn test_large_model_list() {
     let mut models = vec![];
     for i in 0..10_000 {
-        models.push(ModelInfo {
+        models.push(PcModelInfo {
             name: format!("model-{}", i),
-            display_name: Some(format!("Model {}", i)),
+            display_name: format!("Model {}", i),
         });
     }
 
-    let config = ModelProviderConfig {
+    let config = ProviderConfig {
         id: "massive".to_string(),
         provider_type: "test".to_string(),
         endpoint: "https://api.example.com".to_string(),
-        api_key: None,
-        api_path: None,
+        api_key: String::new(),
         models,
     };
 

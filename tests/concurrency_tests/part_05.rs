@@ -2,29 +2,23 @@
 async fn test_high_concurrency_execution() {
     let file_config = AppConfig::default();
 
-    if file_config.providers.is_empty() {
+    // Load providers from the postcard binary config (CLI layer owns provider definitions).
+    let providers = load_app_config(None)
+        .map(|pc| providers_from_postcard(&pc.providers))
+        .unwrap_or_default();
+
+    if providers.is_empty() {
         println!("Skipping real integration execution: No providers found in config.");
         return;
     }
 
-    let provider = match DynamicModelProvider::from_configs(&file_config.providers) {
-        Ok(p) => p,
+    let client = match build_runtime_client(&file_config, &providers) {
+        Ok(c) => c,
         Err(e) => {
             println!("Skipping due to provider init failure: {}", e);
             return;
         }
     };
-
-    let client_config = ClientConfig::new(
-        file_config.default_provider.clone(),
-        file_config.model.clone(),
-    )
-    .with_tools(file_config.tools.clone())
-    .with_servers(file_config.servers.clone())
-    .with_prompts(file_config.prompts.clone())
-    .with_providers(file_config.providers.clone());
-
-    let client = Arc::new(McpClient::new(provider, client_config));
     let service = Arc::new(ChatService::new(client));
 
     let mut tasks = vec![];
@@ -50,6 +44,8 @@ async fn test_high_concurrency_execution() {
                     true, // agent enabled
                     Some(1),
                     true, // debug mode
+                    String::new(),
+                    String::new(),
                 )
                 .await;
 

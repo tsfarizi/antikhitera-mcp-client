@@ -12,8 +12,10 @@ use std::sync::Arc;
 
 use antikythera_cli::domain::use_cases::{render_wasm_stream_report, run_wasm_stream_probe};
 use antikythera_cli::infrastructure::llm::install_terminal_stream_sink;
+use antikythera_cli::infrastructure::llm::providers_from_postcard;
 use antikythera_cli::presentation::tui;
 use antikythera_cli::runtime::{build_runtime_client, materialize_runtime_config};
+use antikythera_cli::config::load_app_config;
 use antikythera_core::application::agent::multi_agent::task::AgentTask;
 use antikythera_cli::cli::{Cli, RunMode};
 use antikythera_core::infrastructure::model::DynamicModelProvider;
@@ -35,8 +37,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_path = cli.config.as_deref().map(Path::new);
     let config = AppConfig::load(config_path)?;
-    let runtime_config = materialize_runtime_config(
+    // Load provider definitions from the postcard config (CLI persistence layer).
+    let pc_config = load_app_config(config_path).unwrap_or_default();
+    let initial_providers = providers_from_postcard(&pc_config.providers);
+    let (runtime_config, providers) = materialize_runtime_config(
         &config,
+        &initial_providers,
         cli.provider.as_deref(),
         cli.model.as_deref(),
         cli.provider_endpoint.as_deref(),
@@ -52,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match mode {
         RunMode::Stdio => {
-            tui::run_chat_app(runtime_config).await?;
+            tui::run_chat_app(runtime_config, providers).await?;
         }
         RunMode::Setup => {
             eprintln!(
@@ -61,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         RunMode::MultiAgent => {
-            let client = build_runtime_client(&runtime_config)?;
+            let client = build_runtime_client(&runtime_config, &providers)?;
             run_multi_agent(cli, client).await?;
         }
         RunMode::WasmHarness => {

@@ -6,9 +6,11 @@ use antikythera_core::application::agent::{Agent, AgentOptions, AgentOutcome, Ag
 use antikythera_core::application::client::{
     ChatRequest, ChatResult, ClientConfigSnapshot, McpClient,
 };
-use antikythera_core::config::{AppConfig, ModelProviderConfig, loader as config_loader};
+use antikythera_core::config::{AppConfig, PromptsConfig};
 use antikythera_core::get_latest_logs;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
+use crate::config::{save_app_config, AppConfig as PostcardAppConfig, ModelConfig as PostcardModelConfig};
+use crate::infrastructure::llm::{ModelProviderConfig, providers_to_postcard};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -16,15 +18,197 @@ use crossterm::terminal::{
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+
+use tokio::sync::oneshot;
 
 use crate::CliResult;
 use crate::runtime::{build_runtime_client, materialize_runtime_config};
 
 const MAX_VISIBLE_MESSAGES: usize = 12;
+
+/// Result received from a spawned chat or agent task via a oneshot channel.
+enum PendingResponse {
+    Chat(Result<ChatResult, String>),
+    Agent(Result<AgentOutcome, String>),
+}
+
+// ── Settings Panel types ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsTab {
+    Provider = 0,
+    Model    = 1,
+    Prompts  = 2,
+    System   = 3,
+    Agent    = 4,
+}
+
+impl SettingsTab {
+    const COUNT: usize = 5;
+    const ALL: [SettingsTab; 5] = [
+        SettingsTab::Provider,
+        SettingsTab::Model,
+        SettingsTab::Prompts,
+        SettingsTab::System,
+        SettingsTab::Agent,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Provider => "Provider",
+            Self::Model    => "Model",
+            Self::Prompts  => "Prompts",
+            Self::System   => "System Prompt",
+            Self::Agent    => "Agent",
+        }
+    }
+
+    fn next(self) -> Self { Self::ALL[(self as usize + 1) % Self::COUNT] }
+    fn prev(self) -> Self { Self::ALL[(self as usize + Self::COUNT - 1) % Self::COUNT] }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PromptField {
+    Template            = 0,
+    ToolGuidance        = 1,
+    FallbackGuidance    = 2,
+    JsonRetryMessage    = 3,
+    ToolResultInstr     = 4,
+    AgentInstructions   = 5,
+    UiInstructions      = 6,
+    LanguageInstructions = 7,
+    AgentMaxStepsError  = 8,
+    NoToolsGuidance     = 9,
+}
+
+impl PromptField {
+    const COUNT: usize = 10;
+    const ALL: [PromptField; 10] = [
+        PromptField::Template,
+        PromptField::ToolGuidance,
+        PromptField::FallbackGuidance,
+        PromptField::JsonRetryMessage,
+        PromptField::ToolResultInstr,
+        PromptField::AgentInstructions,
+        PromptField::UiInstructions,
+        PromptField::LanguageInstructions,
+        PromptField::AgentMaxStepsError,
+        PromptField::NoToolsGuidance,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Template             => "Template",
+            Self::ToolGuidance         => "Tool Guidance",
+            Self::FallbackGuidance     => "Fallback Guidance",
+            Self::JsonRetryMessage     => "JSON Retry Msg",
+            Self::ToolResultInstr      => "Tool Result Instr",
+            Self::AgentInstructions    => "Agent Instructions",
+            Self::UiInstructions       => "UI Instructions",
+            Self::LanguageInstructions => "Language Instr",
+            Self::AgentMaxStepsError   => "Max Steps Error",
+            Self::NoToolsGuidance      => "No Tools Guidance",
+        }
+    }
+
+    fn get_from(self, p: &PromptsConfig) -> String {
+        match self {
+            Self::Template             => p.template().to_string(),
+            Self::ToolGuidance         => p.tool_guidance().to_string(),
+            Self::FallbackGuidance     => p.fallback_guidance().to_string(),
+            Self::JsonRetryMessage     => p.json_retry_message().to_string(),
+            Self::ToolResultInstr      => p.tool_result_instruction().to_string(),
+            Self::AgentInstructions    => p.agent_instructions().to_string(),
+            Self::UiInstructions       => p.ui_instructions().to_string(),
+            Self::LanguageInstructions => p.language_instructions().to_string(),
+            Self::AgentMaxStepsError   => p.agent_max_steps_error().to_string(),
+            Self::NoToolsGuidance      => p.no_tools_guidance().to_string(),
+        }
+    }
+
+    fn set_into(self, p: &mut PromptsConfig, value: String) {
+        let v = if value.is_empty() { None } else { Some(value) };
+        match self {
+            Self::Template             => p.template = v,
+            Self::ToolGuidance         => p.tool_guidance = v,
+            Self::FallbackGuidance     => p.fallback_guidance = v,
+            Self::JsonRetryMessage     => p.json_retry_message = v,
+            Self::ToolResultInstr      => p.tool_result_instruction = v,
+            Self::AgentInstructions    => p.agent_instructions = v,
+            Self::UiInstructions       => p.ui_instructions = v,
+            Self::LanguageInstructions => p.language_instructions = v,
+            Self::AgentMaxStepsError   => p.agent_max_steps_error = v,
+            Self::NoToolsGuidance      => p.no_tools_guidance = v,
+        }
+    }
+}
+
+struct SettingsPanel {
+    open: bool,
+    tab: SettingsTab,
+    provider_cursor: usize,
+    model_cursor: usize,
+    prompt_cursor: usize,
+    editing: bool,
+    edit_buffer: String,
+    pending_provider_idx: usize,
+    pending_model_idx: usize,
+    pending_system_prompt: String,
+    pending_prompts: PromptsConfig,
+    pending_agent_mode: bool,
+}
+
+impl SettingsPanel {
+    fn new() -> Self {
+        Self {
+            open: false,
+            tab: SettingsTab::Provider,
+            provider_cursor: 0,
+            model_cursor: 0,
+            prompt_cursor: 0,
+            editing: false,
+            edit_buffer: String::new(),
+            pending_provider_idx: 0,
+            pending_model_idx: 0,
+            pending_system_prompt: String::new(),
+            pending_prompts: PromptsConfig::default(),
+            pending_agent_mode: true,
+        }
+    }
+
+    fn open_with(
+        &mut self,
+        app_provider: &str,
+        app_model: &str,
+        config: &AppConfig,
+        providers: &[ModelProviderConfig],
+        agent_mode: bool,
+    ) {
+        self.open = true;
+        self.tab = SettingsTab::Provider;
+        self.editing = false;
+        self.edit_buffer.clear();
+        self.pending_system_prompt = config.system_prompt.clone().unwrap_or_default();
+        self.pending_prompts = config.prompts.clone();
+        self.pending_agent_mode = agent_mode;
+        self.pending_provider_idx = providers
+            .iter()
+            .position(|p| p.id == app_provider)
+            .unwrap_or(0);
+        self.provider_cursor = self.pending_provider_idx;
+        self.pending_model_idx = providers
+            .get(self.pending_provider_idx)
+            .and_then(|p| p.models.iter().position(|m| m.name == app_model))
+            .unwrap_or(0);
+        self.model_cursor = self.pending_model_idx;
+        self.prompt_cursor = 0;
+    }
+}
+
 const SLASH_COMMANDS: [(&str, &str); 10] = [
     ("help", "Tampilkan perintah yang tersedia"),
     ("providers", "Tampilkan provider dan model yang tersedia"),
@@ -69,9 +253,7 @@ struct ChatApp {
     model: String,
     session_id: Option<String>,
     input: String,
-    /// When true, F2 is active and keystrokes edit `model_input` instead of `input`.
-    editing_model: bool,
-    model_input: String,
+    settings: SettingsPanel,
     agent_mode: bool,
     status: String,
     tools: usize,
@@ -82,27 +264,30 @@ struct ChatApp {
     log_lines: Vec<String>,
     loading: bool,
     should_quit: bool,
+    /// In-flight request receiver. Set when a chat/agent task has been spawned;
+    /// cleared when the result arrives or the channel is closed.
+    pending_rx: Option<oneshot::Receiver<PendingResponse>>,
 }
 
 impl ChatApp {
-    fn new(runtime_config: AppConfig, snapshot: ClientConfigSnapshot, tools: usize) -> Self {
+    fn new(runtime_config: AppConfig, providers: Vec<ModelProviderConfig>, snapshot: ClientConfigSnapshot, tools: usize) -> Self {
         let mut app = Self {
             provider: runtime_config.default_provider.clone(),
             model: runtime_config.model.clone(),
             session_id: None,
             input: String::new(),
-            editing_model: false,
-            model_input: String::new(),
+            settings: SettingsPanel::new(),
             agent_mode: true,
-            status: "Siap. Ketik pesan atau gunakan /help. F2 = edit model.".to_string(),
+            status: "Siap. Ketik pesan atau /help. F2 = Settings Panel.".to_string(),
             tools,
-            providers: runtime_config.providers.clone(),
+            providers,
             runtime_config,
             snapshot,
             messages: Vec::new(),
             log_lines: Vec::new(),
             loading: false,
             should_quit: false,
+            pending_rx: None,
         };
         app.messages.push(UiMessage::new(
             "Welcome",
@@ -136,7 +321,7 @@ impl ChatApp {
     }
 }
 
-pub async fn run_chat_app(config: AppConfig) -> CliResult<()> {
+pub async fn run_chat_app(config: AppConfig, providers: Vec<ModelProviderConfig>) -> CliResult<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -144,10 +329,10 @@ pub async fn run_chat_app(config: AppConfig) -> CliResult<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let client = build_runtime_client(&config)?;
+    let client = build_runtime_client(&config, &providers)?;
     let snapshot = client.config_snapshot();
     let tools = client.tools().len();
-    let result = run_loop(&mut terminal, client, ChatApp::new(config, snapshot, tools)).await;
+    let result = run_loop(&mut terminal, client, ChatApp::new(config, providers, snapshot, tools)).await;
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -161,6 +346,40 @@ async fn run_loop(
     mut app: ChatApp,
 ) -> CliResult<()> {
     loop {
+        // Poll for a completed in-flight request spawned in a previous iteration.
+        if let Some(mut rx) = app.pending_rx.take() {
+            use tokio::sync::oneshot::error::TryRecvError;
+            match rx.try_recv() {
+                Ok(PendingResponse::Chat(Ok(result))) => {
+                    app.loading = false;
+                    apply_chat_result(&mut app, result);
+                }
+                Ok(PendingResponse::Chat(Err(msg))) => {
+                    app.loading = false;
+                    app.status = "Model gagal menjawab.".to_string();
+                    app.push_message(UiMessage::new("Model Error", msg, UiTone::Error));
+                }
+                Ok(PendingResponse::Agent(Ok(outcome))) => {
+                    app.loading = false;
+                    apply_agent_outcome(&mut app, outcome);
+                }
+                Ok(PendingResponse::Agent(Err(msg))) => {
+                    app.loading = false;
+                    app.status = "Agent gagal menyelesaikan permintaan.".to_string();
+                    app.push_message(UiMessage::new("Agent Error", msg, UiTone::Error));
+                }
+                Err(TryRecvError::Empty) => {
+                    // Task still running — put the receiver back.
+                    app.pending_rx = Some(rx);
+                }
+                Err(TryRecvError::Closed) => {
+                    app.loading = false;
+                    app.status =
+                        "Kesalahan internal: proses respons berhenti tidak terduga.".to_string();
+                }
+            }
+        }
+
         // Refresh log panel from the core logging system on every frame tick.
         // This captures entries written by WASM FFI callbacks and agent steps.
         let session_key = app.session_id.as_deref().unwrap_or("global");
@@ -194,30 +413,45 @@ async fn run_loop(
             match handle_key_event(key, &mut app) {
                 KeyAction::None => {}
                 KeyAction::Submit => {
-                    app.loading = true;
-                    terminal.draw(|frame| draw(frame, &app))?;
-                    submit_input(&mut client, &mut app).await;
-                    app.loading = false;
+                    submit_input(&mut client, &mut app);
                 }
-                KeyAction::ApplyModel => {
-                    let new_model = app.model_input.trim().to_string();
-                    app.model_input.clear();
-                    if new_model.is_empty() {
-                        app.status = "Model tidak berubah (input kosong).".to_string();
-                    } else {
-                        match apply_model_selection(&mut app, &new_model.clone()) {
-                            Ok(_) => {
-                                if let Err(err) = reconfigure_runtime(&mut app, &mut client) {
-                                    app.status =
-                                        format!("Gagal menerapkan model: {}", err);
-                                } else {
-                                    app.status =
-                                        format!("Model diperbarui ke {}.", app.model);
-                                }
+                KeyAction::ApplySettings => {
+                    // Extract pending provider / model from the settings panel.
+                    let provider_id = app
+                        .providers
+                        .get(app.settings.pending_provider_idx)
+                        .map(|p| p.id.clone())
+                        .unwrap_or_else(|| app.provider.clone());
+                    let model_name = app
+                        .providers
+                        .get(app.settings.pending_provider_idx)
+                        .and_then(|p| p.models.get(app.settings.pending_model_idx))
+                        .map(|m| m.name.clone())
+                        .unwrap_or_else(|| app.model.clone());
+
+                    // Write pending prompts + system prompt back into runtime config.
+                    app.runtime_config.prompts = app.settings.pending_prompts.clone();
+                    app.runtime_config.system_prompt =
+                        if app.settings.pending_system_prompt.is_empty() {
+                            None
+                        } else {
+                            Some(app.settings.pending_system_prompt.clone())
+                        };
+                    app.agent_mode = app.settings.pending_agent_mode;
+
+                    match apply_runtime_selection(&mut app, provider_id, model_name) {
+                        Ok(_) => {
+                            if let Err(err) = reconfigure_runtime(&mut app, &mut client) {
+                                app.status = format!("Gagal menerapkan settings: {}", err);
+                            } else {
+                                app.status = format!(
+                                    "Settings disimpan. Provider: {}, Model: {}.",
+                                    app.provider, app.model
+                                );
                             }
-                            Err(err) => {
-                                app.status = format!("Gagal ganti model: {}", err);
-                            }
+                        }
+                        Err(err) => {
+                            app.status = format!("Gagal menerapkan settings: {}", err);
                         }
                     }
                 }
@@ -232,7 +466,7 @@ async fn run_loop(
 enum KeyAction {
     None,
     Submit,
-    ApplyModel,
+    ApplySettings,
     Quit,
 }
 
@@ -241,41 +475,21 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
         return KeyAction::Quit;
     }
 
-    // F2 toggles model-edit mode.
-    if key.code == KeyCode::F(2) {
-        if app.editing_model {
-            // Pressing F2 again cancels without applying.
-            app.editing_model = false;
-            app.model_input.clear();
-            app.status = "Edit model dibatalkan.".to_string();
-        } else {
-            app.editing_model = true;
-            app.model_input = app.model.clone();
-            app.status = "Edit model aktif. Enter = terapkan, Esc = batal.".to_string();
-        }
-        return KeyAction::None;
+    // Route all input to settings panel when it's open.
+    if app.settings.open {
+        return handle_settings_key(key, app);
     }
 
-    // While editing model: Enter applies, Esc cancels, other keys edit the model buffer.
-    if app.editing_model {
-        match key.code {
-            KeyCode::Enter => {
-                app.editing_model = false;
-                return KeyAction::ApplyModel;
-            }
-            KeyCode::Esc => {
-                app.editing_model = false;
-                app.model_input.clear();
-                app.status = "Edit model dibatalkan.".to_string();
-            }
-            KeyCode::Backspace => {
-                app.model_input.pop();
-            }
-            KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                app.model_input.push(ch);
-            }
-            _ => {}
-        }
+    // F2 opens the full settings panel.
+    if key.code == KeyCode::F(2) {
+        let provider = app.provider.clone();
+        let model = app.model.clone();
+        let agent_mode = app.agent_mode;
+        let config = app.runtime_config.clone();
+        let providers = app.providers.clone();
+        app.settings.open_with(&provider, &model, &config, &providers, agent_mode);
+        app.status =
+            "Settings terbuka. Tab/BackTab=ganti tab | ↑↓=navigasi | Enter=pilih | Ctrl+S=simpan | Esc=tutup".to_string();
         return KeyAction::None;
     }
 
@@ -302,12 +516,162 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
     }
 }
 
-async fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut ChatApp) {
+fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
+    // Ctrl+S — save all pending changes and close.
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
+        app.settings.open = false;
+        return KeyAction::ApplySettings;
+    }
+
+    // While in text-edit mode, route keystrokes to the edit buffer.
+    if app.settings.editing {
+        match key.code {
+            KeyCode::Esc => {
+                app.settings.editing = false;
+                app.settings.edit_buffer.clear();
+            }
+            // Ctrl+Enter commits the field edit.
+            KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let value = std::mem::take(&mut app.settings.edit_buffer);
+                commit_settings_edit(app, value);
+                app.settings.editing = false;
+            }
+            KeyCode::Enter => {
+                app.settings.edit_buffer.push('\n');
+            }
+            KeyCode::Backspace => {
+                app.settings.edit_buffer.pop();
+            }
+            KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.settings.edit_buffer.push(ch);
+            }
+            _ => {}
+        }
+        return KeyAction::None;
+    }
+
+    // Esc closes settings panel without applying.
+    if key.code == KeyCode::Esc {
+        app.settings.open = false;
+        return KeyAction::None;
+    }
+
+    match key.code {
+        KeyCode::Tab => {
+            app.settings.tab = app.settings.tab.next();
+        }
+        KeyCode::BackTab => {
+            app.settings.tab = app.settings.tab.prev();
+        }
+        // Number shortcut keys (1-5) for direct tab jump.
+        KeyCode::Char('1') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.settings.tab = SettingsTab::Provider;
+        }
+        KeyCode::Char('2') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.settings.tab = SettingsTab::Model;
+        }
+        KeyCode::Char('3') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.settings.tab = SettingsTab::Prompts;
+        }
+        KeyCode::Char('4') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.settings.tab = SettingsTab::System;
+        }
+        KeyCode::Char('5') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.settings.tab = SettingsTab::Agent;
+        }
+        KeyCode::Up => match app.settings.tab {
+            SettingsTab::Provider => {
+                app.settings.provider_cursor = app.settings.provider_cursor.saturating_sub(1);
+            }
+            SettingsTab::Model => {
+                app.settings.model_cursor = app.settings.model_cursor.saturating_sub(1);
+            }
+            SettingsTab::Prompts => {
+                app.settings.prompt_cursor = app.settings.prompt_cursor.saturating_sub(1);
+            }
+            _ => {}
+        },
+        KeyCode::Down => match app.settings.tab {
+            SettingsTab::Provider => {
+                let max = app.providers.len().saturating_sub(1);
+                if app.settings.provider_cursor < max {
+                    app.settings.provider_cursor += 1;
+                }
+            }
+            SettingsTab::Model => {
+                let max = app
+                    .providers
+                    .get(app.settings.pending_provider_idx)
+                    .map(|p| p.models.len().saturating_sub(1))
+                    .unwrap_or(0);
+                if app.settings.model_cursor < max {
+                    app.settings.model_cursor += 1;
+                }
+            }
+            SettingsTab::Prompts => {
+                if app.settings.prompt_cursor + 1 < PromptField::COUNT {
+                    app.settings.prompt_cursor += 1;
+                }
+            }
+            _ => {}
+        },
+        KeyCode::Enter => match app.settings.tab {
+            SettingsTab::Provider => {
+                app.settings.pending_provider_idx = app.settings.provider_cursor;
+                app.settings.pending_model_idx = 0;
+                app.settings.model_cursor = 0;
+                // Jump to Model tab so user can pick the model.
+                app.settings.tab = SettingsTab::Model;
+            }
+            SettingsTab::Model => {
+                app.settings.pending_model_idx = app.settings.model_cursor;
+            }
+            SettingsTab::Prompts => {
+                if let Some(&field) = PromptField::ALL.get(app.settings.prompt_cursor) {
+                    app.settings.edit_buffer = field.get_from(&app.settings.pending_prompts);
+                    app.settings.editing = true;
+                }
+            }
+            SettingsTab::System => {
+                app.settings.edit_buffer = app.settings.pending_system_prompt.clone();
+                app.settings.editing = true;
+            }
+            SettingsTab::Agent => {
+                app.settings.pending_agent_mode = !app.settings.pending_agent_mode;
+            }
+        },
+        _ => {}
+    }
+
+    KeyAction::None
+}
+
+fn commit_settings_edit(app: &mut ChatApp, value: String) {
+    match app.settings.tab {
+        SettingsTab::System => {
+            app.settings.pending_system_prompt = value;
+        }
+        SettingsTab::Prompts => {
+            if let Some(&field) = PromptField::ALL.get(app.settings.prompt_cursor) {
+                field.set_into(&mut app.settings.pending_prompts, value);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut ChatApp) {
     let input = app.input.trim().to_string();
     app.input.clear();
 
     if input.is_empty() {
         app.status = "Ketik pesan atau slash command untuk melanjutkan.".to_string();
+        return;
+    }
+
+    // Prevent double-submission while a request is already in-flight.
+    if app.pending_rx.is_some() {
+        app.status = "Menunggu respons...".to_string();
         return;
     }
 
@@ -318,47 +682,42 @@ async fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &m
 
     app.push_message(UiMessage::new("You", &input, UiTone::User));
     app.status = format!("Mengirim ke {}/{}...", app.provider, app.model);
+    app.loading = true;
+
+    let (tx, rx) = oneshot::channel();
+    app.pending_rx = Some(rx);
 
     if app.agent_mode {
         let options = AgentOptions {
             session_id: app.session_id.clone(),
             ..AgentOptions::default()
         };
-        let agent = Agent::new(client.clone());
-        match agent.run(input, options).await {
-            Ok(outcome) => apply_agent_outcome(app, outcome),
-            Err(error) => {
-                app.status = "Agent gagal menyelesaikan permintaan.".to_string();
-                app.push_message(UiMessage::new(
-                    "Agent Error",
-                    error.user_message(),
-                    UiTone::Error,
-                ));
-            }
-        }
+        let client_arc = Arc::clone(client);
+        tokio::spawn(async move {
+            let result = Agent::new(client_arc)
+                .run(input, options)
+                .await
+                .map_err(|e| e.user_message());
+            let _ = tx.send(PendingResponse::Agent(result));
+        });
     } else {
-        match client
-            .chat(ChatRequest {
-                prompt: input,
-                attachments: Vec::new(),
-                system_prompt: None,
-                session_id: app.session_id.clone(),
-                raw_mode: false,
-                bypass_template: false,
-                force_json: false,
-            })
-            .await
-        {
-            Ok(result) => apply_chat_result(app, result),
-            Err(error) => {
-                app.status = "Model gagal menjawab.".to_string();
-                app.push_message(UiMessage::new(
-                    "Model Error",
-                    error.user_message(),
-                    UiTone::Error,
-                ));
-            }
-        }
+        let client_arc = Arc::clone(client);
+        let session_id = app.session_id.clone();
+        tokio::spawn(async move {
+            let result = client_arc
+                .chat(ChatRequest {
+                    prompt: input,
+                    attachments: Vec::new(),
+                    system_prompt: None,
+                    session_id,
+                    raw_mode: false,
+                    bypass_template: false,
+                    force_json: false,
+                })
+                .await
+                .map_err(|e| e.user_message());
+            let _ = tx.send(PendingResponse::Chat(result));
+        });
     }
 }
 
@@ -634,13 +993,14 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     frame.render_widget(sidebar, right_panel[0]);
 
     // ── WASM / FFI log panel ────────────────────────────────────────────────
+    // Error-level entries are surfaced in the chat area already; omit them
+    // here so the panel stays focused on structured debug/info context.
     let log_items: Vec<ListItem<'_>> = app
         .log_lines
         .iter()
+        .filter(|line| !line.contains("[Error]") && !line.contains("[ERROR]"))
         .map(|line| {
-            let style = if line.contains("[Error]") || line.contains("[ERROR]") {
-                Style::default().fg(Color::Red)
-            } else if line.contains("[Warn]") || line.contains("[WARN]") {
+            let style = if line.contains("[Warn]") || line.contains("[WARN]") {
                 Style::default().fg(Color::Yellow)
             } else if line.contains("[Debug]") || line.contains("[DEBUG]") {
                 Style::default().fg(Color::DarkGray)
@@ -658,22 +1018,12 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     );
     frame.render_widget(log_panel, right_panel[1]);
 
-    // ── Prompt / model-edit bar ─────────────────────────────────────────────
-    if app.editing_model {
-        let model_bar = Paragraph::new(app.model_input.as_str())
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Edit Model  [Enter = terapkan | Esc / F2 = batal]")
-                    .border_style(Style::default().fg(Color::Magenta)),
-            )
-            .style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD));
-        frame.render_widget(model_bar, layout[2]);
-    } else {
+    // ── Prompt bar ───────────────────────────────────────────────────────────
+    {
         let prompt_title = if app.loading {
             "Prompt  [mengirim...]"
         } else {
-            "Prompt  [F2 = edit model]"
+            "Prompt  [F2 = Settings | Enter = kirim | /help = commands]"
         };
         let input_widget = Paragraph::new(app.input.as_str())
             .block(Block::default().borders(Borders::ALL).title(prompt_title))
@@ -686,7 +1036,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     }
 
     // ── Command autocomplete overlay ────────────────────────────────────────
-    if !app.editing_model && app.input.starts_with('/') {
+    if app.input.starts_with('/') {
         let suggestions = app
             .suggestions()
             .into_iter()
@@ -711,13 +1061,18 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" submit  "),
         Span::styled("F2", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-        Span::raw(" edit model  "),
+        Span::raw(" settings  "),
         Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" quit  "),
         Span::styled(app.status.as_str(), Style::default().fg(Color::Gray)),
     ]))
     .block(Block::default().borders(Borders::ALL).title("Status"));
     frame.render_widget(footer, layout[3]);
+
+    // ── Settings overlay (drawn on top of everything else) ───────────────────
+    if app.settings.open {
+        draw_settings_overlay(frame, app);
+    }
 }
 
 fn render_messages<'a>(messages: impl Iterator<Item = &'a UiMessage>) -> Text<'static> {
@@ -888,7 +1243,6 @@ fn render_config_snapshot(snapshot: &ClientConfigSnapshot) -> String {
             "system prompt    : {}",
             snapshot.system_prompt.as_deref().unwrap_or("<none>")
         ),
-        format!("providers        : {}", snapshot.providers.len()),
         format!("servers          : {}", snapshot.servers.len()),
         format!("tools            : {}", snapshot.tools.len()),
         format!("template chars   : {}", snapshot.prompt_template.len()),
@@ -920,8 +1274,9 @@ fn apply_runtime_selection(
     provider: String,
     model: String,
 ) -> Result<String, String> {
-    let updated_config = materialize_runtime_config(
+    let (updated_config, updated_providers) = materialize_runtime_config(
         &app.runtime_config,
+        &app.providers,
         Some(&provider),
         Some(&model),
         None,
@@ -931,9 +1286,9 @@ fn apply_runtime_selection(
     .map_err(|error| error.to_string())?;
 
     app.runtime_config = updated_config;
+    app.providers = updated_providers;
     app.provider = app.runtime_config.default_provider.clone();
     app.model = app.runtime_config.model.clone();
-    app.providers = app.runtime_config.providers.clone();
     app.session_id = None;
 
     Ok(format!(
@@ -987,16 +1342,371 @@ fn reconfigure_runtime(
     app: &mut ChatApp,
     client: &mut Arc<McpClient<DynamicModelProvider>>,
 ) -> Result<(), String> {
-    config_loader::save_config(&app.runtime_config, None).map_err(|error| error.to_string())?;
+    // Build a PostcardAppConfig to persist — merge core routing fields with CLI providers.
+    let pc = PostcardAppConfig {
+        model: PostcardModelConfig {
+            default_provider: app.runtime_config.default_provider.clone(),
+            model: app.runtime_config.model.clone(),
+        },
+        providers: providers_to_postcard(app.providers.clone()),
+        ..Default::default()
+    };
+    save_app_config(&pc, None).map_err(|error| error.to_string())?;
 
     let new_client =
-        build_runtime_client(&app.runtime_config).map_err(|error| error.to_string())?;
+        build_runtime_client(&app.runtime_config, &app.providers).map_err(|error| error.to_string())?;
     app.snapshot = new_client.config_snapshot();
     app.tools = new_client.tools().len();
-    app.providers = app.runtime_config.providers.clone();
     *client = new_client;
 
     Ok(())
+}
+
+// ── Settings overlay draw functions ──────────────────────────────────────────
+
+fn draw_settings_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
+    let area = frame.area();
+    // Blank the entire terminal before drawing the overlay.
+    frame.render_widget(Clear, area);
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .title(" ⚙  Settings  [Tab/BackTab=ganti tab | ↑↓=nav | Enter=pilih | Ctrl+S=simpan | Esc=tutup] ")
+        .border_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
+    let inner = outer_block.inner(area);
+    frame.render_widget(outer_block, area);
+
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(10)])
+        .split(inner);
+
+    // Tab bar — highlight the active tab.
+    let mut tab_spans: Vec<Span> = Vec::new();
+    for (i, tab) in SettingsTab::ALL.iter().enumerate() {
+        let label = format!(" [{}] {} ", i + 1, tab.label());
+        if *tab == app.settings.tab {
+            tab_spans.push(Span::styled(
+                label,
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            tab_spans.push(Span::styled(label, Style::default().fg(Color::Cyan)));
+        }
+        tab_spans.push(Span::raw("  "));
+    }
+    let tab_bar =
+        Paragraph::new(Line::from(tab_spans)).block(Block::default().borders(Borders::ALL));
+    frame.render_widget(tab_bar, layout[0]);
+
+    // Render the content area for the active tab.
+    match app.settings.tab {
+        SettingsTab::Provider => draw_settings_tab_provider(frame, app, layout[1]),
+        SettingsTab::Model    => draw_settings_tab_model(frame, app, layout[1]),
+        SettingsTab::Prompts  => draw_settings_tab_prompts(frame, app, layout[1]),
+        SettingsTab::System   => draw_settings_tab_system(frame, app, layout[1]),
+        SettingsTab::Agent    => draw_settings_tab_agent(frame, app, layout[1]),
+    }
+}
+
+fn draw_settings_tab_provider(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+        .split(area);
+
+    let items: Vec<ListItem> = app
+        .providers
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let selected = i == app.settings.pending_provider_idx;
+            let cursor = i == app.settings.provider_cursor;
+            let radio = if selected { "◉" } else { "○" };
+            let arrow = if cursor { "▶" } else { " " };
+            let style = if cursor {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else if selected {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default()
+            };
+            ListItem::new(format!("{arrow} {radio} {:<18} [{}]", p.id, p.provider_type))
+                .style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Provider  [↑↓=navigasi | Enter=pilih & ke tab Model]")
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    frame.render_widget(list, cols[0]);
+
+    if let Some(p) = app.providers.get(app.settings.provider_cursor) {
+        let models_text = p
+            .models
+            .iter()
+            .map(|m| format!("  • {}", m.display_name.as_deref().unwrap_or(&m.name)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let api_status = if p.api_key.is_some() {
+            "✓ tersedia"
+        } else {
+            "✗ tidak ada (pakai env var)"
+        };
+        let detail = format!(
+            "ID       : {}\nType     : {}\nEndpoint : {}\nAPI Key  : {}\n\nModels:\n{}",
+            p.id,
+            p.provider_type,
+            p.endpoint,
+            api_status,
+            if models_text.is_empty() {
+                "  (tidak ada model terdaftar)".to_string()
+            } else {
+                models_text
+            }
+        );
+        let widget = Paragraph::new(detail)
+            .block(Block::default().borders(Borders::ALL).title("Detail Provider"))
+            .wrap(Wrap { trim: false });
+        frame.render_widget(widget, cols[1]);
+    }
+}
+
+fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(area);
+
+    let Some(provider) = app.providers.get(app.settings.pending_provider_idx) else {
+        let msg = Paragraph::new("Pilih provider terlebih dahulu di tab [1] Provider.")
+            .block(Block::default().borders(Borders::ALL).title("Model"));
+        frame.render_widget(msg, area);
+        return;
+    };
+
+    let items: Vec<ListItem> = provider
+        .models
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let selected = i == app.settings.pending_model_idx;
+            let cursor = i == app.settings.model_cursor;
+            let radio = if selected { "◉" } else { "○" };
+            let arrow = if cursor { "▶" } else { " " };
+            let style = if cursor {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else if selected {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default()
+            };
+            let name = m.display_name.as_deref().unwrap_or(&m.name);
+            ListItem::new(format!("{arrow} {radio} {name}")).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(format!(
+                "Model untuk '{}' [↑↓=navigasi | Enter=konfirmasi]",
+                provider.id
+            ))
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    frame.render_widget(list, cols[0]);
+
+    if let Some(m) = provider.models.get(app.settings.model_cursor) {
+        let status = if app.settings.model_cursor == app.settings.pending_model_idx {
+            "◉ terpilih"
+        } else {
+            "○ belum dipilih (tekan Enter untuk memilih)"
+        };
+        let detail = format!(
+            "Name         : {}\nDisplay Name : {}\n\nStatus       : {}",
+            m.name,
+            m.display_name.as_deref().unwrap_or("(sama dengan name)"),
+            status
+        );
+        let widget = Paragraph::new(detail)
+            .block(Block::default().borders(Borders::ALL).title("Detail Model"))
+            .wrap(Wrap { trim: false });
+        frame.render_widget(widget, cols[1]);
+    }
+}
+
+fn draw_settings_tab_prompts(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(area);
+
+    let items: Vec<ListItem> = PromptField::ALL
+        .iter()
+        .enumerate()
+        .map(|(i, &field)| {
+            let cursor = i == app.settings.prompt_cursor;
+            let arrow = if cursor { "▶" } else { " " };
+            let preview = field
+                .get_from(&app.settings.pending_prompts)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .chars()
+                .take(58)
+                .collect::<String>();
+            let style = if cursor {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            ListItem::new(format!("{arrow} {:<22} {}", field.label(), preview)).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Prompt Fields  [↑↓=pilih | Enter=edit | Ctrl+Enter=simpan field | Esc=batal edit]")
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    frame.render_widget(list, rows[0]);
+
+    if app.settings.editing {
+        let edit_widget = Paragraph::new(app.settings.edit_buffer.as_str())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Edit Field  [Ctrl+Enter=simpan | Esc=batal | Enter=baris baru]")
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .wrap(Wrap { trim: false });
+        frame.render_widget(edit_widget, rows[1]);
+    } else if let Some(&field) = PromptField::ALL.get(app.settings.prompt_cursor) {
+        let preview_text = field.get_from(&app.settings.pending_prompts);
+        let preview_widget = Paragraph::new(preview_text.as_str())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!("Preview: {}  [Enter=edit]", field.label()))
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .wrap(Wrap { trim: false });
+        frame.render_widget(preview_widget, rows[1]);
+    }
+}
+
+fn draw_settings_tab_system(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(5), Constraint::Min(8)])
+        .split(area);
+
+    let info = Paragraph::new(
+        "System prompt di-inject ke setiap sesi baru sebagai instruksi dasar.\n\
+         Biarkan kosong untuk menggunakan template default dari PromptsConfig.\n\
+         Tekan Enter untuk mulai edit. Ctrl+Enter untuk simpan perubahan.",
+    )
+    .block(Block::default().borders(Borders::ALL).title("Info"))
+    .wrap(Wrap { trim: false });
+    frame.render_widget(info, rows[0]);
+
+    if app.settings.editing {
+        let edit = Paragraph::new(app.settings.edit_buffer.as_str())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Edit System Prompt  [Ctrl+Enter=simpan | Esc=batal | Enter=baris baru]")
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .wrap(Wrap { trim: false });
+        frame.render_widget(edit, rows[1]);
+    } else {
+        let current = if app.settings.pending_system_prompt.is_empty() {
+            "(kosong — menggunakan template default dari PromptsConfig)".to_string()
+        } else {
+            app.settings.pending_system_prompt.clone()
+        };
+        let preview = Paragraph::new(current.as_str())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("System Prompt Aktif  [Enter=edit]")
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .wrap(Wrap { trim: false });
+        frame.render_widget(preview, rows[1]);
+    }
+}
+
+fn draw_settings_tab_agent(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(9), Constraint::Min(4)])
+        .split(area);
+
+    let mode_label = if app.settings.pending_agent_mode {
+        "◉ Agent Loop  (aktif)"
+    } else {
+        "○ Direct Chat (aktif)"
+    };
+    let content = format!(
+        "Mode Eksekusi  : {}\n\n\
+         Tekan Enter untuk toggle mode.\n\n\
+         ◉ Agent Loop   — Prompt dieksekusi melalui planning loop & tool calls.\n\
+         ○ Direct Chat  — Prompt langsung dikirim ke model tanpa loop agent.\n\n\
+         Ctrl+S untuk menyimpan semua perubahan settings.",
+        mode_label
+    );
+    let widget = Paragraph::new(content.as_str())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Agent Settings  [Enter=toggle | Ctrl+S=simpan semua]")
+                .border_style(Style::default().fg(Color::Cyan)),
+        )
+        .wrap(Wrap { trim: false });
+    frame.render_widget(widget, rows[0]);
+
+    // Quick summary of all pending changes.
+    let provider_name = app
+        .providers
+        .get(app.settings.pending_provider_idx)
+        .map(|p| p.id.as_str())
+        .unwrap_or("(tidak ada)");
+    let model_name = app
+        .providers
+        .get(app.settings.pending_provider_idx)
+        .and_then(|p| p.models.get(app.settings.pending_model_idx))
+        .map(|m| m.name.as_str())
+        .unwrap_or("(tidak ada)");
+    let summary = format!(
+        "Pending Changes:\n  Provider     : {}\n  Model        : {}\n  Mode         : {}\n  System Prompt: {} karakter",
+        provider_name,
+        model_name,
+        if app.settings.pending_agent_mode { "Agent Loop" } else { "Direct Chat" },
+        app.settings.pending_system_prompt.len(),
+    );
+    let summary_widget = Paragraph::new(summary.as_str())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Ringkasan Perubahan Pending  [Ctrl+S=terapkan semua]")
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .wrap(Wrap { trim: false });
+    frame.render_widget(summary_widget, rows[1]);
 }
 
 fn find_provider<'a>(
@@ -1025,7 +1735,7 @@ fn slash_command_suggestions(input: &str) -> Vec<(&'static str, &'static str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use antikythera_core::config::ModelInfo;
+    use crate::infrastructure::llm::ModelInfo;
 
     fn provider(id: &str, provider_type: &str, model: &str) -> ModelProviderConfig {
         ModelProviderConfig {

@@ -23,38 +23,6 @@ pub fn load_cli_config(path: Option<&Path>) -> CliResult<AppConfig> {
     load_app_config(path)
 }
 
-/// Create an [`LlmProvider`] box from the active provider in `config`.
-pub fn build_llm_provider(
-    config: &AppConfig,
-) -> CliResult<Box<dyn crate::domain::use_cases::chat_use_case::LlmProvider>> {
-    let provider = config
-        .providers
-        .iter()
-        .find(|p| p.id == config.model.default_provider)
-        .ok_or_else(|| {
-            CliError::Validation(format!(
-                "Provider '{}' not found",
-                config.model.default_provider
-            ))
-        })?;
-
-    Err(CliError::Unsupported(format!(
-        "Direct model invocation for provider '{}' ({}) is disabled in this repository. The embedding host must call the model API and pass the response back into the framework.",
-        provider.id, provider.provider_type
-    )))
-}
-
-/// Deprecated compatibility alias.
-#[deprecated(
-    since = "0.9.9",
-    note = "use build_llm_provider instead; scheduled removal in 2.0.0"
-)]
-pub fn create_llm_provider(
-    config: &AppConfig,
-) -> CliResult<Box<dyn crate::domain::use_cases::chat_use_case::LlmProvider>> {
-    build_llm_provider(config)
-}
-
 /// Build a CLI [`ProviderConfig`] domain entity from the active provider in `config`.
 pub fn build_active_provider_config(config: &AppConfig) -> CliResult<ProviderConfig> {
     let provider = config
@@ -118,8 +86,25 @@ mod tests {
         }
     }
 
+    fn openai_config() -> AppConfig {
+        AppConfig {
+            providers: vec![crate::config::ProviderConfig {
+                id: "openai-gpt".to_string(),
+                provider_type: "openai".to_string(),
+                endpoint: "https://api.openai.com".to_string(),
+                api_key: "sk-test-key".to_string(),
+                models: Vec::new(),
+            }],
+            model: crate::config::ModelConfig {
+                default_provider: "openai-gpt".to_string(),
+                model: "gpt-4o-mini".to_string(),
+            },
+            ..AppConfig::default()
+        }
+    }
+
     #[test]
-    fn build_active_provider_config_maps_provider() {
+    fn build_active_provider_config_maps_ollama_provider() {
         let config = sample_config();
         let provider = build_active_provider_config(&config).expect("provider should map");
         assert_eq!(provider.id, "ollama-local");
@@ -128,12 +113,19 @@ mod tests {
     }
 
     #[test]
-    fn build_llm_provider_returns_typed_unsupported_error() {
-        let config = sample_config();
-        match build_llm_provider(&config) {
-            Ok(_) => panic!("expected unsupported error"),
-            Err(err) => assert!(err.to_string().contains("unsupported operation")),
-        }
+    fn build_active_provider_config_maps_openai_provider() {
+        let config = openai_config();
+        let provider = build_active_provider_config(&config).expect("openai should map");
+        assert_eq!(provider.id, "openai-gpt");
+        assert_eq!(provider.provider_type, ProviderType::OpenAi);
+        assert_eq!(provider.api_key, Some("sk-test-key".to_string()));
+    }
+
+    #[test]
+    fn build_active_provider_config_rejects_missing_provider() {
+        let mut config = sample_config();
+        config.model.default_provider = "nonexistent".to_string();
+        assert!(build_active_provider_config(&config).is_err());
     }
 
     #[test]

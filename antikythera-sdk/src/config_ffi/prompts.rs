@@ -79,7 +79,7 @@ pub fn mcp_config_list_prompts() -> *mut c_char {
         "json_retry_message", "tool_result_instruction",
         "agent_instructions", "ui_instructions",
         "language_instructions", "agent_max_steps_error",
-        "no_tools_guidance"
+        "no_tools_guidance", "fallback_response_keys"
     ])
 }
 
@@ -99,6 +99,7 @@ pub fn get_prompt_value(prompts: &config::PromptsConfig, name: &str) -> Result<S
         "language_instructions" => Ok(prompts.language_instructions.clone()),
         "agent_max_steps_error" => Ok(prompts.agent_max_steps_error.clone()),
         "no_tools_guidance" => Ok(prompts.no_tools_guidance.clone()),
+        "fallback_response_keys" => Ok(prompts.fallback_response_keys.join(",")),
         _ => Err(format!("Unknown prompt field: {}", name)),
     }
 }
@@ -115,6 +116,14 @@ pub fn set_prompt_value(prompts: &mut config::PromptsConfig, name: &str, value: 
         "language_instructions" => prompts.language_instructions = value.to_string(),
         "agent_max_steps_error" => prompts.agent_max_steps_error = value.to_string(),
         "no_tools_guidance" => prompts.no_tools_guidance = value.to_string(),
+        "fallback_response_keys" => {
+            prompts.fallback_response_keys = value
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+        }
         _ => return Err(format!("Unknown prompt field: {}", name)),
     }
     Ok(())
