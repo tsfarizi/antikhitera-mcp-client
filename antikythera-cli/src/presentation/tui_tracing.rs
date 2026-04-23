@@ -38,10 +38,16 @@ impl<S: Subscriber> Layer<S> for AntikytheraTuiLayer {
             tracing::Level::TRACE => return,
         };
 
-        // Use the module path as a short source label.
-        // e.g. "antikythera_core::application::client" → "client"
+        // Derive a categorised source label that tells the operator which
+        // layer of the stack emitted the event:
+        //   cli:*     — antikythera-cli crate (HTTP clients, streaming, factory)
+        //   ffi:*     — WASM/FFI infrastructure (wasm runner, host functions)
+        //   stream:*  — Model HTTP clients (request/response to Ollama/Gemini/OpenAI)
+        //   agent:*   — Agent FSM, runner, context, parser, multi-agent
+        //   tool:*    — Tooling layer (transport, SSE, RPC, process manager)
+        //   core:*    — Everything else in antikythera-core
         let target = event.metadata().target();
-        let source = target.rsplit("::").next().unwrap_or(target);
+        let source = categorize_source(target);
 
         // Collect message and additional key-value fields.
         let mut visitor = MessageVisitor::default();
@@ -54,6 +60,30 @@ impl<S: Subscriber> Layer<S> for AntikytheraTuiLayer {
 
         let session_id = get_active_session();
         get_logger(&session_id).log_with_source(level, source, message);
+    }
+}
+
+/// Map a tracing target path to a categorised source label.
+fn categorize_source(target: &str) -> String {
+    let last = target.rsplit("::").next().unwrap_or(target);
+    if target.starts_with("antikythera_cli::") {
+        // CLI crate events — distinguish from identically-named core modules.
+        format!("cli:{last}")
+    } else if target.starts_with("antikythera_core::infrastructure::wasm") {
+        // WASM / FFI host-side events.
+        format!("ffi:{last}")
+    } else if target.starts_with("antikythera_core::infrastructure::model") {
+        // Model HTTP clients — the actual LLM API calls and streaming.
+        format!("stream:{last}")
+    } else if target.starts_with("antikythera_core::application::agent") {
+        // Agent FSM, runner, tool-call execution, response parser.
+        format!("agent:{last}")
+    } else if target.starts_with("antikythera_core::application::tooling") {
+        // MCP tool transports: SSE, JSON-RPC, process spawning.
+        format!("tool:{last}")
+    } else {
+        // antikythera_core::application::client, services, discovery, etc.
+        format!("core:{last}")
     }
 }
 

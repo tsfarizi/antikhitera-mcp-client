@@ -62,9 +62,16 @@ flowchart TD
   The `stdio` mode now launches a ratatui-based workspace with:
 
   1. A conversation panel that keeps the latest chat and tool trace visible.
+     While a response is in flight it shows a live streaming preview of the
+     incoming tokens (if the provider supports streaming).
   2. A context sidebar showing provider, model, session, and configured backends.
   3. A prompt box with slash-command recommendations as soon as the input starts with `/`.
   4. Inline commands such as `/help`, `/providers`, `/use <provider> [model]`, `/model <name>`, `/config`, `/tools`, `/agent`, `/reset`, and `/exit`.
+  5. A Settings overlay (press `F2`) showing the full active config as TOML.
+  6. A History browser overlay (press `F3`) listing saved conversations with
+     open / rename / delete actions.
+  7. A health status dot in the footer that reflects live provider health
+     (green = healthy, yellow = degraded, red = failing).
 
   Use `Tab` to autocomplete the first command suggestion, `Enter` to submit, and `Esc` to quit.
 
@@ -103,6 +110,7 @@ task setup-config PROVIDER_ID=openai PROVIDER_TYPE=openai PROVIDER_ENDPOINT=http
 | `--model <name>` | Override active model without editing config |
 | `--provider-endpoint <url>` | Override endpoint for the selected provider |
 | `--ollama-url <url>` | Override Ollama endpoint (default: `http://127.0.0.1:11434`) |
+| `--stream` | Enable live token streaming to stderr (terminal sink) |
 | `--wasm <path>` | Path to wasm module used by `wasm-harness` |
 | `--wasm-llm-response <json>` | Host callback response stub for `wasm-harness` |
 

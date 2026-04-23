@@ -1,10 +1,15 @@
 use std::io::{self, Stdout};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use chrono::Utc;
 
 use antikythera_core::application::agent::{Agent, AgentOptions, AgentOutcome, AgentStep};
 use antikythera_core::application::client::{
-    ChatRequest, ChatResult, ClientConfigSnapshot, McpClient,
+    ChatRequest, ChatResult, ClientConfigSnapshot, McpClient, McpError,
+};
+use antikythera_core::application::resilience::{
+    ContextWindowPolicy, HealthStatus, HealthTracker, RetryPolicy, with_retry_if,
 };
 use antikythera_core::config::{AppConfig, PromptsConfig};
 use antikythera_core::get_latest_logs;
@@ -12,6 +17,7 @@ use antikythera_sdk::sdk_logging::get_latest_sdk_logs;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use crate::config::{save_app_config, AppConfig as PostcardAppConfig, ModelConfig as PostcardModelConfig};
 use crate::infrastructure::llm::{ModelInfo, ModelProviderConfig, providers_to_postcard};
+use crate::infrastructure::llm::{StreamEvent, clear_stream_event_sink, set_stream_event_sink};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -24,8 +30,9 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
+use crate::infrastructure::history::{ChatHistorySession, ChatHistoryStore, ChatTurn, TurnRole};
 use crate::CliResult;
 use crate::runtime::{build_runtime_client, materialize_runtime_config};
 
@@ -148,6 +155,51 @@ impl PromptField {
     }
 }
 
+// ── History Browser ─────────────────────────────────────────────────────────
+
+/// Overlay for browsing and managing saved debug chat sessions.
+struct HistoryBrowser {
+    open: bool,
+    /// Cursor position in the session list.
+    cursor: usize,
+    /// Full turns of the session currently in detail view (`None` = list view).
+    detail: Option<ChatHistorySession>,
+    /// Scroll offset (turn index) inside the detail view.
+    detail_scroll: usize,
+    /// Whether the rename input row is active.
+    rename_mode: bool,
+    /// Text being typed for the rename operation.
+    rename_buffer: String,
+    /// Cached session list — refreshed when the browser is opened.
+    sessions: Vec<ChatHistorySession>,
+}
+
+impl HistoryBrowser {
+    fn new() -> Self {
+        Self {
+            open: false,
+            cursor: 0,
+            detail: None,
+            detail_scroll: 0,
+            rename_mode: false,
+            rename_buffer: String::new(),
+            sessions: Vec::new(),
+        }
+    }
+
+    /// Open the overlay with a pre-loaded session list (avoids double-borrow
+    /// when caller needs to split `app.history_store` from `app.history`).
+    fn open_and_refresh_with(&mut self, sessions: Vec<ChatHistorySession>) {
+        self.sessions = sessions;
+        self.cursor = 0;
+        self.detail = None;
+        self.detail_scroll = 0;
+        self.rename_mode = false;
+        self.rename_buffer.clear();
+        self.open = true;
+    }
+}
+
 struct SettingsPanel {
     open: bool,
     tab: SettingsTab,
@@ -218,7 +270,7 @@ impl SettingsPanel {
     }
 }
 
-const SLASH_COMMANDS: [(&str, &str); 10] = [
+const SLASH_COMMANDS: [(&str, &str); 11] = [
     ("help", "Tampilkan perintah yang tersedia"),
     ("providers", "Tampilkan provider dan model yang tersedia"),
     ("use", "Pilih provider aktif: /use <provider> [model]"),
@@ -228,6 +280,7 @@ const SLASH_COMMANDS: [(&str, &str); 10] = [
     ("agent", "Toggle atau set mode agent: /agent on|off|toggle"),
     ("reset", "Mulai sesi baru dan hapus riwayat UI"),
     ("clear", "Alias untuk /reset"),
+    ("history", "Buka browser riwayat sesi chat (F3)"),
     ("exit", "Tutup TUI"),
 ];
 
@@ -276,6 +329,21 @@ struct ChatApp {
     /// In-flight request receiver. Set when a chat/agent task has been spawned;
     /// cleared when the result arrives or the channel is closed.
     pending_rx: Option<oneshot::Receiver<PendingResponse>>,
+    // ── Debug history ────────────────────────────────────────────────────────
+    /// Persistent store for debug chat history JSON files.
+    history_store: ChatHistoryStore,
+    /// The history session that is currently being built (in-flight).
+    current_history_session: Option<ChatHistorySession>,
+    /// Overlay for browsing and managing saved debug sessions.
+    history: HistoryBrowser,
+    // ── Live streaming ───────────────────────────────────────────────────────
+    /// Tokens received so far from the in-flight streaming request.
+    streaming_content: String,
+    /// Channel receiver for streaming token chunks from the background task.
+    stream_rx: Option<mpsc::UnboundedReceiver<String>>,
+    // ── Provider health ──────────────────────────────────────────────────────
+    /// Aggregated health metrics for the active LLM provider.
+    health: Arc<Mutex<HealthTracker>>,
 }
 
 impl ChatApp {
@@ -287,7 +355,7 @@ impl ChatApp {
             input: String::new(),
             settings: SettingsPanel::new(),
             agent_mode: true,
-            status: "Siap. Ketik pesan atau /help. F2 = Settings Panel.".to_string(),
+            status: "Siap. Ketik pesan atau /help. F2 = Settings | F3 = Riwayat.".to_string(),
             tools,
             providers,
             runtime_config,
@@ -297,6 +365,12 @@ impl ChatApp {
             loading: false,
             should_quit: false,
             pending_rx: None,
+            history_store: ChatHistoryStore::new(),
+            current_history_session: None,
+            history: HistoryBrowser::new(),
+            streaming_content: String::new(),
+            stream_rx: None,
+            health: Arc::new(Mutex::new(HealthTracker::new())),
         };
         app.messages.push(UiMessage::new(
             "Welcome",
@@ -320,6 +394,9 @@ impl ChatApp {
 
     fn reset_session(&mut self) {
         self.session_id = None;
+        // Finalise the in-flight history session — it was already saved on the
+        // last assistant turn, so we just drop the in-memory reference.
+        self.current_history_session = None;
         self.status =
             "Sesi direset. Riwayat host baru akan dimulai pada pesan berikutnya.".to_string();
         self.push_message(UiMessage::new(
@@ -330,7 +407,7 @@ impl ChatApp {
     }
 }
 
-pub async fn run_chat_app(config: AppConfig, providers: Vec<ModelProviderConfig>) -> CliResult<()> {
+pub async fn run_chat_app(mut config: AppConfig, providers: Vec<ModelProviderConfig>) -> CliResult<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -338,10 +415,51 @@ pub async fn run_chat_app(config: AppConfig, providers: Vec<ModelProviderConfig>
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Run server auto-discovery before building the client so any discovered
+    // servers are included in the ServerManager that the client owns.
+    let discovery_msg = {
+        use antikythera_core::application::discovery::startup::run_startup_discovery;
+        use antikythera_core::config::server::{ServerConfig as CoreServerConfig, TransportType};
+        use std::collections::HashMap;
+
+        let result = run_startup_discovery(None).await;
+        let mut added = 0usize;
+        for server in result.loaded_servers() {
+            let sc = CoreServerConfig {
+                name: server.name.clone(),
+                transport: TransportType::Stdio,
+                command: Some(server.binary_path.clone()),
+                args: Vec::new(),
+                env: HashMap::new(),
+                workdir: None,
+                url: None,
+                headers: HashMap::new(),
+                default_timezone: None,
+                default_city: None,
+            };
+            if !config.servers.iter().any(|s| s.name == sc.name) {
+                config.servers.push(sc);
+                added += 1;
+            }
+        }
+        if result.folder_exists {
+            Some(format!(
+                "Server discovery: {} ditemukan, {} berhasil diload, {} ditambahkan ke konfigurasi aktif.",
+                result.summary.total_found, result.summary.loaded, added
+            ))
+        } else {
+            None  // servers/ folder not found — discovery is optional; omit to avoid noise at startup.
+        }
+    };
+
     let client = build_runtime_client(&config, &providers)?;
     let snapshot = client.config_snapshot();
     let tools = client.tools().len();
-    let result = run_loop(&mut terminal, client, ChatApp::new(config, providers, snapshot, tools)).await;
+    let mut app = ChatApp::new(config, providers, snapshot, tools);
+    if let Some(msg) = discovery_msg {
+        app.push_message(UiMessage::new("Server Discovery", msg, UiTone::System));
+    }
+    let result = run_loop(&mut terminal, client, app).await;
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -355,25 +473,44 @@ async fn run_loop(
     mut app: ChatApp,
 ) -> CliResult<()> {
     loop {
+        // Drain live-streaming token chunks into the preview buffer.
+        if let Some(rx) = &mut app.stream_rx {
+            while let Ok(chunk) = rx.try_recv() {
+                app.streaming_content.push_str(&chunk);
+            }
+        }
+
         // Poll for a completed in-flight request spawned in a previous iteration.
         if let Some(mut rx) = app.pending_rx.take() {
             use tokio::sync::oneshot::error::TryRecvError;
             match rx.try_recv() {
                 Ok(PendingResponse::Chat(Ok(result))) => {
                     app.loading = false;
+                    app.streaming_content.clear();
+                    app.stream_rx = None;
+                    clear_stream_event_sink();
                     apply_chat_result(&mut app, result);
                 }
                 Ok(PendingResponse::Chat(Err(msg))) => {
                     app.loading = false;
+                    app.streaming_content.clear();
+                    app.stream_rx = None;
+                    clear_stream_event_sink();
                     app.status = "Model gagal menjawab.".to_string();
                     app.push_message(UiMessage::new("Model Error", msg, UiTone::Error));
                 }
                 Ok(PendingResponse::Agent(Ok(outcome))) => {
                     app.loading = false;
+                    app.streaming_content.clear();
+                    app.stream_rx = None;
+                    clear_stream_event_sink();
                     apply_agent_outcome(&mut app, outcome);
                 }
                 Ok(PendingResponse::Agent(Err(msg))) => {
                     app.loading = false;
+                    app.streaming_content.clear();
+                    app.stream_rx = None;
+                    clear_stream_event_sink();
                     app.status = "Agent gagal menyelesaikan permintaan.".to_string();
                     app.push_message(UiMessage::new("Agent Error", msg, UiTone::Error));
                 }
@@ -383,6 +520,9 @@ async fn run_loop(
                 }
                 Err(TryRecvError::Closed) => {
                     app.loading = false;
+                    app.streaming_content.clear();
+                    app.stream_rx = None;
+                    clear_stream_event_sink();
                     app.status =
                         "Kesalahan internal: proses respons berhenti tidak terduga.".to_string();
                 }
@@ -509,6 +649,11 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
         return handle_settings_key(key, app);
     }
 
+    // Route all input to history browser when it's open.
+    if app.history.open {
+        return handle_history_key(key, app);
+    }
+
     // F2 opens the full settings panel.
     if key.code == KeyCode::F(2) {
         let provider = app.provider.clone();
@@ -519,6 +664,14 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
         app.settings.open_with(&provider, &model, &config, &providers, agent_mode);
         app.status =
             "Settings terbuka. Tab/BackTab=ganti tab | ↑↓=navigasi | Enter=pilih | Ctrl+S=simpan | Esc=tutup".to_string();
+        return KeyAction::None;
+    }
+
+    // F3 opens the history browser.
+    if key.code == KeyCode::F(3) {
+        let sessions = app.history_store.list_sessions();
+        app.history.open_and_refresh_with(sessions);
+        app.status = "Riwayat Chat. ↑↓=navigasi | Enter=lihat | d=hapus | r=ganti judul | Esc=tutup".to_string();
         return KeyAction::None;
     }
 
@@ -543,6 +696,96 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
         }
         _ => KeyAction::None,
     }
+}
+
+// ── History browser key handler ───────────────────────────────────────────────
+
+fn handle_history_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
+    // Rename mode intercepts all printable input.
+    if app.history.rename_mode {
+        match key.code {
+            KeyCode::Esc => {
+                app.history.rename_mode = false;
+                app.history.rename_buffer.clear();
+            }
+            KeyCode::Enter => {
+                let new_title = app.history.rename_buffer.trim().to_string();
+                if !new_title.is_empty() {
+                    if let Some(id) = app.history.sessions.get(app.history.cursor).map(|s| s.id.clone()) {
+                        if app.history_store.rename_session(&id, new_title).is_ok() {
+                            app.history.sessions = app.history_store.list_sessions();
+                        }
+                    }
+                }
+                app.history.rename_mode = false;
+                app.history.rename_buffer.clear();
+            }
+            KeyCode::Backspace => {
+                app.history.rename_buffer.pop();
+            }
+            KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.history.rename_buffer.push(ch);
+            }
+            _ => {}
+        }
+        return KeyAction::None;
+    }
+
+    // Detail view — show full conversation, allow scrolling.
+    if app.history.detail.is_some() {
+        match key.code {
+            KeyCode::Esc | KeyCode::Backspace => {
+                app.history.detail = None;
+                app.history.detail_scroll = 0;
+            }
+            KeyCode::Up => {
+                app.history.detail_scroll = app.history.detail_scroll.saturating_sub(1);
+            }
+            KeyCode::Down => {
+                app.history.detail_scroll += 1;
+            }
+            _ => {}
+        }
+        return KeyAction::None;
+    }
+
+    // List view — navigate, open, delete, rename.
+    match key.code {
+        KeyCode::Esc | KeyCode::F(3) => {
+            app.history.open = false;
+            app.status = "Siap.".to_string();
+        }
+        KeyCode::Up => {
+            app.history.cursor = app.history.cursor.saturating_sub(1);
+        }
+        KeyCode::Down => {
+            let max = app.history.sessions.len().saturating_sub(1);
+            if app.history.cursor < max {
+                app.history.cursor += 1;
+            }
+        }
+        KeyCode::Enter => {
+            if let Some(id) = app.history.sessions.get(app.history.cursor).map(|s| s.id.clone()) {
+                app.history.detail = app.history_store.load_session(&id);
+                app.history.detail_scroll = 0;
+            }
+        }
+        KeyCode::Char('d') => {
+            if let Some(id) = app.history.sessions.get(app.history.cursor).map(|s| s.id.clone()) {
+                let _ = app.history_store.delete_session(&id);
+                app.history.sessions = app.history_store.list_sessions();
+                let max = app.history.sessions.len().saturating_sub(1);
+                app.history.cursor = app.history.cursor.min(max);
+            }
+        }
+        KeyCode::Char('r') => {
+            let buf = app.history.sessions.get(app.history.cursor).map(|s| s.title.clone()).unwrap_or_default();
+            app.history.rename_buffer = buf;
+            app.history.rename_mode = true;
+        }
+        _ => {}
+    }
+    KeyAction::None
 }
 
 fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
@@ -774,8 +1017,43 @@ fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut Cha
     app.status = format!("Mengirim ke {}/{}...", app.provider, app.model);
     app.loading = true;
 
+    // Capture user turn into the in-flight debug history session.
+    if app.current_history_session.is_none() {
+        app.current_history_session = Some(ChatHistorySession::new(
+            ChatHistoryStore::new_id(),
+            app.provider.clone(),
+            app.model.clone(),
+            app.agent_mode,
+        ));
+    }
+    if let Some(session) = &mut app.current_history_session {
+        if let Some(ref id) = app.session_id {
+            session.core_session_id = Some(id.clone());
+        }
+        session.turns.push(ChatTurn {
+            timestamp: Utc::now().to_rfc3339(),
+            role: TurnRole::User,
+            content: input.clone(),
+            tool_steps: 0,
+        });
+    }
+
     let (tx, rx) = oneshot::channel();
     app.pending_rx = Some(rx);
+
+    // Install a streaming sink that forwards token chunks to the TUI render loop
+    // so tokens appear live in the Conversation panel while the task runs.
+    let (stream_tx, stream_rx) = mpsc::unbounded_channel::<String>();
+    app.stream_rx = Some(stream_rx);
+    app.streaming_content.clear();
+    set_stream_event_sink(Arc::new(move |event: &StreamEvent| {
+        if let StreamEvent::Chunk { content, .. } = event {
+            let _ = stream_tx.send(content.clone());
+        }
+    }));
+
+    let health_ref = Arc::clone(&app.health);
+    let provider_id = app.provider.clone();
 
     if app.agent_mode {
         let options = AgentOptions {
@@ -784,29 +1062,67 @@ fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut Cha
         };
         let client_arc = Arc::clone(client);
         tokio::spawn(async move {
+            let start = std::time::Instant::now();
             let result = Agent::new(client_arc)
                 .run(input, options)
                 .await
                 .map_err(|e| e.user_message());
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+            if let Ok(mut h) = health_ref.lock() {
+                match &result {
+                    Ok(_) => h.record_success(&provider_id, elapsed_ms),
+                    Err(e) => h.record_failure(&provider_id, e.as_str()),
+                }
+            }
             let _ = tx.send(PendingResponse::Agent(result));
         });
     } else {
         let client_arc = Arc::clone(client);
         let session_id = app.session_id.clone();
+        let cw_policy = ContextWindowPolicy::default();
+        let retry_policy = RetryPolicy::default();
         tokio::spawn(async move {
-            let result = client_arc
-                .chat(ChatRequest {
-                    prompt: input,
-                    attachments: Vec::new(),
-                    system_prompt: None,
-                    session_id,
-                    raw_mode: false,
-                    bypass_template: false,
-                    force_json: false,
-                })
-                .await
-                .map_err(|e| e.user_message());
-            let _ = tx.send(PendingResponse::Chat(result));
+            // Auto-prune context window before sending if the session is long.
+            if let Some(ref sid) = session_id {
+                let removed = client_arc.prune_session(sid, &cw_policy).await;
+                if removed > 0 {
+                    tracing::info!(removed, "Context window pruned before request");
+                }
+            }
+
+            let start = std::time::Instant::now();
+            // Retry on transient failures with exponential back-off.
+            let result: Result<ChatResult, McpError> = with_retry_if(
+                &retry_policy,
+                || {
+                    let c = Arc::clone(&client_arc);
+                    let prompt = input.clone();
+                    let sid = session_id.clone();
+                    async move {
+                        c.chat(ChatRequest {
+                            prompt,
+                            attachments: Vec::new(),
+                            system_prompt: None,
+                            session_id: sid,
+                            raw_mode: false,
+                            bypass_template: false,
+                            force_json: false,
+                        })
+                        .await
+                    }
+                },
+                |_: &McpError| true,
+            )
+            .await;
+
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+            if let Ok(mut h) = health_ref.lock() {
+                match &result {
+                    Ok(r) => h.record_success(&r.provider, elapsed_ms),
+                    Err(e) => h.record_failure(&provider_id, e.user_message()),
+                }
+            }
+            let _ = tx.send(PendingResponse::Chat(result.map_err(|e| e.user_message())));
         });
     }
 }
@@ -819,17 +1135,36 @@ fn apply_chat_result(app: &mut ChatApp, result: ChatResult) {
     );
     app.push_message(UiMessage::new(
         format!("Assistant [{}]", result.provider),
-        result.content,
+        result.content.clone(),
         UiTone::Assistant,
     ));
+
+    // Append assistant turn and persist the debug history session.
+    if let Some(session) = &mut app.current_history_session {
+        session.core_session_id = Some(result.session_id.clone());
+        session.updated_at = Utc::now().to_rfc3339();
+        if session.title.is_empty() {
+            if let Some(first) = session.turns.iter().find(|t| t.role == TurnRole::User) {
+                session.title = first.content.chars().take(60).collect();
+            }
+        }
+        session.turns.push(ChatTurn {
+            timestamp: Utc::now().to_rfc3339(),
+            role: TurnRole::Assistant,
+            content: result.content.clone(),
+            tool_steps: 0,
+        });
+        let _ = app.history_store.save_session(session);
+    }
 }
 
 fn apply_agent_outcome(app: &mut ChatApp, outcome: AgentOutcome) {
     app.session_id = Some(outcome.session_id.clone());
     app.status = format!("Agent selesai dengan {} langkah tool.", outcome.steps.len());
+    let response_text = format_agent_response(&outcome.response);
     app.push_message(UiMessage::new(
         "Agent",
-        format_agent_response(&outcome.response),
+        response_text.clone(),
         UiTone::Assistant,
     ));
 
@@ -839,6 +1174,25 @@ fn apply_agent_outcome(app: &mut ChatApp, outcome: AgentOutcome) {
             render_steps_summary(&outcome.steps),
             UiTone::System,
         ));
+    }
+
+    // Append assistant turn and persist the debug history session.
+    let tool_step_count = outcome.steps.len();
+    if let Some(session) = &mut app.current_history_session {
+        session.core_session_id = Some(outcome.session_id.clone());
+        session.updated_at = Utc::now().to_rfc3339();
+        if session.title.is_empty() {
+            if let Some(first) = session.turns.iter().find(|t| t.role == TurnRole::User) {
+                session.title = first.content.chars().take(60).collect();
+            }
+        }
+        session.turns.push(ChatTurn {
+            timestamp: Utc::now().to_rfc3339(),
+            role: TurnRole::Assistant,
+            content: response_text,
+            tool_steps: tool_step_count,
+        });
+        let _ = app.history_store.save_session(session);
     }
 }
 
@@ -984,6 +1338,11 @@ fn process_command(
             ));
         }
         "reset" | "clear" => app.reset_session(),
+        "history" => {
+            let sessions = app.history_store.list_sessions();
+            app.history.open_and_refresh_with(sessions);
+            app.status = "Riwayat Chat. ↑↓=navigasi | Enter=lihat | d=hapus | r=ganti judul | Esc=tutup".to_string();
+        }
         "exit" | "quit" => {
             app.status = "Menutup TUI...".to_string();
             app.should_quit = true;
@@ -1068,8 +1427,22 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         .rev()
         .take(MAX_VISIBLE_MESSAGES)
         .collect::<Vec<_>>();
-    let conversation = Paragraph::new(render_messages(messages.into_iter().rev()))
-        .block(Block::default().borders(Borders::ALL).title("Conversation"))
+    let conv_title = if app.loading {
+        if app.streaming_content.is_empty() {
+            "Conversation  [mengirim...]"
+        } else {
+            "Conversation  [menerima...]"
+        }
+    } else {
+        "Conversation"
+    };
+    let mut conv_text = render_messages(messages.into_iter().rev());
+    // Append live streaming tokens as an in-progress assistant message.
+    if app.loading && !app.streaming_content.is_empty() {
+        conv_text.extend(render_streaming_preview(&app.streaming_content));
+    }
+    let conversation = Paragraph::new(conv_text)
+        .block(Block::default().borders(Borders::ALL).title(conv_title))
         .wrap(Wrap { trim: false });
     frame.render_widget(conversation, content[0]);
 
@@ -1083,39 +1456,56 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     frame.render_widget(sidebar, right_panel[0]);
 
     // ── WASM / FFI log panel ────────────────────────────────────────────────
-    // Merges core logs (transport, provider, agent) and SDK logs (FFI, WASM).
-    // Error entries are surfaced in the chat area; omit them here.
+    // Source prefixes (set by the tracing bridge + SDK logging):
+    //   cli:*    — CLI crate (streaming, HTTP clients)  → LightYellow
+    //   sdk:*    — SDK / FFI layer (ConfigFfiLogger, WasmAgentLogger) → Magenta
+    //   ffi:*    — WASM host runner events              → Magenta
+    //   stream:* — Model HTTP client send/recv          → Cyan
+    //   agent:*  — Agent FSM, runner, context, parser   → Green
+    //   tool:*   — MCP tool transports (SSE/RPC/proc)  → Blue
+    //   core:*   — antikythera-core misc (client, svc)  → Gray
+    // ERROR entries are already shown in the chat area — suppress here.
     let log_items: Vec<ListItem<'_>> = app
         .log_lines
         .iter()
-        .filter(|line| !line.contains("[ERROR]") && !line.contains("[Error]"))
+        .filter(|line| !line.contains("[ERROR]"))
         .map(|line| {
-            let style = if line.contains("[WARN]") || line.contains("[Warn]") {
+            let style = if line.contains("[WARN]") {
+                // Warnings always in yellow regardless of source.
                 Style::default().fg(Color::Yellow)
-            } else if line.contains("[DEBUG]") || line.contains("[Debug]") {
-                // FFI/SDK calls (sdk: prefix) rendered in Magenta.
-                if line.contains("][sdk:") {
+            } else if line.contains("][cli:") {
+                if line.contains("[DEBUG]") {
+                    Style::default().fg(Color::Yellow)
+                } else {
+                    Style::default().fg(Color::LightYellow)
+                }
+            } else if line.contains("][sdk:") || line.contains("][ffi:") {
+                if line.contains("[DEBUG]") {
                     Style::default().fg(Color::Magenta)
-                } else if line.contains("][transport]") {
+                } else {
+                    Style::default().fg(Color::LightMagenta)
+                }
+            } else if line.contains("][stream:") {
+                if line.contains("[DEBUG]") {
                     Style::default().fg(Color::Cyan)
-                } else if line.contains("][provider]") {
+                } else {
+                    Style::default().fg(Color::LightCyan)
+                }
+            } else if line.contains("][agent:") {
+                if line.contains("[DEBUG]") {
+                    Style::default().fg(Color::Green)
+                } else {
+                    Style::default().fg(Color::LightGreen)
+                }
+            } else if line.contains("][tool:") {
+                if line.contains("[DEBUG]") {
                     Style::default().fg(Color::Blue)
                 } else {
-                    Style::default().fg(Color::DarkGray)
+                    Style::default().fg(Color::LightBlue)
                 }
             } else {
-                // INFO level: color by source.
-                if line.contains("][sdk:") {
-                    Style::default().fg(Color::LightMagenta)
-                } else if line.contains("][transport]") {
-                    Style::default().fg(Color::LightCyan)
-                } else if line.contains("][provider]") {
-                    Style::default().fg(Color::LightBlue)
-                } else if line.contains("][agent]") {
-                    Style::default().fg(Color::LightGreen)
-                } else {
-                    Style::default().fg(Color::Gray)
-                }
+                // core:* or unknown
+                Style::default().fg(Color::Gray)
             };
             ListItem::new(Span::styled(line.clone(), style))
         })
@@ -1123,7 +1513,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     let log_panel = List::new(log_items).block(
         Block::default()
             .borders(Borders::ALL)
-            .title("WASM / FFI Logs  [magenta=FFI | cyan=transport | blue=provider | green=agent]")
+            .title("Logs [yellow=CLI | magenta=FFI/SDK | cyan=stream | green=agent | blue=tool]")
             .title_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
     );
     frame.render_widget(log_panel, right_panel[1]);
@@ -1133,7 +1523,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         let prompt_title = if app.loading {
             "Prompt  [mengirim...]"
         } else {
-            "Prompt  [F2 = Settings | Enter = kirim | /help = commands]"
+            "Prompt  [F2 = Settings | F3 = Riwayat | Enter = kirim | /help = commands]"
         };
         let input_widget = Paragraph::new(app.input.as_str())
             .block(Block::default().borders(Borders::ALL).title(prompt_title))
@@ -1165,13 +1555,25 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     }
 
     // ── Footer / status ──────────────────────────────────────────────────────
+    // Health dot: read without blocking (try_lock avoids hanging the render loop).
+    let (health_dot, health_color) = match app.health.try_lock() {
+        Ok(h) => match h.overall_status() {
+            HealthStatus::Healthy => ("\u{25cf} ", Color::Green),
+            HealthStatus::Degraded => ("\u{25cf} ", Color::Yellow),
+            HealthStatus::Unhealthy => ("\u{25cf} ", Color::Red),
+        },
+        Err(_) => ("\u{25cb} ", Color::Gray),
+    };
     let footer = Paragraph::new(Line::from(vec![
+        Span::styled(health_dot, Style::default().fg(health_color).add_modifier(Modifier::BOLD)),
         Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" autocomplete  "),
         Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" submit  "),
         Span::styled("F2", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
         Span::raw(" settings  "),
+        Span::styled("F3", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" riwayat  "),
         Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" quit  "),
         Span::styled(app.status.as_str(), Style::default().fg(Color::Gray)),
@@ -1183,6 +1585,36 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     if app.settings.open {
         draw_settings_overlay(frame, app);
     }
+
+    // ── History overlay (drawn on top of everything else) ──────────────────
+    if app.history.open {
+        draw_history_overlay(frame, app);
+    }
+}
+
+fn render_streaming_preview(content: &str) -> Text<'static> {
+    let mut lines = Vec::new();
+    lines.push(Line::from(vec![
+        Span::styled(
+            " Streaming ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+    ]));
+    for line in content.lines() {
+        lines.push(Line::from(Span::styled(
+            line.to_string(),
+            Style::default().fg(Color::LightCyan),
+        )));
+    }
+    lines.push(Line::from(Span::styled(
+        "...",
+        Style::default().fg(Color::DarkGray),
+    )));
+    Text::from(lines)
 }
 
 fn render_messages<'a>(messages: impl Iterator<Item = &'a UiMessage>) -> Text<'static> {
@@ -1400,6 +1832,8 @@ fn apply_runtime_selection(
     app.provider = app.runtime_config.default_provider.clone();
     app.model = app.runtime_config.model.clone();
     app.session_id = None;
+    // Provider/model changed — start a fresh history session next turn.
+    app.current_history_session = None;
 
     Ok(format!(
         "Provider/model aktif sekarang {}/{}. Sesi percakapan direset agar riwayat tidak tercampur antar backend.",
@@ -1470,6 +1904,183 @@ fn reconfigure_runtime(
     *client = new_client;
 
     Ok(())
+}
+
+// ── History overlay draw functions ────────────────────────────────────────────
+
+fn render_history_detail(session: &ChatHistorySession, scroll: usize) -> Text<'static> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    for turn in session.turns.iter().skip(scroll).take(20) {
+        let ts = turn.timestamp.get(..19).unwrap_or(turn.timestamp.as_str()).to_string();
+        let (label, label_style) = match turn.role {
+            TurnRole::User => (
+                format!(" Anda [{ts}] "),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            TurnRole::Assistant => (
+                format!(" AI   [{ts}] "),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        };
+        lines.push(Line::from(Span::styled(label, label_style)));
+        for body_line in turn.content.lines().take(10) {
+            lines.push(Line::from(Span::raw(body_line.to_string())));
+        }
+        if turn.tool_steps > 0 {
+            lines.push(Line::from(Span::styled(
+                format!("  [{} langkah tool]", turn.tool_steps),
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+        lines.push(Line::default());
+    }
+    if lines.is_empty() {
+        lines.push(Line::from(Span::raw("(sesi kosong)".to_string())));
+    }
+    Text::from(lines)
+}
+
+fn draw_history_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
+    let area = frame.area();
+    frame.render_widget(Clear, area);
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Riwayat Chat  [\u{2191}\u{2193} = navigasi  |  Enter = lihat  |  d = hapus  |  r = ganti judul  |  Esc = tutup] ")
+        .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+    let inner = outer_block.inner(area);
+    frame.render_widget(outer_block, area);
+
+    if app.history.sessions.is_empty() {
+        frame.render_widget(
+            Paragraph::new(
+                "Belum ada riwayat sesi tersimpan.\n\
+                 Riwayat disimpan otomatis setelah setiap respons AI.\n\
+                 Tekan Esc untuk menutup.",
+            )
+            .block(Block::default().borders(Borders::ALL))
+            .wrap(Wrap { trim: false }),
+            inner,
+        );
+        return;
+    }
+
+    let split = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
+        .split(inner);
+
+    // ── Left: session list ─────────────────────────────────────────────────
+    let list_items: Vec<ListItem> = app
+        .history
+        .sessions
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let cursor = i == app.history.cursor;
+            let arrow = if cursor { "▶" } else { " " };
+            let date = s.updated_at.get(..10).unwrap_or(s.updated_at.as_str());
+            let title = if s.title.is_empty() { "<tanpa judul>" } else { s.title.as_str() };
+            let style = if cursor {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            ListItem::new(format!(
+                "{arrow} {title}\n    {}/{} · {date} · {} giliran",
+                s.provider,
+                s.model,
+                s.turns.len()
+            ))
+            .style(style)
+        })
+        .collect();
+
+    frame.render_widget(
+        List::new(list_items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(
+                    "Sesi ({})  [Enter=lihat  d=hapus  r=ganti judul]",
+                    app.history.sessions.len()
+                ))
+                .border_style(Style::default().fg(Color::Yellow)),
+        ),
+        split[0],
+    );
+
+    // ── Right: detail or summary ───────────────────────────────────────────
+    if let Some(detail) = &app.history.detail {
+        let detail_title = if detail.title.is_empty() {
+            "<tanpa judul>".to_string()
+        } else {
+            detail.title.clone()
+        };
+        frame.render_widget(
+            Paragraph::new(render_history_detail(detail, app.history.detail_scroll))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(format!(
+                            "Percakapan: {}  [\u{2191}\u{2193}=gulir  Esc=kembali]",
+                            detail_title
+                        ))
+                        .border_style(Style::default().fg(Color::Cyan)),
+                )
+                .wrap(Wrap { trim: false }),
+            split[1],
+        );
+    } else if let Some(s) = app.history.sessions.get(app.history.cursor) {
+        let summary = format!(
+            "Provider  : {}\nModel     : {}\nMode      : {}\nGiliran   : {}\nDibuat    : {}\nDiperbarui: {}\nCore ID   : {}\n\nEnter = lihat percakapan\nd     = hapus sesi\nr     = ganti judul",
+            s.provider,
+            s.model,
+            if s.agent_mode { "Agent Loop" } else { "Chat Langsung" },
+            s.turns.len(),
+            s.created_at.get(..19).unwrap_or(s.created_at.as_str()),
+            s.updated_at.get(..19).unwrap_or(s.updated_at.as_str()),
+            s.core_session_id.as_deref().unwrap_or("-"),
+        );
+        frame.render_widget(
+            Paragraph::new(summary)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Info Sesi")
+                        .border_style(Style::default().fg(Color::Yellow)),
+                )
+                .wrap(Wrap { trim: false }),
+            split[1],
+        );
+    }
+
+    // ── Rename input bar overlay at the bottom ─────────────────────────────
+    if app.history.rename_mode {
+        let bottom = Rect {
+            x: area.x + 1,
+            y: area.y + area.height.saturating_sub(4),
+            width: area.width.saturating_sub(2),
+            height: 3,
+        };
+        frame.render_widget(Clear, bottom);
+        frame.render_widget(
+            Paragraph::new(format!("Judul baru: {}\u{2588}", app.history.rename_buffer))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Ganti Judul  [Enter=simpan  Esc=batal]")
+                        .border_style(Style::default().fg(Color::Magenta)),
+                )
+                .style(Style::default().fg(Color::Magenta)),
+            bottom,
+        );
+    }
 }
 
 // ── Settings overlay draw functions ──────────────────────────────────────────

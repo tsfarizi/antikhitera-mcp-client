@@ -14,7 +14,7 @@
 //! ## Example
 //!
 //! ```no_run,ignore
-//! use antikythera_core::client::{McpClient, ClientConfig, ChatRequest};
+//! use antikythera_core::application::client::{McpClient, ClientConfig, ChatRequest};
 //!
 //! async fn example() {
 //!     // Client setup would go here
@@ -175,6 +175,11 @@ pub struct PreparedChatTurn {
     pub logs: Vec<String>,
 }
 
+/// Error returned by [`McpClient`] operations.
+///
+/// Wraps [`ModelError`] — the only error path today is a model provider
+/// failure. Use [`McpError::user_message`] to get a human-readable string
+/// suitable for display in the TUI or CLI output.
 #[derive(Debug, Error)]
 pub enum McpError {
     #[error(transparent)]
@@ -189,6 +194,11 @@ impl McpError {
     }
 }
 
+/// Read-only snapshot of the active [`McpClient`] configuration.
+///
+/// Produced by [`McpClient::config_snapshot`] and passed to the TUI so the
+/// UI can display current provider, model, tools, and server bindings without
+/// holding a lock on the client.
 #[derive(Debug, Clone)]
 pub struct ClientConfigSnapshot {
     pub model: String,
@@ -197,9 +207,24 @@ pub struct ClientConfigSnapshot {
     pub prompt_template: String,
     pub tools: Vec<ToolConfig>,
     pub servers: Vec<ServerConfig>,
+    /// Full TOML representation of the config, shown in the Settings overlay.
     pub raw: String,
 }
 
+/// Core MCP client that owns session history, provider dispatch, and server connectivity.
+///
+/// `McpClient<P>` is generic over any [`ModelProvider`] implementation, making
+/// it usable across native, WASM, and FFI deployment targets without change.
+/// Callers supply any concrete `P` — including host-delegating providers that
+/// forward the LLM call outward via FFI — keeping this type agnostic to both
+/// the runtime environment and the underlying model infrastructure.
+///
+/// # Session model
+///
+/// Each session is identified by a `session_id` string.  History is stored
+/// in-memory in a `Mutex<HashMap<session_id, Vec<ChatMessage>>>` and is scoped
+/// to the lifetime of this instance.  Use [`McpClient::prune_session`] to trim
+/// old messages before a request when the conversation grows long.
 pub struct McpClient<P: ModelProvider> {
     provider: P,
     config: ClientConfig,
@@ -208,6 +233,10 @@ pub struct McpClient<P: ModelProvider> {
 }
 
 impl<P: ModelProvider> McpClient<P> {
+    /// Construct a new client from a provider and a [`ClientConfig`].
+    ///
+    /// A [`ServerManager`] is created from `config.servers` and stored as the
+    /// active [`ToolServerInterface`].  Session history starts empty.
     pub fn new(provider: P, config: ClientConfig) -> Self {
         let server_manager = Arc::new(ServerManager::new(config.servers.clone()));
         let bridge: Arc<dyn ToolServerInterface> = server_manager;
@@ -219,22 +248,29 @@ impl<P: ModelProvider> McpClient<P> {
         }
     }
 
+    /// Return the active [`ClientConfig`].
     pub fn config(&self) -> &ClientConfig {
         &self.config
     }
 
+    /// Return the list of registered tool configurations.
     pub fn tools(&self) -> &[ToolConfig] {
         &self.config.tools
     }
 
+    /// Return the default provider identifier (e.g., `"gemini"`, `"openai"`).
     pub fn default_provider(&self) -> &str {
         &self.config.default_provider
     }
 
+    /// Return the default model name used when no per-request override is set.
     pub fn default_model(&self) -> &str {
         &self.config.default_model
     }
 
+    /// Build a [`ClientConfigSnapshot`] from the current config for display layers.
+    ///
+    /// The snapshot includes the raw TOML representation used by the Settings overlay.
     pub fn config_snapshot(&self) -> ClientConfigSnapshot {
         let app_config = self.config.to_app_config();
         let prompt_template = app_config.prompt_template().to_string();
@@ -250,14 +286,23 @@ impl<P: ModelProvider> McpClient<P> {
         }
     }
 
+    /// Return the prompts configuration section (system prompt templates, overrides).
     pub fn prompts(&self) -> &PromptsConfig {
         &self.config.prompts
     }
 
+    /// Return a clone of the active [`ToolServerInterface`] arc (the `ServerManager`).
     pub fn server_bridge(&self) -> Arc<dyn ToolServerInterface> {
         self.server_bridge.clone()
     }
 
+    /// Assemble a [`PreparedChatTurn`] without calling the model.
+    ///
+    /// Loads session history, optionally applies `bypass_template` or
+    /// `raw_mode`, builds the system prompt from the template, and
+    /// constructs the outgoing [`ModelRequest`].  The result can be
+    /// inspected or handed to [`complete_chat_from_host`] when the host
+    /// owns the LLM API call.
     pub async fn prepare_chat(&self, request: ChatRequest) -> PreparedChatTurn {
         let provider = self.config.default_provider.clone();
         let model = self.config.default_model.clone();
@@ -270,10 +315,12 @@ impl<P: ModelProvider> McpClient<P> {
         let mut messages = Vec::new();
 
         if raw_mode {
-            // Raw mode: skip all system prompts and history, just send user message directly
+            // Raw mode: bypass system prompt, session history, and template composition.
+            // The user message is sent to the model exactly as received, with no context injection.
             logs.push("Raw mode: sending request directly to model".to_string());
         } else {
-            // Normal mode: include system prompt and history
+            // Normal mode: load session history, compose the system prompt from the
+            // configured template, and prepend both before the outgoing user message.
             let history = {
                 let start_wait = std::time::Instant::now();
                 let mut sessions = self.sessions.lock().await;
@@ -294,12 +341,14 @@ impl<P: ModelProvider> McpClient<P> {
                 ));
             }
 
-            // Determine system prompt based on bypass_template flag
+            // Select system-prompt composition strategy.
+            // - bypass_template=true: the agent runner has already assembled a complete
+            //   system prompt; use it verbatim to avoid double-wrapping.
+            // - bypass_template=false: compose from the configured prompt template,
+            //   substituting any per-request override into {{custom_instruction}}.
             let system_prompt = if request.bypass_template {
-                // Agent provides complete system prompt - use as-is
                 request.system_prompt.unwrap_or_default()
             } else {
-                // Normal mode: compose with template
                 let system = request
                     .system_prompt
                     .or_else(|| self.config.default_system_prompt.clone());
@@ -348,6 +397,11 @@ impl<P: ModelProvider> McpClient<P> {
         }
     }
 
+    /// Commit a [`ModelResponse`] to session history and return a [`ChatResult`].
+    ///
+    /// Both the user message and the model's assistant message are appended to
+    /// the in-memory session store under `prepared.session_id` via
+    /// [`persist_exchange`].
     pub async fn complete_chat(
         &self,
         prepared: PreparedChatTurn,
@@ -385,6 +439,11 @@ impl<P: ModelProvider> McpClient<P> {
         })
     }
 
+    /// Convert a host-provided [`HostModelResponse`] to [`ModelResponse`] then
+    /// delegate to [`complete_chat`].
+    ///
+    /// This is the preferred path when the embedding host owns the LLM API call
+    /// (WASM component or custom transport).
     pub async fn complete_chat_from_host(
         &self,
         prepared: PreparedChatTurn,
@@ -395,6 +454,11 @@ impl<P: ModelProvider> McpClient<P> {
         self.complete_chat(prepared, model_response).await
     }
 
+    /// Single-method convenience: [`prepare_chat`] → provider dispatch → [`complete_chat`].
+    ///
+    /// Use this in native CLI mode where `McpClient` owns the provider.  For
+    /// WASM or host-delegating scenarios, call [`prepare_chat`] and
+    /// [`complete_chat_from_host`] separately.
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
         let prepared = self.prepare_chat(request).await;
 
@@ -417,10 +481,12 @@ impl<P: ModelProvider> McpClient<P> {
         }
 
         let tool_guidance = if self.config.tools.is_empty() {
-            // No tools available - use fallback guidance
+            // No MCP tools registered: emit only the fallback guidance so the model
+            // knows it must rely on its own knowledge rather than tool invocations.
             self.config.prompts.fallback_guidance().to_string()
         } else {
-            // Tools available - list them with guidance
+            // MCP tools are registered: list each tool name + description so the
+            // model can reason about which tool to invoke for the current request.
             let mut text = format!("{}\n", self.config.prompts.tool_guidance());
             for tool in &self.config.tools {
                 let description = tool
@@ -460,6 +526,11 @@ impl<P: ModelProvider> McpClient<P> {
         cleaned.join("\n").trim().to_string()
     }
 
+    /// Append `user_message` and `assistant` to the in-memory session history.
+    ///
+    /// If `session_id` has no existing history an entry is created.  The lock
+    /// acquisition latency is traced at `DEBUG` level to surface contention
+    /// under concurrent multi-agent usage.
     async fn persist_exchange(
         &self,
         session_id: &str,
@@ -479,6 +550,36 @@ impl<P: ModelProvider> McpClient<P> {
             total_messages = history.len(),
             "Persisted chat exchange to session history"
         );
+    }
+
+    /// Prune old non-system messages from `session_id` to fit within `policy`.
+    ///
+    /// Returns the number of messages removed, or `0` when the session does
+    /// not exist or is already within budget.
+    pub async fn prune_session(
+        &self,
+        session_id: &str,
+        policy: &crate::application::resilience::ContextWindowPolicy,
+    ) -> usize {
+        use crate::application::resilience::prune_messages;
+        let mut sessions = self.sessions.lock().await;
+        if let Some(history) = sessions.get_mut(session_id) {
+            let before = history.len();
+            let pruned = prune_messages(history, policy);
+            *history = pruned;
+            let removed = before - history.len();
+            if removed > 0 {
+                tracing::info!(
+                    session_id,
+                    removed,
+                    remaining = history.len(),
+                    "Context window pruned"
+                );
+            }
+            removed
+        } else {
+            0
+        }
     }
 
     pub(crate) fn summarise(text: &str) -> String {

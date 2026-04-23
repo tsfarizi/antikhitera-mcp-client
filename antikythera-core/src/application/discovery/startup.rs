@@ -1,7 +1,15 @@
-//! Startup Discovery Integration
+//! Startup server discovery integration.
 //!
-//! This module provides startup logging for MCP server discovery.
-//! It scans the servers folder, loads each server, and logs the results.
+//! Scans the `servers/` folder, attempts to load each discovered binary via
+//! MCP stdio transport, retrieves their available tools, and returns a
+//! structured [`StartupDiscoveryResult`].
+//!
+//! The result can be consumed by any embedding layer at startup to merge
+//! newly found servers into an active configuration before the first client
+//! session is opened, making discovered servers available without requiring
+//! a config-file restart.  Helper methods on [`StartupDiscoveryResult`] —
+//! [`loaded_servers`], [`failed_servers`], and [`has_loaded_servers`] — make
+//! it easy to inspect and act on the discovery outcome.
 
 use super::types::{DiscoveredServer, DiscoverySummary, LoadStatus};
 use super::{DEFAULT_SERVERS_FOLDER, load_all, scan_folder};
@@ -195,7 +203,8 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
 
 /// Print discovery results to stdout (for non-logging scenarios).
 ///
-/// Useful when tracing is disabled or for CLI output.
+/// Useful when tracing is disabled or when the embedding layer has not yet
+/// configured a structured log subscriber.
 pub fn print_discovery_summary(result: &StartupDiscoveryResult) {
     if !result.folder_exists {
         println!("⚠️  Servers folder not found - no auto-discovery performed");

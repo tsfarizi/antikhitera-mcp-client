@@ -4,6 +4,7 @@
 //! Implements the domain ports (interfaces).
 
 pub mod config;
+pub mod history;
 pub mod llm;
 
 pub use config::*;

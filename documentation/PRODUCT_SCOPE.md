@@ -44,6 +44,7 @@ The `antikythera` binary accepts a `--mode` flag:
 | `stdio` (default) | Interactive TUI chat session |
 | `setup` | Configuration wizard for providers and servers |
 | `multi-agent` | Orchestrator harness for multi-agent task dispatch |
+| `wasm-harness` | Host-FFI WASM probe for runtime/session/tool-registry validation |
 
 ## Architecture philosophy
 

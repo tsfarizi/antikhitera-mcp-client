@@ -1,8 +1,15 @@
 //! Main CLI Binary Entry Point
 //!
 //! Thin wrapper over `antikythera_core`: parses CLI arguments, loads the
-//! shared `app.pc` config, constructs an `McpClient`, then dispatches to the
-//! core's STDIO loop (`tui` mode) or REST server (`rest` mode).
+//! shared `app.pc` config, constructs an `McpClient`, then dispatches to one
+//! of the supported run modes:
+//!
+//! | Mode | Description |
+//! |:-----|:------------|
+//! | `stdio` (default) | Interactive ratatui TUI chat session |
+//! | `setup` | Configuration wizard for providers and servers |
+//! | `multi-agent` | Multi-agent orchestrator harness |
+//! | `wasm-harness` | Host-FFI WASM probe for runtime/session/tool validation |
 //!
 //! All provider resolution, session management, and protocol handling live in
 //! `antikythera-core`; this binary only handles argument-to-run-mode wiring.
@@ -27,6 +34,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[cfg(feature = "multi-agent")]
 use antikythera_core::application::agent::multi_agent::{
     AgentProfile, DirectRouter, ExecutionMode, MultiAgentOrchestrator, RoundRobinRouter,
+};
+
+#[cfg(feature = "multi-agent")]
+use antikythera_core::application::agent::multi_agent::budget::OrchestratorBudget;
+
+#[cfg(feature = "multi-agent")]
+use antikythera_core::application::agent::multi_agent::guardrails::{
+    BudgetGuardrail, GuardrailChain, TimeoutGuardrail,
 };
 
 #[tokio::main]
@@ -175,10 +190,31 @@ async fn run_multi_agent(
         orch = orch.with_router(Arc::new(RoundRobinRouter::new()));
     }
 
+    // ----------------------------------------------------------------
+    // Attach resource limits: an orchestrator-wide budget (max concurrent
+    // tasks + total step ceiling) and a per-task guardrail chain (wall-clock
+    // timeout + step budget cap). This prevents runaway agent loops.
+    // ----------------------------------------------------------------
+    // OrchestratorBudget tracks global concurrency and cumulative step usage
+    // across all in-flight tasks for the lifetime of this orchestrator.
+    let budget = OrchestratorBudget::new()
+        .with_max_concurrent_tasks(8)
+        .with_max_total_steps(1_000);
+
+    // GuardrailChain adds per-task timeout enforcement and step-budget cap.
+    let guardrails = GuardrailChain::new()
+        // Enforce a hard 5-minute wall-clock execution limit on each dispatched task.
+        .with_guardrail(Arc::new(TimeoutGuardrail::new(300_000)))
+        // Allow at most 50 reasoning steps per task to prevent runaway agent loops.
+        .with_guardrail(Arc::new(BudgetGuardrail::new().with_max_task_steps(50)));
+
+    orch = orch.with_budget(budget).with_guardrails(guardrails);
+
     eprintln!(
-        "Multi-agent orchestrator ready: {} agent(s), mode={}",
+        "Multi-agent orchestrator ready: {} agent(s), mode={}, guardrails={}",
         orch.agent_count(),
-        exec_mode
+        exec_mode,
+        orch.guardrail_count(),
     );
 
     // ----------------------------------------------------------------
