@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::CliError;
 use crate::CliResult;
 use crate::infrastructure::llm::build_provider_from_configs;
-use crate::infrastructure::llm::{ModelInfo, ModelProviderConfig};
+use crate::infrastructure::llm::{ModelProviderConfig};
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use antikythera_core::{AppConfig, ClientConfig, McpClient};
 
@@ -67,7 +67,22 @@ pub fn materialize_runtime_config(
             "" | "default" => None,
             other => Some(other.to_string()),
         })
-        .unwrap_or_else(|| default_model_for_provider(&default_provider).to_string());
+        .or_else(|| {
+            let fallback = default_model_for_provider(&default_provider);
+            if fallback.is_empty() {
+                None
+            } else {
+                Some(fallback.to_string())
+            }
+        })
+        .ok_or_else(|| {
+            CliError::Validation(format!(
+                "Nama model belum dikonfigurasi untuk provider '{}'. \
+                 Tambahkan model melalui Settings (F2 → [2] Model → [a]=tambah) \
+                 atau jalankan: antikythera-config add-model {} <nama-model>",
+                default_provider, default_provider
+            ))
+        })?;
 
     if providers
         .iter()
@@ -171,12 +186,10 @@ fn detect_provider_from_env() -> String {
     "ollama".to_string()
 }
 
-fn default_model_for_provider(provider_id: &str) -> &'static str {
-    match provider_id.to_ascii_lowercase().as_str() {
-        "gemini" => "gemini-2.0-flash",
-        "openai" => "gpt-4o-mini",
-        _ => "llama3.2",
-    }
+fn default_model_for_provider(_provider_id: &str) -> &'static str {
+    // No hardcoded defaults — model must be configured by the user.
+    // Returns empty string so the caller can detect absence and report it.
+    ""
 }
 
 fn default_provider_template(provider_id: &str) -> Option<ModelProviderConfig> {
@@ -191,10 +204,7 @@ fn default_provider_template(provider_id: &str) -> Option<ModelProviderConfig> {
                 .ok()
                 .filter(|value| !value.trim().is_empty()),
             api_path: None,
-            models: vec![ModelInfo {
-                name: "gemini-2.0-flash".to_string(),
-                display_name: Some("Gemini 2.0 Flash".to_string()),
-            }],
+            models: vec![],
         }),
         "openai" => Some(ModelProviderConfig {
             id: "openai".to_string(),
@@ -204,10 +214,7 @@ fn default_provider_template(provider_id: &str) -> Option<ModelProviderConfig> {
                 .ok()
                 .filter(|value| !value.trim().is_empty()),
             api_path: None,
-            models: vec![ModelInfo {
-                name: "gpt-4o-mini".to_string(),
-                display_name: Some("GPT-4o Mini".to_string()),
-            }],
+            models: vec![],
         }),
         "ollama" => Some(ModelProviderConfig {
             id: "ollama".to_string(),
@@ -215,10 +222,7 @@ fn default_provider_template(provider_id: &str) -> Option<ModelProviderConfig> {
             endpoint: "http://127.0.0.1:11434".to_string(),
             api_key: None,
             api_path: None,
-            models: vec![ModelInfo {
-                name: "llama3.2".to_string(),
-                display_name: Some("Llama 3.2".to_string()),
-            }],
+            models: vec![],
         }),
         _ => None,
     }

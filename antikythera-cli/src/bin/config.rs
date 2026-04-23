@@ -50,6 +50,23 @@ pub enum ConfigCommand {
     Reset,
     /// Show config status
     Status,
+    /// Add a model to a provider's model list
+    AddModel {
+        /// Provider ID to add the model to
+        provider: String,
+        /// Model name (e.g. gemini-2.0-flash, gpt-4o, llama3.2)
+        model: String,
+        /// Optional human-readable display name
+        #[arg(name = "display_name")]
+        display_name: Option<String>,
+    },
+    /// Remove a model from a provider's model list
+    RemoveModel {
+        /// Provider ID
+        provider: String,
+        /// Model name to remove
+        model: String,
+    },
 }
 
 pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
@@ -110,13 +127,12 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             }
 
             let provider_type = normalize_provider_type(&provider_type);
-            let models = default_models_for_provider(&provider_type);
             config.providers.push(ProviderConfig {
                 id: id.clone(),
                 provider_type,
                 endpoint,
                 api_key: api_key.unwrap_or_default(),
-                models,
+                models: vec![],
             });
 
             save_app_config(&config, None)?;
@@ -209,6 +225,57 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 println!("✗ No config found at: {}", CONFIG_PATH);
                 println!("  Run 'init' to create default config.");
             }
+            Ok(())
+        }
+
+        ConfigCommand::AddModel {
+            provider,
+            model,
+            display_name,
+        } => {
+            let mut config = load_app_config(None)?;
+            let Some(p) = config.providers.iter_mut().find(|p| p.id == provider) else {
+                return Err(CliError::Validation(format!(
+                    "Provider '{}' tidak ditemukan",
+                    provider
+                )));
+            };
+            if p.models.iter().any(|m| m.name == model) {
+                return Err(CliError::Validation(format!(
+                    "Model '{}' sudah ada di provider '{}'",
+                    model, provider
+                )));
+            }
+            p.models.push(ModelInfo {
+                name: model.clone(),
+                display_name: display_name.clone().unwrap_or_default(),
+            });
+            save_app_config(&config, None)?;
+            println!(
+                "✓ Model '{}' ditambahkan ke provider '{}'",
+                model, provider
+            );
+            Ok(())
+        }
+
+        ConfigCommand::RemoveModel { provider, model } => {
+            let mut config = load_app_config(None)?;
+            let Some(p) = config.providers.iter_mut().find(|p| p.id == provider) else {
+                return Err(CliError::Validation(format!(
+                    "Provider '{}' tidak ditemukan",
+                    provider
+                )));
+            };
+            let before = p.models.len();
+            p.models.retain(|m| m.name != model);
+            if p.models.len() == before {
+                return Err(CliError::Validation(format!(
+                    "Model '{}' tidak ditemukan di provider '{}'",
+                    model, provider
+                )));
+            }
+            save_app_config(&config, None)?;
+            println!("✓ Model '{}' dihapus dari provider '{}'", model, provider);
             Ok(())
         }
     }

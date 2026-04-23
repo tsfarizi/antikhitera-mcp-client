@@ -14,6 +14,7 @@ use antikythera_cli::domain::use_cases::{render_wasm_stream_report, run_wasm_str
 use antikythera_cli::infrastructure::llm::install_terminal_stream_sink;
 use antikythera_cli::infrastructure::llm::providers_from_postcard;
 use antikythera_cli::presentation::tui;
+use antikythera_cli::presentation::tui_tracing::AntikytheraTuiLayer;
 use antikythera_cli::runtime::{build_runtime_client, materialize_runtime_config};
 use antikythera_cli::config::load_app_config;
 use antikythera_core::application::agent::multi_agent::task::AgentTask;
@@ -21,6 +22,7 @@ use antikythera_cli::cli::{Cli, RunMode};
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use antikythera_core::{AppConfig, McpClient};
 use clap::Parser;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[cfg(feature = "multi-agent")]
 use antikythera_core::application::agent::multi_agent::{
@@ -29,6 +31,13 @@ use antikythera_core::application::agent::multi_agent::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Install the TUI tracing bridge first — routes all tracing::debug!/info!/
+    // warn!/error! events from antikythera-core into the LOGGERS system so they
+    // appear in the WASM/FFI Logs panel. Must be installed before any crate code runs.
+    tracing_subscriber::registry()
+        .with(AntikytheraTuiLayer)
+        .init();
+
     // Load .env at process startup so GEMINI_API_KEY / OPENAI_API_KEY are
     // available for provider auto-detection. Missing .env file is fine.
     let _ = dotenvy::dotenv();

@@ -8,9 +8,10 @@ use antikythera_core::application::client::{
 };
 use antikythera_core::config::{AppConfig, PromptsConfig};
 use antikythera_core::get_latest_logs;
+use antikythera_sdk::sdk_logging::get_latest_sdk_logs;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use crate::config::{save_app_config, AppConfig as PostcardAppConfig, ModelConfig as PostcardModelConfig};
-use crate::infrastructure::llm::{ModelProviderConfig, providers_to_postcard};
+use crate::infrastructure::llm::{ModelInfo, ModelProviderConfig, providers_to_postcard};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -160,6 +161,10 @@ struct SettingsPanel {
     pending_system_prompt: String,
     pending_prompts: PromptsConfig,
     pending_agent_mode: bool,
+    /// Whether the "add model" input row is active on the Model tab.
+    model_add_mode: bool,
+    /// Buffer for the new model name being typed on the Model tab.
+    model_add_buffer: String,
 }
 
 impl SettingsPanel {
@@ -177,6 +182,8 @@ impl SettingsPanel {
             pending_system_prompt: String::new(),
             pending_prompts: PromptsConfig::default(),
             pending_agent_mode: true,
+            model_add_mode: false,
+            model_add_buffer: String::new(),
         }
     }
 
@@ -206,6 +213,8 @@ impl SettingsPanel {
             .unwrap_or(0);
         self.model_cursor = self.pending_model_idx;
         self.prompt_cursor = 0;
+        self.model_add_mode = false;
+        self.model_add_buffer.clear();
     }
 }
 
@@ -380,17 +389,37 @@ async fn run_loop(
             }
         }
 
-        // Refresh log panel from the core logging system on every frame tick.
-        // This captures entries written by WASM FFI callbacks and agent steps.
-        let session_key = app.session_id.as_deref().unwrap_or("global");
-        let raw_logs = get_latest_logs(session_key, 40);
-        app.log_lines = raw_logs
+        // Refresh log panel from both core and SDK logging systems on every frame tick.
+        // Core logs: transport (data transfer), provider (API calls), agent (tool calls).
+        // SDK logs: FFI calls, WasmAgent events, config/server operations.
+        // The tracing bridge (AntikytheraTuiLayer) writes all tracing:: events to the
+        // "tui" session bucket — always read from "tui" here regardless of chat session.
+        let mut core_logs = get_latest_logs("tui", 50);
+        let mut sdk_logs = get_latest_sdk_logs("tui", 20);
+        // Merge: tag SDK entries so they can be highlighted differently.
+        // We encode source prefix "sdk:" to differentiate from core sources.
+        for entry in &mut sdk_logs {
+            if let Some(ref mut src) = entry.source {
+                *src = format!("sdk:{src}");
+            } else {
+                entry.source = Some("sdk:ffi".to_string());
+            }
+        }
+        core_logs.extend(sdk_logs);
+        // Sort by sequence number for correct chronological order.
+        core_logs.sort_by_key(|e| e.sequence);
+        app.log_lines = core_logs
             .into_iter()
             .rev()
             .map(|entry| {
-                let level = format!("{:?}", entry.level);
+                let level = entry.level.as_str();
                 let source = entry.source.as_deref().unwrap_or("core");
-                format!("[{level:<5}][{source}] {}", entry.message)
+                // Include context payload (FFI args, tool names, etc.) when present.
+                if let Some(ctx) = &entry.context {
+                    format!("[{level:<5}][{source}] {} | {ctx}", entry.message)
+                } else {
+                    format!("[{level:<5}][{source}] {}", entry.message)
+                }
             })
             .collect();
 
@@ -519,8 +548,49 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
 fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
     // Ctrl+S — save all pending changes and close.
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
+        app.settings.model_add_mode = false;
+        app.settings.model_add_buffer.clear();
         app.settings.open = false;
         return KeyAction::ApplySettings;
+    }
+
+    // ── Model "add" input mode ───────────────────────────────────────────────
+    // Intercept keystrokes while the user is typing a new model name.
+    if app.settings.model_add_mode {
+        match key.code {
+            KeyCode::Esc => {
+                app.settings.model_add_mode = false;
+                app.settings.model_add_buffer.clear();
+            }
+            KeyCode::Enter => {
+                let name = app.settings.model_add_buffer.trim().to_string();
+                if !name.is_empty()
+                    && let Some(provider) =
+                        app.providers.get_mut(app.settings.pending_provider_idx)
+                    && !provider.models.iter().any(|m| m.name == name)
+                {
+                    provider.models.push(ModelInfo {
+                        name,
+                        display_name: None,
+                    });
+                    // Move cursor to the newly added model.
+                    app.settings.model_cursor = provider.models.len().saturating_sub(1);
+                }
+                app.settings.model_add_mode = false;
+                app.settings.model_add_buffer.clear();
+            }
+            KeyCode::Backspace => {
+                app.settings.model_add_buffer.pop();
+            }
+            KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Only allow printable ASCII (no whitespace except hyphen/dot).
+                if ch.is_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':') {
+                    app.settings.model_add_buffer.push(ch);
+                }
+            }
+            _ => {}
+        }
+        return KeyAction::None;
     }
 
     // While in text-edit mode, route keystrokes to the edit buffer.
@@ -640,6 +710,26 @@ fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
                 app.settings.pending_agent_mode = !app.settings.pending_agent_mode;
             }
         },
+        // ── Add model (Model tab only) ────────────────────────────────────────
+        KeyCode::Char('a') if app.settings.tab == SettingsTab::Model => {
+            app.settings.model_add_mode = true;
+            app.settings.model_add_buffer.clear();
+        }
+        // ── Delete model (Model tab only) ─────────────────────────────────────
+        KeyCode::Char('d') if app.settings.tab == SettingsTab::Model => {
+            let idx = app.settings.pending_provider_idx;
+            let cursor = app.settings.model_cursor;
+            if let Some(provider) = app.providers.get_mut(idx)
+                && cursor < provider.models.len()
+            {
+                provider.models.remove(cursor);
+                let new_len = provider.models.len();
+                // Keep cursors in bounds after removal.
+                app.settings.model_cursor = cursor.min(new_len.saturating_sub(1));
+                app.settings.pending_model_idx =
+                    app.settings.pending_model_idx.min(new_len.saturating_sub(1));
+            }
+        }
         _ => {}
     }
 
@@ -993,19 +1083,39 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     frame.render_widget(sidebar, right_panel[0]);
 
     // ── WASM / FFI log panel ────────────────────────────────────────────────
-    // Error-level entries are surfaced in the chat area already; omit them
-    // here so the panel stays focused on structured debug/info context.
+    // Merges core logs (transport, provider, agent) and SDK logs (FFI, WASM).
+    // Error entries are surfaced in the chat area; omit them here.
     let log_items: Vec<ListItem<'_>> = app
         .log_lines
         .iter()
-        .filter(|line| !line.contains("[Error]") && !line.contains("[ERROR]"))
+        .filter(|line| !line.contains("[ERROR]") && !line.contains("[Error]"))
         .map(|line| {
-            let style = if line.contains("[Warn]") || line.contains("[WARN]") {
+            let style = if line.contains("[WARN]") || line.contains("[Warn]") {
                 Style::default().fg(Color::Yellow)
-            } else if line.contains("[Debug]") || line.contains("[DEBUG]") {
-                Style::default().fg(Color::DarkGray)
+            } else if line.contains("[DEBUG]") || line.contains("[Debug]") {
+                // FFI/SDK calls (sdk: prefix) rendered in Magenta.
+                if line.contains("][sdk:") {
+                    Style::default().fg(Color::Magenta)
+                } else if line.contains("][transport]") {
+                    Style::default().fg(Color::Cyan)
+                } else if line.contains("][provider]") {
+                    Style::default().fg(Color::Blue)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                }
             } else {
-                Style::default().fg(Color::Gray)
+                // INFO level: color by source.
+                if line.contains("][sdk:") {
+                    Style::default().fg(Color::LightMagenta)
+                } else if line.contains("][transport]") {
+                    Style::default().fg(Color::LightCyan)
+                } else if line.contains("][provider]") {
+                    Style::default().fg(Color::LightBlue)
+                } else if line.contains("][agent]") {
+                    Style::default().fg(Color::LightGreen)
+                } else {
+                    Style::default().fg(Color::Gray)
+                }
             };
             ListItem::new(Span::styled(line.clone(), style))
         })
@@ -1013,7 +1123,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     let log_panel = List::new(log_items).block(
         Block::default()
             .borders(Borders::ALL)
-            .title("WASM / FFI Logs")
+            .title("WASM / FFI Logs  [magenta=FFI | cyan=transport | blue=provider | green=agent]")
             .title_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
     );
     frame.render_widget(log_panel, right_panel[1]);
@@ -1483,10 +1593,21 @@ fn draw_settings_tab_provider(frame: &mut ratatui::Frame<'_>, app: &ChatApp, are
 }
 
 fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+    // Reserve the bottom row for the add-model input bar when active.
+    let (list_area, input_area) = if app.settings.model_add_mode {
+        let rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(3), Constraint::Length(3)])
+            .split(area);
+        (rows[0], Some(rows[1]))
+    } else {
+        (area, None)
+    };
+
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-        .split(area);
+        .split(list_area);
 
     let Some(provider) = app.providers.get(app.settings.pending_provider_idx) else {
         let msg = Paragraph::new("Pilih provider terlebih dahulu di tab [1] Provider.")
@@ -1516,18 +1637,27 @@ fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: 
         })
         .collect();
 
+    let list_title = format!(
+        "Model '{}' [↑↓=navigasi | Enter=pilih | a=tambah | d=hapus]",
+        provider.id
+    );
     let list = List::new(items).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(format!(
-                "Model untuk '{}' [↑↓=navigasi | Enter=konfirmasi]",
-                provider.id
-            ))
+            .title(list_title)
             .border_style(Style::default().fg(Color::Cyan)),
     );
     frame.render_widget(list, cols[0]);
 
-    if let Some(m) = provider.models.get(app.settings.model_cursor) {
+    // Right column: detail or empty state hint.
+    if provider.models.is_empty() {
+        let hint = Paragraph::new(
+            "Belum ada model.\n\nTekan [a] untuk menambahkan nama model\n(contoh: gemini-2.0-flash)",
+        )
+        .block(Block::default().borders(Borders::ALL).title("Detail Model"))
+        .wrap(Wrap { trim: false });
+        frame.render_widget(hint, cols[1]);
+    } else if let Some(m) = provider.models.get(app.settings.model_cursor) {
         let status = if app.settings.model_cursor == app.settings.pending_model_idx {
             "◉ terpilih"
         } else {
@@ -1543,6 +1673,20 @@ fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: 
             .block(Block::default().borders(Borders::ALL).title("Detail Model"))
             .wrap(Wrap { trim: false });
         frame.render_widget(widget, cols[1]);
+    }
+
+    // Add-model input bar at the bottom.
+    if let Some(input_rect) = input_area {
+        let prompt = format!("Nama model: {}█", app.settings.model_add_buffer);
+        let input_widget = Paragraph::new(prompt)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Tambah Model  [Enter=simpan | Esc=batal]")
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(input_widget, input_rect);
     }
 }
 

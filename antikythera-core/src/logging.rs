@@ -14,6 +14,23 @@ use std::sync::{Arc, LazyLock};
 static LOGGERS: LazyLock<std::sync::Mutex<std::collections::HashMap<String, Arc<Logger>>>> =
     LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
+/// Active session key used by the TUI tracing bridge.
+/// Defaults to "tui" so all tracing events land in a predictable bucket.
+static ACTIVE_SESSION: LazyLock<std::sync::Mutex<String>> =
+    LazyLock::new(|| std::sync::Mutex::new("tui".to_string()));
+
+/// Set the session key that the TUI tracing bridge writes events to.
+/// Call this from the TUI when a session becomes active.
+pub fn set_active_session(session_id: &str) {
+    let mut s = ACTIVE_SESSION.lock().unwrap();
+    *s = session_id.to_string();
+}
+
+/// Get the current active session key used by the TUI tracing bridge.
+pub fn get_active_session() -> String {
+    ACTIVE_SESSION.lock().unwrap().clone()
+}
+
 /// Get or create a logger for a session
 pub fn get_logger(session_id: &str) -> Arc<Logger> {
     let mut loggers = LOGGERS.lock().unwrap();

@@ -38,30 +38,21 @@ fn default_provider_catalog() -> Vec<ProviderConfig> {
             provider_type: "ollama".to_string(),
             endpoint: "http://127.0.0.1:11434".to_string(),
             api_key: String::new(),
-            models: vec![ModelInfo {
-                name: "llama3.2".to_string(),
-                display_name: "Llama 3.2".to_string(),
-            }],
+            models: vec![],
         },
         ProviderConfig {
             id: "gemini".to_string(),
             provider_type: "gemini".to_string(),
             endpoint: "https://generativelanguage.googleapis.com".to_string(),
             api_key: "GEMINI_API_KEY".to_string(),
-            models: vec![ModelInfo {
-                name: "gemini-2.0-flash".to_string(),
-                display_name: "Gemini 2.0 Flash".to_string(),
-            }],
+            models: vec![],
         },
         ProviderConfig {
             id: "openai".to_string(),
             provider_type: "openai".to_string(),
             endpoint: "https://api.openai.com".to_string(),
             api_key: "OPENAI_API_KEY".to_string(),
-            models: vec![ModelInfo {
-                name: "gpt-4o-mini".to_string(),
-                display_name: "GPT-4o Mini".to_string(),
-            }],
+            models: vec![],
         },
     ]
 }
@@ -85,22 +76,7 @@ pub fn normalize_provider_type(provider_type: &str) -> String {
     }
 }
 
-pub fn default_models_for_provider(provider_type: &str) -> Vec<ModelInfo> {
-    match normalize_provider_type(provider_type).as_str() {
-        "gemini" => vec![ModelInfo {
-            name: "gemini-2.0-flash".to_string(),
-            display_name: "Gemini 2.0 Flash".to_string(),
-        }],
-        "openai" => vec![ModelInfo {
-            name: "gpt-4o-mini".to_string(),
-            display_name: "GPT-4o Mini".to_string(),
-        }],
-        _ => vec![ModelInfo {
-            name: "llama3.2".to_string(),
-            display_name: "Llama 3.2".to_string(),
-        }],
-    }
-}
+
 
 /// Serialize `AppConfig` to Postcard binary.
 pub fn config_to_postcard(config: &AppConfig) -> CliResult<Vec<u8>> {
