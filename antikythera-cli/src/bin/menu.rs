@@ -61,17 +61,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_path = cli.config.as_deref().map(Path::new);
     let config = AppConfig::load(config_path)?;
-    // Load provider definitions from the postcard config (CLI persistence layer).
+    // Load provider definitions and last-saved routing choices from app.pc.
     let pc_config = load_app_config(config_path).unwrap_or_default();
     let initial_providers = providers_from_postcard(&pc_config.providers);
+
+    // Resolve provider/model: CLI flags > saved app.pc > TOML defaults.
+    let provider_override = cli.provider.clone().or_else(|| {
+        let p = pc_config.model.default_provider.trim().to_string();
+        if p.is_empty() { None } else { Some(p) }
+    });
+    let model_override = cli.model.clone().or_else(|| {
+        let m = pc_config.model.model.trim().to_string();
+        if m.is_empty() { None } else { Some(m) }
+    });
+    // Resolve system prompt: CLI flag > saved custom["system_prompt"] > TOML default.
+    let system_override = cli.system.clone()
+        .or_else(|| pc_config.custom.get("system_prompt").cloned())
+        .or_else(|| config.system_prompt.clone());
+
     let (runtime_config, providers) = materialize_runtime_config(
         &config,
         &initial_providers,
-        cli.provider.as_deref(),
-        cli.model.as_deref(),
+        provider_override.as_deref(),
+        model_override.as_deref(),
         cli.provider_endpoint.as_deref(),
         Some(cli.ollama_url.as_str()),
-        cli.system.as_deref().or(config.system_prompt.as_deref()),
+        system_override.as_deref(),
     )?;
 
     if cli.stream {

@@ -36,8 +36,6 @@ use crate::infrastructure::history::{ChatHistorySession, ChatHistoryStore, ChatT
 use crate::CliResult;
 use crate::runtime::{build_runtime_client, materialize_runtime_config};
 
-const MAX_VISIBLE_MESSAGES: usize = 12;
-
 /// Result received from a spawned chat or agent task via a oneshot channel.
 enum PendingResponse {
     Chat(Result<ChatResult, String>),
@@ -1421,11 +1419,16 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     frame.render_widget(header, layout[0]);
 
     // ── Conversation ────────────────────────────────────────────────────────
+    // Derive how many messages to show from the actual panel height so the
+    // conversation area fills the terminal regardless of window size.
+    // Each message occupies at least 2 rows (header + blank line), so dividing
+    // by 2 gives a conservative upper bound; the Paragraph wraps the rest.
+    let max_visible = ((content[0].height.saturating_sub(2)) / 2).max(4) as usize;
     let messages = app
         .messages
         .iter()
         .rev()
-        .take(MAX_VISIBLE_MESSAGES)
+        .take(max_visible)
         .collect::<Vec<_>>();
     let conv_title = if app.loading {
         if app.streaming_content.is_empty() {
@@ -1465,10 +1468,18 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     //   tool:*   — MCP tool transports (SSE/RPC/proc)  → Blue
     //   core:*   — antikythera-core misc (client, svc)  → Gray
     // ERROR entries are already shown in the chat area — suppress here.
-    let log_items: Vec<ListItem<'_>> = app
+    // Only the most recent lines that fit the visible panel area are shown so
+    // the latest activity is always visible without scrolling.
+    let log_panel_height = right_panel[1].height.saturating_sub(2) as usize;
+    let all_log_lines: Vec<&String> = app
         .log_lines
         .iter()
         .filter(|line| !line.contains("[ERROR]"))
+        .collect();
+    let log_start = all_log_lines.len().saturating_sub(log_panel_height);
+    let log_items: Vec<ListItem<'_>> = all_log_lines[log_start..]
+        .iter()
+        .copied()
         .map(|line| {
             let style = if line.contains("[WARN]") {
                 // Warnings always in yellow regardless of source.
@@ -1887,12 +1898,38 @@ fn reconfigure_runtime(
     client: &mut Arc<McpClient<DynamicModelProvider>>,
 ) -> Result<(), String> {
     // Build a PostcardAppConfig to persist — merge core routing fields with CLI providers.
+    // Convert runtime PromptsConfig (Option<String> fields) to the postcard form (String fields).
+    let postcard_prompts = {
+        use crate::config::PromptsConfig as PcPrompts;
+        let defaults = PcPrompts::default();
+        let r = &app.runtime_config.prompts;
+        PcPrompts {
+            template: r.template.clone().unwrap_or(defaults.template),
+            tool_guidance: r.tool_guidance.clone().unwrap_or(defaults.tool_guidance),
+            fallback_guidance: r.fallback_guidance.clone().unwrap_or(defaults.fallback_guidance),
+            json_retry_message: r.json_retry_message.clone().unwrap_or(defaults.json_retry_message),
+            tool_result_instruction: r.tool_result_instruction.clone().unwrap_or(defaults.tool_result_instruction),
+            agent_instructions: r.agent_instructions.clone().unwrap_or(defaults.agent_instructions),
+            ui_instructions: r.ui_instructions.clone().unwrap_or(defaults.ui_instructions),
+            language_instructions: r.language_instructions.clone().unwrap_or(defaults.language_instructions),
+            agent_max_steps_error: r.agent_max_steps_error.clone().unwrap_or(defaults.agent_max_steps_error),
+            no_tools_guidance: r.no_tools_guidance.clone().unwrap_or(defaults.no_tools_guidance),
+            fallback_response_keys: r.fallback_response_keys.clone().unwrap_or(defaults.fallback_response_keys),
+        }
+    };
+    // Persist system_prompt in the extensible custom map (PostcardAppConfig has no dedicated field).
+    let mut custom = std::collections::HashMap::new();
+    if let Some(sp) = &app.runtime_config.system_prompt {
+        custom.insert("system_prompt".to_string(), sp.clone());
+    }
     let pc = PostcardAppConfig {
         model: PostcardModelConfig {
             default_provider: app.runtime_config.default_provider.clone(),
             model: app.runtime_config.model.clone(),
         },
         providers: providers_to_postcard(app.providers.clone()),
+        prompts: postcard_prompts,
+        custom,
         ..Default::default()
     };
     save_app_config(&pc, None).map_err(|error| error.to_string())?;

@@ -8,3 +8,4 @@
 .code-review-graph/
 .cargo/
 app.pc
+debug/
