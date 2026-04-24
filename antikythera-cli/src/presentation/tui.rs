@@ -857,11 +857,11 @@ fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             KeyCode::Backspace => {
                 app.settings.model_add_buffer.pop();
             }
-            KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                // Only allow printable ASCII (no whitespace except hyphen/dot).
-                if ch.is_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':') {
-                    app.settings.model_add_buffer.push(ch);
-                }
+            KeyCode::Char(ch)
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && (ch.is_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':')) =>
+            {
+                app.settings.model_add_buffer.push(ch);
             }
             _ => {}
         }
@@ -953,10 +953,8 @@ fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
                     app.settings.model_cursor += 1;
                 }
             }
-            SettingsTab::Prompts => {
-                if app.settings.prompt_cursor + 1 < PromptField::COUNT {
-                    app.settings.prompt_cursor += 1;
-                }
+            SettingsTab::Prompts if app.settings.prompt_cursor + 1 < PromptField::COUNT => {
+                app.settings.prompt_cursor += 1;
             }
             _ => {}
         },
