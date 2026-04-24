@@ -75,10 +75,7 @@ impl Client {
             provider = provider.register(
                 entry.id.clone(),
                 entry.models.clone(),
-                Box::new(HostModelClient::new(
-                    entry.id.clone(),
-                    transport.clone(),
-                )),
+                Box::new(HostModelClient::new(entry.id.clone(), transport.clone())),
             );
         }
 

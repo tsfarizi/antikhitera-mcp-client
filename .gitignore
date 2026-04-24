@@ -9,3 +9,4 @@
 .cargo/
 app.pc
 debug/
+.*

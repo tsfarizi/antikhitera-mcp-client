@@ -87,14 +87,20 @@ pub(crate) fn emit_stream_event(event: StreamEvent) {
     // skipped here — they are too frequent and the content appears in the chat
     // area anyway.
     match &event {
-        StreamEvent::Started { provider_id, session_id } => {
+        StreamEvent::Started {
+            provider_id,
+            session_id,
+        } => {
             tracing::info!(
                 provider = provider_id.as_str(),
                 session = session_id.as_deref().unwrap_or("-"),
                 "Stream started"
             );
         }
-        StreamEvent::Completed { provider_id, session_id } => {
+        StreamEvent::Completed {
+            provider_id,
+            session_id,
+        } => {
             tracing::info!(
                 provider = provider_id.as_str(),
                 session = session_id.as_deref().unwrap_or("-"),

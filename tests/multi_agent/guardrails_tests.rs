@@ -1,4 +1,4 @@
-﻿use std::sync::{
+use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
@@ -8,7 +8,9 @@ use antikythera_core::application::agent::multi_agent::{
     MultiAgentOrchestrator, RateLimitGuardrail, TaskGuardrail, TimeoutGuardrail,
 };
 use antikythera_core::application::client::{ClientConfig, McpClient};
-use antikythera_core::infrastructure::model::{ModelError, ModelProvider, ModelRequest, ModelResponse};
+use antikythera_core::infrastructure::model::{
+    ModelError, ModelProvider, ModelRequest, ModelResponse,
+};
 use async_trait::async_trait;
 
 #[derive(Debug)]
@@ -42,18 +44,18 @@ impl TaskGuardrail for AlwaysRejectGuardrail {
         _profile: &AgentProfile,
         _context: &antikythera_core::application::agent::multi_agent::GuardrailContext,
     ) -> Result<(), antikythera_core::application::agent::multi_agent::GuardrailRejection> {
-        Err(antikythera_core::application::agent::multi_agent::GuardrailRejection::new(
-            self.name(),
-            antikythera_core::application::agent::multi_agent::GuardrailStage::PreCheck,
-            ErrorKind::Permanent,
-            "forced rejection",
-        ))
+        Err(
+            antikythera_core::application::agent::multi_agent::GuardrailRejection::new(
+                self.name(),
+                antikythera_core::application::agent::multi_agent::GuardrailStage::PreCheck,
+                ErrorKind::Permanent,
+                "forced rejection",
+            ),
+        )
     }
 }
 
-fn build_orchestrator(
-    call_count: Arc<AtomicUsize>,
-) -> MultiAgentOrchestrator<CountingProvider> {
+fn build_orchestrator(call_count: Arc<AtomicUsize>) -> MultiAgentOrchestrator<CountingProvider> {
     let client = Arc::new(McpClient::new(
         CountingProvider { call_count },
         ClientConfig::new("mock", "mock-model"),
@@ -71,16 +73,20 @@ fn build_orchestrator(
 #[tokio::test]
 async fn timeout_guardrail_blocks_dispatch_before_provider_is_called() {
     let call_count = Arc::new(AtomicUsize::new(0));
-    let orchestrator = build_orchestrator(call_count.clone()).with_guardrail(Arc::new(
-        TimeoutGuardrail::new(1_000).require_timeout(),
-    ));
+    let orchestrator = build_orchestrator(call_count.clone())
+        .with_guardrail(Arc::new(TimeoutGuardrail::new(1_000).require_timeout()));
 
-    let result = orchestrator.dispatch(AgentTask::new("review this code")).await;
+    let result = orchestrator
+        .dispatch(AgentTask::new("review this code"))
+        .await;
 
     assert!(!result.success);
     assert_eq!(result.error_kind, Some(ErrorKind::Permanent));
     assert_eq!(result.metadata.guardrail_name.as_deref(), Some("timeout"));
-    assert_eq!(result.metadata.guardrail_stage.as_deref(), Some("pre_check"));
+    assert_eq!(
+        result.metadata.guardrail_stage.as_deref(),
+        Some("pre_check")
+    );
     assert_eq!(call_count.load(Ordering::SeqCst), 0);
 }
 
@@ -96,12 +102,21 @@ async fn guardrail_chain_preserves_order_and_rate_limit_rejects_second_dispatch(
     let second = orchestrator.dispatch(AgentTask::new("task two")).await;
 
     assert!(!first.success);
-    assert_eq!(first.metadata.guardrail_name.as_deref(), Some("always_reject"));
+    assert_eq!(
+        first.metadata.guardrail_name.as_deref(),
+        Some("always_reject")
+    );
 
     assert!(!second.success);
     assert_eq!(second.error_kind, Some(ErrorKind::Transient));
-    assert_eq!(second.metadata.guardrail_name.as_deref(), Some("rate_limit"));
-    assert_eq!(second.metadata.guardrail_stage.as_deref(), Some("pre_check"));
+    assert_eq!(
+        second.metadata.guardrail_name.as_deref(),
+        Some("rate_limit")
+    );
+    assert_eq!(
+        second.metadata.guardrail_stage.as_deref(),
+        Some("pre_check")
+    );
     assert_eq!(call_count.load(Ordering::SeqCst), 0);
 }
 
@@ -112,11 +127,16 @@ async fn cancellation_guardrail_blocks_dispatch_after_orchestrator_cancel() {
         .with_guardrail(Arc::new(CancellationGuardrail::new()));
 
     orchestrator.cancel();
-    let result = orchestrator.dispatch(AgentTask::new("summarize logs")).await;
+    let result = orchestrator
+        .dispatch(AgentTask::new("summarize logs"))
+        .await;
 
     assert!(!result.success);
     assert_eq!(result.error_kind, Some(ErrorKind::Cancelled));
     assert!(result.metadata.cancelled);
-    assert_eq!(result.metadata.guardrail_name.as_deref(), Some("cancellation"));
+    assert_eq!(
+        result.metadata.guardrail_name.as_deref(),
+        Some("cancellation")
+    );
     assert_eq!(call_count.load(Ordering::SeqCst), 0);
 }

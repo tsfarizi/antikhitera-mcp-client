@@ -1,1 +1,5 @@
+host-imports::call-llm(request: llm-request) -> result<llm-response, string>;
+host-imports::emit-tool-call(event: tool-call-event) -> result<tool-execution-result, string>;
 host-imports::log-message(event: log-event);
+host-imports::save-state(context-id: string, state-json: string) -> result<_, string>;
+host-imports::load-state(context-id: string) -> result<option<string>, string>;

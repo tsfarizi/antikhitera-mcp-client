@@ -76,8 +76,6 @@ pub fn normalize_provider_type(provider_type: &str) -> String {
     }
 }
 
-
-
 /// Serialize `AppConfig` to Postcard binary.
 pub fn config_to_postcard(config: &AppConfig) -> CliResult<Vec<u8>> {
     antikythera_core::config::postcard_config::config_to_postcard(config).map_err(CliError::Config)

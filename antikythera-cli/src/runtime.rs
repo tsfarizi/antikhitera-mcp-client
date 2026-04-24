@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::CliError;
 use crate::CliResult;
+use crate::infrastructure::llm::ModelProviderConfig;
 use crate::infrastructure::llm::build_provider_from_configs;
-use crate::infrastructure::llm::{ModelProviderConfig};
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use antikythera_core::{AppConfig, ClientConfig, McpClient};
 
@@ -263,11 +263,7 @@ mod tests {
         .expect("runtime config");
         assert_eq!(runtime.default_provider, "gemini");
         assert_eq!(runtime.model, "gemini-2.0-flash");
-        assert!(
-            providers
-                .iter()
-                .any(|provider| provider.id == "gemini")
-        );
+        assert!(providers.iter().any(|provider| provider.id == "gemini"));
     }
 
     #[test]

@@ -251,10 +251,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 display_name: display_name.clone().unwrap_or_default(),
             });
             save_app_config(&config, None)?;
-            println!(
-                "✓ Model '{}' ditambahkan ke provider '{}'",
-                model, provider
-            );
+            println!("✓ Model '{}' ditambahkan ke provider '{}'", model, provider);
             Ok(())
         }
 

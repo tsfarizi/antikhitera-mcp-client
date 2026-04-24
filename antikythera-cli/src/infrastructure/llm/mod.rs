@@ -17,6 +17,4 @@ pub use provider_builder::build_provider_from_configs;
 pub use streaming::{
     StreamEvent, clear_stream_event_sink, install_terminal_stream_sink, set_stream_event_sink,
 };
-pub use types::{
-    ModelInfo, ModelProviderConfig, providers_from_postcard, providers_to_postcard,
-};
+pub use types::{ModelInfo, ModelProviderConfig, providers_from_postcard, providers_to_postcard};

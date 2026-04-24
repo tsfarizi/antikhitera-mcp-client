@@ -230,7 +230,9 @@ mod tests {
     async fn simple_chat_returns_llm_response() {
         let mut uc = ChatUseCase::new(
             session(false),
-            Box::new(EchoProvider { response: "hello world".to_string() }),
+            Box::new(EchoProvider {
+                response: "hello world".to_string(),
+            }),
             Box::new(NoopExecutor),
             "system".to_string(),
         );
@@ -243,7 +245,9 @@ mod tests {
     async fn simple_chat_appends_user_and_assistant_messages() {
         let mut uc = ChatUseCase::new(
             session(false),
-            Box::new(EchoProvider { response: "reply".to_string() }),
+            Box::new(EchoProvider {
+                response: "reply".to_string(),
+            }),
             Box::new(NoopExecutor),
             String::new(),
         );
@@ -275,7 +279,9 @@ mod tests {
         let final_json = r#"{"action":"final","response":"done"}"#;
         let mut uc = ChatUseCase::new(
             session(true),
-            Box::new(EchoProvider { response: final_json.to_string() }),
+            Box::new(EchoProvider {
+                response: final_json.to_string(),
+            }),
             Box::new(NoopExecutor),
             String::new(),
         );
@@ -311,7 +317,9 @@ mod tests {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let mut uc = ChatUseCase::new(
             session(true),
-            Box::new(SequentialProvider { calls: calls.clone() }),
+            Box::new(SequentialProvider {
+                calls: calls.clone(),
+            }),
             Box::new(NoopExecutor),
             String::new(),
         );
@@ -328,7 +336,9 @@ mod tests {
         let tool_call_json = r#"{"action":"call_tool","tool":"echo","input":{}}"#;
         let mut uc = ChatUseCase::new(
             session(true),
-            Box::new(EchoProvider { response: tool_call_json.to_string() }),
+            Box::new(EchoProvider {
+                response: tool_call_json.to_string(),
+            }),
             Box::new(NoopExecutor),
             String::new(),
         );

@@ -17,15 +17,15 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use antikythera_cli::cli::{Cli, RunMode};
+use antikythera_cli::config::load_app_config;
 use antikythera_cli::domain::use_cases::{render_wasm_stream_report, run_wasm_stream_probe};
 use antikythera_cli::infrastructure::llm::install_terminal_stream_sink;
 use antikythera_cli::infrastructure::llm::providers_from_postcard;
 use antikythera_cli::presentation::tui;
 use antikythera_cli::presentation::tui_tracing::AntikytheraTuiLayer;
 use antikythera_cli::runtime::{build_runtime_client, materialize_runtime_config};
-use antikythera_cli::config::load_app_config;
 use antikythera_core::application::agent::multi_agent::task::AgentTask;
-use antikythera_cli::cli::{Cli, RunMode};
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use antikythera_core::{AppConfig, McpClient};
 use clap::Parser;
@@ -75,7 +75,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if m.is_empty() { None } else { Some(m) }
     });
     // Resolve system prompt: CLI flag > saved custom["system_prompt"] > TOML default.
-    let system_override = cli.system.clone()
+    let system_override = cli
+        .system
+        .clone()
         .or_else(|| pc_config.custom.get("system_prompt").cloned())
         .or_else(|| config.system_prompt.clone());
 

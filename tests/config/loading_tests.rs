@@ -1,13 +1,13 @@
-﻿// Config loading tests - testing AppConfig::load behavior.
+// Config loading tests - testing AppConfig::load behavior.
 //
 // The application stores all configuration as a single Postcard binary (app.pc).
 // Tests verify: file-not-found error, self-heal on corrupt data, and correct
 // field values on a valid binary.
 
-use antikythera_core::config::{AppConfig, ConfigError};
 use antikythera_core::config::postcard_config::{
     ModelConfig, PostcardAppConfig, config_to_postcard,
 };
+use antikythera_core::config::{AppConfig, ConfigError};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;

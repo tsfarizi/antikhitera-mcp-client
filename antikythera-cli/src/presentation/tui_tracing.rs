@@ -18,10 +18,10 @@
 //!     .init();
 //! ```
 
-use antikythera_core::{get_active_session, get_logger, LogLevel};
+use antikythera_core::{LogLevel, get_active_session, get_logger};
 use tracing::{Event, Subscriber};
-use tracing_subscriber::layer::Context;
 use tracing_subscriber::Layer;
+use tracing_subscriber::layer::Context;
 
 /// Routes tracing events to the antikythera LOGGERS system under the current
 /// active session (defaulting to "tui"). Installed once at process startup.
@@ -122,14 +122,17 @@ impl tracing::field::Visit for MessageVisitor {
         if field.name() == "message" {
             self.message = Some(value.to_string());
         } else {
-            self.fields.push((field.name().to_string(), value.to_string()));
+            self.fields
+                .push((field.name().to_string(), value.to_string()));
         }
     }
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         let rendered = format!("{value:?}");
         // Remove surrounding quotes that Debug adds to strings.
-        let clean = rendered.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
+        let clean = rendered
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
             .map(|s| s.to_string())
             .unwrap_or(rendered);
 
@@ -141,14 +144,17 @@ impl tracing::field::Visit for MessageVisitor {
     }
 
     fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
-        self.fields.push((field.name().to_string(), value.to_string()));
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
     }
 
     fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
-        self.fields.push((field.name().to_string(), value.to_string()));
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
     }
 
     fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
-        self.fields.push((field.name().to_string(), value.to_string()));
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
     }
 }

@@ -4,6 +4,11 @@ use std::time::Duration;
 
 use chrono::Utc;
 
+use crate::config::{
+    AppConfig as PostcardAppConfig, ModelConfig as PostcardModelConfig, save_app_config,
+};
+use crate::infrastructure::llm::{ModelInfo, ModelProviderConfig, providers_to_postcard};
+use crate::infrastructure::llm::{StreamEvent, clear_stream_event_sink, set_stream_event_sink};
 use antikythera_core::application::agent::{Agent, AgentOptions, AgentOutcome, AgentStep};
 use antikythera_core::application::client::{
     ChatRequest, ChatResult, ClientConfigSnapshot, McpClient, McpError,
@@ -13,11 +18,8 @@ use antikythera_core::application::resilience::{
 };
 use antikythera_core::config::{AppConfig, PromptsConfig};
 use antikythera_core::get_latest_logs;
-use antikythera_sdk::sdk_logging::get_latest_sdk_logs;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
-use crate::config::{save_app_config, AppConfig as PostcardAppConfig, ModelConfig as PostcardModelConfig};
-use crate::infrastructure::llm::{ModelInfo, ModelProviderConfig, providers_to_postcard};
-use crate::infrastructure::llm::{StreamEvent, clear_stream_event_sink, set_stream_event_sink};
+use antikythera_sdk::sdk_logging::get_latest_sdk_logs;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -32,8 +34,8 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
 use tokio::sync::{mpsc, oneshot};
 
-use crate::infrastructure::history::{ChatHistorySession, ChatHistoryStore, ChatTurn, TurnRole};
 use crate::CliResult;
+use crate::infrastructure::history::{ChatHistorySession, ChatHistoryStore, ChatTurn, TurnRole};
 use crate::runtime::{build_runtime_client, materialize_runtime_config};
 
 /// Result received from a spawned chat or agent task via a oneshot channel.
@@ -47,10 +49,10 @@ enum PendingResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SettingsTab {
     Provider = 0,
-    Model    = 1,
-    Prompts  = 2,
-    System   = 3,
-    Agent    = 4,
+    Model = 1,
+    Prompts = 2,
+    System = 3,
+    Agent = 4,
 }
 
 impl SettingsTab {
@@ -66,29 +68,33 @@ impl SettingsTab {
     fn label(self) -> &'static str {
         match self {
             Self::Provider => "Provider",
-            Self::Model    => "Model",
-            Self::Prompts  => "Prompts",
-            Self::System   => "System Prompt",
-            Self::Agent    => "Agent",
+            Self::Model => "Model",
+            Self::Prompts => "Prompts",
+            Self::System => "System Prompt",
+            Self::Agent => "Agent",
         }
     }
 
-    fn next(self) -> Self { Self::ALL[(self as usize + 1) % Self::COUNT] }
-    fn prev(self) -> Self { Self::ALL[(self as usize + Self::COUNT - 1) % Self::COUNT] }
+    fn next(self) -> Self {
+        Self::ALL[(self as usize + 1) % Self::COUNT]
+    }
+    fn prev(self) -> Self {
+        Self::ALL[(self as usize + Self::COUNT - 1) % Self::COUNT]
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PromptField {
-    Template            = 0,
-    ToolGuidance        = 1,
-    FallbackGuidance    = 2,
-    JsonRetryMessage    = 3,
-    ToolResultInstr     = 4,
-    AgentInstructions   = 5,
-    UiInstructions      = 6,
+    Template = 0,
+    ToolGuidance = 1,
+    FallbackGuidance = 2,
+    JsonRetryMessage = 3,
+    ToolResultInstr = 4,
+    AgentInstructions = 5,
+    UiInstructions = 6,
     LanguageInstructions = 7,
-    AgentMaxStepsError  = 8,
-    NoToolsGuidance     = 9,
+    AgentMaxStepsError = 8,
+    NoToolsGuidance = 9,
 }
 
 impl PromptField {
@@ -108,47 +114,47 @@ impl PromptField {
 
     fn label(self) -> &'static str {
         match self {
-            Self::Template             => "Template",
-            Self::ToolGuidance         => "Tool Guidance",
-            Self::FallbackGuidance     => "Fallback Guidance",
-            Self::JsonRetryMessage     => "JSON Retry Msg",
-            Self::ToolResultInstr      => "Tool Result Instr",
-            Self::AgentInstructions    => "Agent Instructions",
-            Self::UiInstructions       => "UI Instructions",
+            Self::Template => "Template",
+            Self::ToolGuidance => "Tool Guidance",
+            Self::FallbackGuidance => "Fallback Guidance",
+            Self::JsonRetryMessage => "JSON Retry Msg",
+            Self::ToolResultInstr => "Tool Result Instr",
+            Self::AgentInstructions => "Agent Instructions",
+            Self::UiInstructions => "UI Instructions",
             Self::LanguageInstructions => "Language Instr",
-            Self::AgentMaxStepsError   => "Max Steps Error",
-            Self::NoToolsGuidance      => "No Tools Guidance",
+            Self::AgentMaxStepsError => "Max Steps Error",
+            Self::NoToolsGuidance => "No Tools Guidance",
         }
     }
 
     fn get_from(self, p: &PromptsConfig) -> String {
         match self {
-            Self::Template             => p.template().to_string(),
-            Self::ToolGuidance         => p.tool_guidance().to_string(),
-            Self::FallbackGuidance     => p.fallback_guidance().to_string(),
-            Self::JsonRetryMessage     => p.json_retry_message().to_string(),
-            Self::ToolResultInstr      => p.tool_result_instruction().to_string(),
-            Self::AgentInstructions    => p.agent_instructions().to_string(),
-            Self::UiInstructions       => p.ui_instructions().to_string(),
+            Self::Template => p.template().to_string(),
+            Self::ToolGuidance => p.tool_guidance().to_string(),
+            Self::FallbackGuidance => p.fallback_guidance().to_string(),
+            Self::JsonRetryMessage => p.json_retry_message().to_string(),
+            Self::ToolResultInstr => p.tool_result_instruction().to_string(),
+            Self::AgentInstructions => p.agent_instructions().to_string(),
+            Self::UiInstructions => p.ui_instructions().to_string(),
             Self::LanguageInstructions => p.language_instructions().to_string(),
-            Self::AgentMaxStepsError   => p.agent_max_steps_error().to_string(),
-            Self::NoToolsGuidance      => p.no_tools_guidance().to_string(),
+            Self::AgentMaxStepsError => p.agent_max_steps_error().to_string(),
+            Self::NoToolsGuidance => p.no_tools_guidance().to_string(),
         }
     }
 
     fn set_into(self, p: &mut PromptsConfig, value: String) {
         let v = if value.is_empty() { None } else { Some(value) };
         match self {
-            Self::Template             => p.template = v,
-            Self::ToolGuidance         => p.tool_guidance = v,
-            Self::FallbackGuidance     => p.fallback_guidance = v,
-            Self::JsonRetryMessage     => p.json_retry_message = v,
-            Self::ToolResultInstr      => p.tool_result_instruction = v,
-            Self::AgentInstructions    => p.agent_instructions = v,
-            Self::UiInstructions       => p.ui_instructions = v,
+            Self::Template => p.template = v,
+            Self::ToolGuidance => p.tool_guidance = v,
+            Self::FallbackGuidance => p.fallback_guidance = v,
+            Self::JsonRetryMessage => p.json_retry_message = v,
+            Self::ToolResultInstr => p.tool_result_instruction = v,
+            Self::AgentInstructions => p.agent_instructions = v,
+            Self::UiInstructions => p.ui_instructions = v,
             Self::LanguageInstructions => p.language_instructions = v,
-            Self::AgentMaxStepsError   => p.agent_max_steps_error = v,
-            Self::NoToolsGuidance      => p.no_tools_guidance = v,
+            Self::AgentMaxStepsError => p.agent_max_steps_error = v,
+            Self::NoToolsGuidance => p.no_tools_guidance = v,
         }
     }
 }
@@ -345,7 +351,12 @@ struct ChatApp {
 }
 
 impl ChatApp {
-    fn new(runtime_config: AppConfig, providers: Vec<ModelProviderConfig>, snapshot: ClientConfigSnapshot, tools: usize) -> Self {
+    fn new(
+        runtime_config: AppConfig,
+        providers: Vec<ModelProviderConfig>,
+        snapshot: ClientConfigSnapshot,
+        tools: usize,
+    ) -> Self {
         let mut app = Self {
             provider: runtime_config.default_provider.clone(),
             model: runtime_config.model.clone(),
@@ -405,7 +416,10 @@ impl ChatApp {
     }
 }
 
-pub async fn run_chat_app(mut config: AppConfig, providers: Vec<ModelProviderConfig>) -> CliResult<()> {
+pub async fn run_chat_app(
+    mut config: AppConfig,
+    providers: Vec<ModelProviderConfig>,
+) -> CliResult<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -446,7 +460,7 @@ pub async fn run_chat_app(mut config: AppConfig, providers: Vec<ModelProviderCon
                 result.summary.total_found, result.summary.loaded, added
             ))
         } else {
-            None  // servers/ folder not found — discovery is optional; omit to avoid noise at startup.
+            None // servers/ folder not found — discovery is optional; omit to avoid noise at startup.
         }
     };
 
@@ -659,7 +673,8 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
         let agent_mode = app.agent_mode;
         let config = app.runtime_config.clone();
         let providers = app.providers.clone();
-        app.settings.open_with(&provider, &model, &config, &providers, agent_mode);
+        app.settings
+            .open_with(&provider, &model, &config, &providers, agent_mode);
         app.status =
             "Settings terbuka. Tab/BackTab=ganti tab | ↑↓=navigasi | Enter=pilih | Ctrl+S=simpan | Esc=tutup".to_string();
         return KeyAction::None;
@@ -669,7 +684,9 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
     if key.code == KeyCode::F(3) {
         let sessions = app.history_store.list_sessions();
         app.history.open_and_refresh_with(sessions);
-        app.status = "Riwayat Chat. ↑↓=navigasi | Enter=lihat | d=hapus | r=ganti judul | Esc=tutup".to_string();
+        app.status =
+            "Riwayat Chat. ↑↓=navigasi | Enter=lihat | d=hapus | r=ganti judul | Esc=tutup"
+                .to_string();
         return KeyAction::None;
     }
 
@@ -709,7 +726,12 @@ fn handle_history_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             KeyCode::Enter => {
                 let new_title = app.history.rename_buffer.trim().to_string();
                 if !new_title.is_empty() {
-                    if let Some(id) = app.history.sessions.get(app.history.cursor).map(|s| s.id.clone()) {
+                    if let Some(id) = app
+                        .history
+                        .sessions
+                        .get(app.history.cursor)
+                        .map(|s| s.id.clone())
+                    {
                         if app.history_store.rename_session(&id, new_title).is_ok() {
                             app.history.sessions = app.history_store.list_sessions();
                         }
@@ -763,13 +785,23 @@ fn handle_history_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             }
         }
         KeyCode::Enter => {
-            if let Some(id) = app.history.sessions.get(app.history.cursor).map(|s| s.id.clone()) {
+            if let Some(id) = app
+                .history
+                .sessions
+                .get(app.history.cursor)
+                .map(|s| s.id.clone())
+            {
                 app.history.detail = app.history_store.load_session(&id);
                 app.history.detail_scroll = 0;
             }
         }
         KeyCode::Char('d') => {
-            if let Some(id) = app.history.sessions.get(app.history.cursor).map(|s| s.id.clone()) {
+            if let Some(id) = app
+                .history
+                .sessions
+                .get(app.history.cursor)
+                .map(|s| s.id.clone())
+            {
                 let _ = app.history_store.delete_session(&id);
                 app.history.sessions = app.history_store.list_sessions();
                 let max = app.history.sessions.len().saturating_sub(1);
@@ -777,7 +809,12 @@ fn handle_history_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             }
         }
         KeyCode::Char('r') => {
-            let buf = app.history.sessions.get(app.history.cursor).map(|s| s.title.clone()).unwrap_or_default();
+            let buf = app
+                .history
+                .sessions
+                .get(app.history.cursor)
+                .map(|s| s.title.clone())
+                .unwrap_or_default();
             app.history.rename_buffer = buf;
             app.history.rename_mode = true;
         }
@@ -806,8 +843,7 @@ fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             KeyCode::Enter => {
                 let name = app.settings.model_add_buffer.trim().to_string();
                 if !name.is_empty()
-                    && let Some(provider) =
-                        app.providers.get_mut(app.settings.pending_provider_idx)
+                    && let Some(provider) = app.providers.get_mut(app.settings.pending_provider_idx)
                     && !provider.models.iter().any(|m| m.name == name)
                 {
                     provider.models.push(ModelInfo {
@@ -967,8 +1003,10 @@ fn handle_settings_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
                 let new_len = provider.models.len();
                 // Keep cursors in bounds after removal.
                 app.settings.model_cursor = cursor.min(new_len.saturating_sub(1));
-                app.settings.pending_model_idx =
-                    app.settings.pending_model_idx.min(new_len.saturating_sub(1));
+                app.settings.pending_model_idx = app
+                    .settings
+                    .pending_model_idx
+                    .min(new_len.saturating_sub(1));
             }
         }
         _ => {}
@@ -1339,7 +1377,9 @@ fn process_command(
         "history" => {
             let sessions = app.history_store.list_sessions();
             app.history.open_and_refresh_with(sessions);
-            app.status = "Riwayat Chat. ↑↓=navigasi | Enter=lihat | d=hapus | r=ganti judul | Esc=tutup".to_string();
+            app.status =
+                "Riwayat Chat. ↑↓=navigasi | Enter=lihat | d=hapus | r=ganti judul | Esc=tutup"
+                    .to_string();
         }
         "exit" | "quit" => {
             app.status = "Menutup TUI...".to_string();
@@ -1411,7 +1451,11 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         ),
         Span::raw("  "),
         Span::styled(
-            if app.agent_mode { "Agent Loop" } else { "Direct Chat" },
+            if app.agent_mode {
+                "Agent Loop"
+            } else {
+                "Direct Chat"
+            },
             Style::default().fg(Color::Yellow),
         ),
     ]))
@@ -1525,7 +1569,11 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         Block::default()
             .borders(Borders::ALL)
             .title("Logs [yellow=CLI | magenta=FFI/SDK | cyan=stream | green=agent | blue=tool]")
-            .title_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+            .title_style(
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
     );
     frame.render_widget(log_panel, right_panel[1]);
 
@@ -1576,16 +1624,46 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         Err(_) => ("\u{25cb} ", Color::Gray),
     };
     let footer = Paragraph::new(Line::from(vec![
-        Span::styled(health_dot, Style::default().fg(health_color).add_modifier(Modifier::BOLD)),
-        Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            health_dot,
+            Style::default()
+                .fg(health_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            "Tab",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" autocomplete  "),
-        Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Enter",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" submit  "),
-        Span::styled("F2", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "F2",
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" settings  "),
-        Span::styled("F3", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "F3",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" riwayat  "),
-        Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Esc",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" quit  "),
         Span::styled(app.status.as_str(), Style::default().fg(Color::Gray)),
     ]))
@@ -1906,15 +1984,42 @@ fn reconfigure_runtime(
         PcPrompts {
             template: r.template.clone().unwrap_or(defaults.template),
             tool_guidance: r.tool_guidance.clone().unwrap_or(defaults.tool_guidance),
-            fallback_guidance: r.fallback_guidance.clone().unwrap_or(defaults.fallback_guidance),
-            json_retry_message: r.json_retry_message.clone().unwrap_or(defaults.json_retry_message),
-            tool_result_instruction: r.tool_result_instruction.clone().unwrap_or(defaults.tool_result_instruction),
-            agent_instructions: r.agent_instructions.clone().unwrap_or(defaults.agent_instructions),
-            ui_instructions: r.ui_instructions.clone().unwrap_or(defaults.ui_instructions),
-            language_instructions: r.language_instructions.clone().unwrap_or(defaults.language_instructions),
-            agent_max_steps_error: r.agent_max_steps_error.clone().unwrap_or(defaults.agent_max_steps_error),
-            no_tools_guidance: r.no_tools_guidance.clone().unwrap_or(defaults.no_tools_guidance),
-            fallback_response_keys: r.fallback_response_keys.clone().unwrap_or(defaults.fallback_response_keys),
+            fallback_guidance: r
+                .fallback_guidance
+                .clone()
+                .unwrap_or(defaults.fallback_guidance),
+            json_retry_message: r
+                .json_retry_message
+                .clone()
+                .unwrap_or(defaults.json_retry_message),
+            tool_result_instruction: r
+                .tool_result_instruction
+                .clone()
+                .unwrap_or(defaults.tool_result_instruction),
+            agent_instructions: r
+                .agent_instructions
+                .clone()
+                .unwrap_or(defaults.agent_instructions),
+            ui_instructions: r
+                .ui_instructions
+                .clone()
+                .unwrap_or(defaults.ui_instructions),
+            language_instructions: r
+                .language_instructions
+                .clone()
+                .unwrap_or(defaults.language_instructions),
+            agent_max_steps_error: r
+                .agent_max_steps_error
+                .clone()
+                .unwrap_or(defaults.agent_max_steps_error),
+            no_tools_guidance: r
+                .no_tools_guidance
+                .clone()
+                .unwrap_or(defaults.no_tools_guidance),
+            fallback_response_keys: r
+                .fallback_response_keys
+                .clone()
+                .unwrap_or(defaults.fallback_response_keys),
         }
     };
     // Persist system_prompt in the extensible custom map (PostcardAppConfig has no dedicated field).
@@ -1934,8 +2039,8 @@ fn reconfigure_runtime(
     };
     save_app_config(&pc, None).map_err(|error| error.to_string())?;
 
-    let new_client =
-        build_runtime_client(&app.runtime_config, &app.providers).map_err(|error| error.to_string())?;
+    let new_client = build_runtime_client(&app.runtime_config, &app.providers)
+        .map_err(|error| error.to_string())?;
     app.snapshot = new_client.config_snapshot();
     app.tools = new_client.tools().len();
     *client = new_client;
@@ -1948,7 +2053,11 @@ fn reconfigure_runtime(
 fn render_history_detail(session: &ChatHistorySession, scroll: usize) -> Text<'static> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     for turn in session.turns.iter().skip(scroll).take(20) {
-        let ts = turn.timestamp.get(..19).unwrap_or(turn.timestamp.as_str()).to_string();
+        let ts = turn
+            .timestamp
+            .get(..19)
+            .unwrap_or(turn.timestamp.as_str())
+            .to_string();
         let (label, label_style) = match turn.role {
             TurnRole::User => (
                 format!(" Anda [{ts}] "),
@@ -2023,9 +2132,15 @@ fn draw_history_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
             let cursor = i == app.history.cursor;
             let arrow = if cursor { "▶" } else { " " };
             let date = s.updated_at.get(..10).unwrap_or(s.updated_at.as_str());
-            let title = if s.title.is_empty() { "<tanpa judul>" } else { s.title.as_str() };
+            let title = if s.title.is_empty() {
+                "<tanpa judul>"
+            } else {
+                s.title.as_str()
+            };
             let style = if cursor {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -2078,7 +2193,11 @@ fn draw_history_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
             "Provider  : {}\nModel     : {}\nMode      : {}\nGiliran   : {}\nDibuat    : {}\nDiperbarui: {}\nCore ID   : {}\n\nEnter = lihat percakapan\nd     = hapus sesi\nr     = ganti judul",
             s.provider,
             s.model,
-            if s.agent_mode { "Agent Loop" } else { "Chat Langsung" },
+            if s.agent_mode {
+                "Agent Loop"
+            } else {
+                "Chat Langsung"
+            },
             s.turns.len(),
             s.created_at.get(..19).unwrap_or(s.created_at.as_str()),
             s.updated_at.get(..19).unwrap_or(s.updated_at.as_str()),
@@ -2167,10 +2286,10 @@ fn draw_settings_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     // Render the content area for the active tab.
     match app.settings.tab {
         SettingsTab::Provider => draw_settings_tab_provider(frame, app, layout[1]),
-        SettingsTab::Model    => draw_settings_tab_model(frame, app, layout[1]),
-        SettingsTab::Prompts  => draw_settings_tab_prompts(frame, app, layout[1]),
-        SettingsTab::System   => draw_settings_tab_system(frame, app, layout[1]),
-        SettingsTab::Agent    => draw_settings_tab_agent(frame, app, layout[1]),
+        SettingsTab::Model => draw_settings_tab_model(frame, app, layout[1]),
+        SettingsTab::Prompts => draw_settings_tab_prompts(frame, app, layout[1]),
+        SettingsTab::System => draw_settings_tab_system(frame, app, layout[1]),
+        SettingsTab::Agent => draw_settings_tab_agent(frame, app, layout[1]),
     }
 }
 
@@ -2190,14 +2309,19 @@ fn draw_settings_tab_provider(frame: &mut ratatui::Frame<'_>, app: &ChatApp, are
             let radio = if selected { "◉" } else { "○" };
             let arrow = if cursor { "▶" } else { " " };
             let style = if cursor {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             } else if selected {
                 Style::default().fg(Color::Green)
             } else {
                 Style::default()
             };
-            ListItem::new(format!("{arrow} {radio} {:<18} [{}]", p.id, p.provider_type))
-                .style(style)
+            ListItem::new(format!(
+                "{arrow} {radio} {:<18} [{}]",
+                p.id, p.provider_type
+            ))
+            .style(style)
         })
         .collect();
 
@@ -2234,7 +2358,11 @@ fn draw_settings_tab_provider(frame: &mut ratatui::Frame<'_>, app: &ChatApp, are
             }
         );
         let widget = Paragraph::new(detail)
-            .block(Block::default().borders(Borders::ALL).title("Detail Provider"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Detail Provider"),
+            )
             .wrap(Wrap { trim: false });
         frame.render_widget(widget, cols[1]);
     }
@@ -2274,7 +2402,9 @@ fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: 
             let radio = if selected { "◉" } else { "○" };
             let arrow = if cursor { "▶" } else { " " };
             let style = if cursor {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             } else if selected {
                 Style::default().fg(Color::Green)
             } else {
@@ -2359,7 +2489,9 @@ fn draw_settings_tab_prompts(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area
                 .take(58)
                 .collect::<String>();
             let style = if cursor {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -2370,7 +2502,9 @@ fn draw_settings_tab_prompts(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area
     let list = List::new(items).block(
         Block::default()
             .borders(Borders::ALL)
-            .title("Prompt Fields  [↑↓=pilih | Enter=edit | Ctrl+Enter=simpan field | Esc=batal edit]")
+            .title(
+                "Prompt Fields  [↑↓=pilih | Enter=edit | Ctrl+Enter=simpan field | Esc=batal edit]",
+            )
             .border_style(Style::default().fg(Color::Cyan)),
     );
     frame.render_widget(list, rows[0]);
@@ -2487,7 +2621,11 @@ fn draw_settings_tab_agent(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: 
         "Pending Changes:\n  Provider     : {}\n  Model        : {}\n  Mode         : {}\n  System Prompt: {} karakter",
         provider_name,
         model_name,
-        if app.settings.pending_agent_mode { "Agent Loop" } else { "Direct Chat" },
+        if app.settings.pending_agent_mode {
+            "Agent Loop"
+        } else {
+            "Direct Chat"
+        },
         app.settings.pending_system_prompt.len(),
     );
     let summary_widget = Paragraph::new(summary.as_str())
