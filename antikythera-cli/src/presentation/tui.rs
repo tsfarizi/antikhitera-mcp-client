@@ -725,17 +725,15 @@ fn handle_history_key(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             }
             KeyCode::Enter => {
                 let new_title = app.history.rename_buffer.trim().to_string();
-                if !new_title.is_empty() {
-                    if let Some(id) = app
+                if !new_title.is_empty()
+                    && let Some(id) = app
                         .history
                         .sessions
                         .get(app.history.cursor)
                         .map(|s| s.id.clone())
-                    {
-                        if app.history_store.rename_session(&id, new_title).is_ok() {
-                            app.history.sessions = app.history_store.list_sessions();
-                        }
-                    }
+                    && app.history_store.rename_session(&id, new_title).is_ok()
+                {
+                    app.history.sessions = app.history_store.list_sessions();
                 }
                 app.history.rename_mode = false;
                 app.history.rename_buffer.clear();
@@ -1179,10 +1177,10 @@ fn apply_chat_result(app: &mut ChatApp, result: ChatResult) {
     if let Some(session) = &mut app.current_history_session {
         session.core_session_id = Some(result.session_id.clone());
         session.updated_at = Utc::now().to_rfc3339();
-        if session.title.is_empty() {
-            if let Some(first) = session.turns.iter().find(|t| t.role == TurnRole::User) {
-                session.title = first.content.chars().take(60).collect();
-            }
+        if session.title.is_empty()
+            && let Some(first) = session.turns.iter().find(|t| t.role == TurnRole::User)
+        {
+            session.title = first.content.chars().take(60).collect();
         }
         session.turns.push(ChatTurn {
             timestamp: Utc::now().to_rfc3339(),
@@ -1217,10 +1215,10 @@ fn apply_agent_outcome(app: &mut ChatApp, outcome: AgentOutcome) {
     if let Some(session) = &mut app.current_history_session {
         session.core_session_id = Some(outcome.session_id.clone());
         session.updated_at = Utc::now().to_rfc3339();
-        if session.title.is_empty() {
-            if let Some(first) = session.turns.iter().find(|t| t.role == TurnRole::User) {
-                session.title = first.content.chars().take(60).collect();
-            }
+        if session.title.is_empty()
+            && let Some(first) = session.turns.iter().find(|t| t.role == TurnRole::User)
+        {
+            session.title = first.content.chars().take(60).collect();
         }
         session.turns.push(ChatTurn {
             timestamp: Utc::now().to_rfc3339(),
