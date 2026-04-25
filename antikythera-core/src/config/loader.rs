@@ -217,6 +217,7 @@ fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::Pos
                 .unwrap_or_default(),
         },
         agent: postcard_config::AgentConfig::default(),
+        security: crate::security::config::SecurityConfig::default(),
         custom: std::collections::HashMap::new(),
     }
 }

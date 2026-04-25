@@ -8,6 +8,9 @@ pub mod constants;
 pub mod domain;
 pub mod infrastructure;
 
+/// Security module for input validation, rate limiting, and secrets management
+pub mod security;
+
 /// Unified logging system for all core operations
 pub mod logging;
 

@@ -82,6 +82,7 @@ chrono.workspace = true
 sysinfo = { workspace = true, optional = true }
 dotenvy.workspace = true
 shellexpand.workspace = true
+regex = "1.10"
 # TUI and wizard (optional)
 crossterm = { workspace = true, optional = true }
 ratatui = { workspace = true, optional = true }

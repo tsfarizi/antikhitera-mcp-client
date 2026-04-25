@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-cli"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "antikythera-core",
  "antikythera-sdk",
@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-core"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "antikythera-log",
  "anyhow",
@@ -141,6 +141,7 @@ dependencies = [
  "once_cell",
  "postcard",
  "ratatui",
+ "regex",
  "reqwest",
  "reqwest-eventsource",
  "serde",
@@ -159,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-log"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -172,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-sdk"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "antikythera-core",
  "antikythera-log",
@@ -194,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "antikythera-session"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "antikythera-log",
  "chrono",
@@ -353,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "build-scripts"
-version = "1.0.2"
+version = "1.0.3"
 
 [[package]]
 name = "bumpalo"

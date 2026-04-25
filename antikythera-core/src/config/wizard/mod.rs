@@ -76,6 +76,7 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
         },
         prompts: PromptsConfig::default(),
         agent: postcard_config::AgentConfig::default(),
+        security: crate::security::config::SecurityConfig::default(),
         custom: std::collections::HashMap::new(),
     };
 

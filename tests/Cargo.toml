@@ -5,6 +5,30 @@ edition = "2024"
 publish = false
 
 # ============================================================================
+# Security Module Tests
+# ============================================================================
+
+[[test]]
+name = "security_validation_tests"
+path = "security/validation_tests.rs"
+
+[[test]]
+name = "security_rate_limit_tests"
+path = "security/rate_limit_tests.rs"
+
+[[test]]
+name = "security_secrets_tests"
+path = "security/secrets_tests.rs"
+
+[[test]]
+name = "security_config_tests"
+path = "security/config_tests.rs"
+
+[[test]]
+name = "security_ffi_tests"
+path = "security_ffi/tests.rs"
+
+# ============================================================================
 # Log Module Tests
 # ============================================================================
 

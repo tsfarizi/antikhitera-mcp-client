@@ -27,6 +27,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+// Import security configuration types
+use crate::security::config::SecurityConfig;
+
 // ============================================================================
 // Unified Configuration Structure
 // ============================================================================
@@ -44,6 +47,8 @@ pub struct PostcardAppConfig {
     pub prompts: PromptsConfig,
     /// Agent behavior settings
     pub agent: AgentConfig,
+    /// Security configuration
+    pub security: SecurityConfig,
     /// Custom key-value pairs for extensibility
     #[serde(default)]
     pub custom: HashMap<String, String>,
