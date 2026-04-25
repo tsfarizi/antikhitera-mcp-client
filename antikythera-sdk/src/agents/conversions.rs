@@ -4,6 +4,7 @@
 use super::orchestrator::{
     GuardrailOptions, OrchestratorMonitorSnapshot, OrchestratorOptions, TaskResultDetail,
 };
+#[cfg(feature = "sdk-core")]
 use super::types::{StreamingModeOption, StreamingOptions};
 
 #[cfg(feature = "multi-agent")]

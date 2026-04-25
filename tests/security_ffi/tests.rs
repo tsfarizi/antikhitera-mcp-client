@@ -387,9 +387,21 @@ pub mod secrets_ffi_tests {
             let result_ptr = mcp_security_list_secrets();
             let result = CString::from_raw(result_ptr).into_string().unwrap();
 
-            assert!(result.contains("\"secrets\""));
-            assert!(result.contains("secret1"));
-            assert!(result.contains("secret2"));
+            assert!(
+                result.contains("\"secrets\""),
+                "Result should contain secrets list: {}",
+                result
+            );
+            assert!(
+                result.contains("secret1"),
+                "Result should contain secret1: {}",
+                result
+            );
+            assert!(
+                result.contains("secret2"),
+                "Result should contain secret2: {}",
+                result
+            );
         }
     }
 
@@ -406,9 +418,22 @@ pub mod secrets_ffi_tests {
             let result_ptr = mcp_security_get_secret_metadata(id.as_ptr());
             let result = CString::from_raw(result_ptr).into_string().unwrap();
 
-            assert!(result.contains("\"id\":\"test-secret-4\""));
-            assert!(result.contains("\"version\":1"));
-            assert!(result.contains("\"active\":true"));
+            assert!(
+                result.contains("\"id\":\"test-secret-4\"")
+                    || result.contains("\"id\": \"test-secret-4\""),
+                "Result should contain correct ID: {}",
+                result
+            );
+            assert!(
+                result.contains("\"version\":1") || result.contains("\"version\": 1"),
+                "Result should contain correct version: {}",
+                result
+            );
+            assert!(
+                result.contains("\"active\":true") || result.contains("\"active\": true"),
+                "Result should contain correct active status: {}",
+                result
+            );
         }
     }
 
