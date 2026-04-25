@@ -230,9 +230,14 @@ pub mod rate_limit_ffi_tests {
             // Check usage after reset
             let usage_ptr = mcp_security_get_usage(session_id.as_ptr());
             let usage = CString::from_raw(usage_ptr).into_string().unwrap();
+
+            // Allow for varying whitespace in JSON output
+            let is_reset = usage.contains("\"requests_per_minute\":0")
+                || usage.contains("\"requests_per_minute\": 0");
             assert!(
-                usage.contains("\"requests_per_minute\":0")
-                    || usage.contains("\"requests_per_minute\": 0")
+                is_reset,
+                "Session was not reset correctly. Usage: {}",
+                usage
             );
         }
     }
