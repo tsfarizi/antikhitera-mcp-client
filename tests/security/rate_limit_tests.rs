@@ -1,13 +1,13 @@
 //! Rate limiting tests
 
 use antikythera_core::security::config::RateLimitConfig;
-use antikythera_core::security::rate_limit::{RateLimiter, RateLimitError};
+use antikythera_core::security::rate_limit::{RateLimitError, RateLimiter};
 
 #[test]
 fn test_rate_limiter_creation() {
     let config = RateLimitConfig::default();
     let limiter = RateLimiter::new(config);
-    assert_eq!(limiter.config().enabled, true);
+    assert!(limiter.config().enabled);
 }
 
 #[test]
@@ -41,7 +41,10 @@ fn test_rate_limit_exceeded() {
     }
 
     // 4th request should fail
-    assert!(matches!(limiter.check(session_id), Err(RateLimitError::LimitExceeded { .. })));
+    assert!(matches!(
+        limiter.check(session_id),
+        Err(RateLimitError::LimitExceeded { .. })
+    ));
 }
 
 #[test]
@@ -134,6 +137,6 @@ fn test_update_config() {
     };
 
     limiter.update_config(new_config);
-    assert_eq!(limiter.config().enabled, false);
+    assert!(!limiter.config().enabled);
     assert_eq!(limiter.config().requests_per_minute, 1000);
 }

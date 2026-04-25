@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Security configuration for the entire application
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityConfig {
     /// Input validation settings
     pub validation: ValidationConfig,
@@ -14,16 +14,6 @@ pub struct SecurityConfig {
     pub rate_limit: RateLimitConfig,
     /// Secrets management settings
     pub secrets: SecretsConfig,
-}
-
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            validation: ValidationConfig::default(),
-            rate_limit: RateLimitConfig::default(),
-            secrets: SecretsConfig::default(),
-        }
-    }
 }
 
 /// Input validation configuration
@@ -57,13 +47,8 @@ impl Default for ValidationConfig {
             max_input_size_bytes: 10 * 1024 * 1024, // 10MB
             max_message_length: 100_000,
             max_concurrent_tool_calls: 10,
-            allowed_url_patterns: vec![
-                r"^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}.*$".to_string(),
-            ],
-            blocked_url_patterns: vec![
-                r"^file://.*$".to_string(),
-                r"^data:.*$".to_string(),
-            ],
+            allowed_url_patterns: vec![r"^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}.*$".to_string()],
+            blocked_url_patterns: vec![r"^file://.*$".to_string(), r"^data:.*$".to_string()],
             sanitize_html: true,
             validate_json_schema: true,
             max_json_nesting_depth: 10,
@@ -152,7 +137,7 @@ impl Default for SecretsConfig {
             key_derivation_iterations: 100_000,
             auto_rotate: false,
             rotation_interval_hours: 720, // 30 days
-            max_secret_age_hours: 2160, // 90 days
+            max_secret_age_hours: 2160,   // 90 days
             storage_backend: "memory".to_string(),
             storage_path: None,
             enable_versioning: true,

@@ -8,7 +8,7 @@ fn test_agent_event_stream_enforces_capacity_bound() {
     
     // Add more than capacity
     for i in 0..10 {
-        stream.push_token(&format!("token-{}", i));
+        stream.push_token(format!("token-{}", i));
     }
     
     // Should not exceed capacity
@@ -40,7 +40,7 @@ fn test_agent_event_stream_very_large_capacity() {
     let mut stream = AgentEventStream::with_max_buffered_events(Some(1_000_000));
     
     for i in 0..100_000 {
-        stream.push_token(&format!("token-{}", i));
+        stream.push_token(format!("token-{}", i));
     }
     
     assert_eq!(stream.len(), 100_000);

@@ -2,39 +2,24 @@
 //!
 //! Comprehensive input validation for WASM components and user inputs.
 
+pub mod json;
+pub mod types;
+pub mod url;
+
+use json::JSONValidator;
+pub use types::{ValidationError, ValidationResult};
+use url::URLValidator;
+
 use super::config::ValidationConfig;
 use regex::Regex;
 use serde_json::Value;
 use std::collections::HashSet;
 
-/// Validation result
-#[derive(Debug, Clone)]
-pub enum ValidationResult {
-    Valid,
-    Invalid(String),
-    Sanitized(String),
-}
-
-/// Validation error
-#[derive(Debug, Clone)]
-pub struct ValidationError {
-    pub field: String,
-    pub message: String,
-}
-
-impl std::fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.field, self.message)
-    }
-}
-
-impl std::error::Error for ValidationError {}
-
 /// Input validator
 pub struct InputValidator {
     config: ValidationConfig,
-    allowed_url_regexes: Vec<Regex>,
-    blocked_url_regexes: Vec<Regex>,
+    url_validator: URLValidator,
+    json_validator: JSONValidator,
     blocked_keywords_set: HashSet<String>,
 }
 
@@ -43,13 +28,17 @@ impl InputValidator {
         let allowed_url_regexes = config
             .allowed_url_patterns
             .iter()
-            .map(|pattern| Regex::new(pattern).map_err(|e| format!("Invalid allowed URL pattern: {}", e)))
+            .map(|pattern| {
+                Regex::new(pattern).map_err(|e| format!("Invalid allowed URL pattern: {}", e))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let blocked_url_regexes = config
             .blocked_url_patterns
             .iter()
-            .map(|pattern| Regex::new(pattern).map_err(|e| format!("Invalid blocked URL pattern: {}", e)))
+            .map(|pattern| {
+                Regex::new(pattern).map_err(|e| format!("Invalid blocked URL pattern: {}", e))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let blocked_keywords_set = config
@@ -59,9 +48,12 @@ impl InputValidator {
             .collect();
 
         Ok(Self {
+            url_validator: URLValidator::new(allowed_url_regexes, blocked_url_regexes),
+            json_validator: JSONValidator::new(
+                config.max_json_nesting_depth,
+                config.max_json_array_length,
+            ),
             config,
-            allowed_url_regexes,
-            blocked_url_regexes,
             blocked_keywords_set,
         })
     }
@@ -96,20 +88,7 @@ impl InputValidator {
 
     /// Validate URL
     pub fn validate_url(&self, url: &str) -> ValidationResult {
-        // Check blocked patterns first
-        for regex in &self.blocked_url_regexes {
-            if regex.is_match(url) {
-                return ValidationResult::Invalid(format!("URL matches blocked pattern: {}", url));
-            }
-        }
-
-        // Check allowed patterns
-        let is_allowed = self.allowed_url_regexes.iter().any(|regex| regex.is_match(url));
-        if !is_allowed {
-            return ValidationResult::Invalid(format!("URL does not match any allowed pattern: {}", url));
-        }
-
-        ValidationResult::Valid
+        self.url_validator.validate(url)
     }
 
     /// Check for blocked keywords
@@ -117,7 +96,10 @@ impl InputValidator {
         let lower_input = input.to_lowercase();
         for keyword in &self.blocked_keywords_set {
             if lower_input.contains(keyword) {
-                return ValidationResult::Invalid(format!("Input contains blocked keyword: {}", keyword));
+                return ValidationResult::Invalid(format!(
+                    "Input contains blocked keyword: {}",
+                    keyword
+                ));
             }
         }
         ValidationResult::Valid
@@ -130,15 +112,12 @@ impl InputValidator {
         }
 
         // Basic HTML sanitization - remove script tags and event handlers
-        let sanitized = html
-            .replace("<script", "")
+        html.replace("<script", "")
             .replace("</script>", "")
             .replace("javascript:", "")
             .replace("onerror=", "")
             .replace("onload=", "")
-            .replace("onclick=", "");
-
-        sanitized
+            .replace("onclick=", "")
     }
 
     /// Validate JSON structure
@@ -149,35 +128,9 @@ impl InputValidator {
 
         let value: Value = serde_json::from_str(json_str).map_err(|e| e.to_string())?;
 
-        self.validate_json_structure(&value, 0)?;
+        self.json_validator.validate_structure(&value, 0)?;
 
         Ok(value)
-    }
-
-    /// Validate JSON structure recursively
-    fn validate_json_structure(&self, value: &Value, depth: u32) -> Result<(), String> {
-        if depth > self.config.max_json_nesting_depth {
-            return Err(format!("JSON nesting depth {} exceeds maximum {}", depth, self.config.max_json_nesting_depth));
-        }
-
-        match value {
-            Value::Array(arr) => {
-                if arr.len() as u32 > self.config.max_json_array_length {
-                    return Err(format!("JSON array length {} exceeds maximum {}", arr.len(), self.config.max_json_array_length));
-                }
-                for item in arr {
-                    self.validate_json_structure(item, depth + 1)?;
-                }
-            }
-            Value::Object(obj) => {
-                for (_, v) in obj {
-                    self.validate_json_structure(v, depth + 1)?;
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
     }
 
     /// Validate tool call input
@@ -208,30 +161,29 @@ impl InputValidator {
     /// Validate URLs in JSON structure
     fn validate_urls_in_json(&self, value: &Value) -> ValidationResult {
         match value {
-            Value::String(s) => {
-                if s.starts_with("http://") || s.starts_with("https://") {
-                    if let ValidationResult::Invalid(msg) = self.validate_url(s) {
-                        return ValidationResult::Invalid(msg);
-                    }
-                }
+            Value::String(s) if s.starts_with("http://") || s.starts_with("https://") => {
+                self.validate_url(s)
             }
             Value::Array(arr) => {
                 for item in arr {
-                    if let ValidationResult::Invalid(msg) = self.validate_urls_in_json(item) {
-                        return ValidationResult::Invalid(msg);
+                    let res = self.validate_urls_in_json(item);
+                    if let ValidationResult::Invalid(_) = res {
+                        return res;
                     }
                 }
+                ValidationResult::Valid
             }
             Value::Object(obj) => {
                 for (_, v) in obj {
-                    if let ValidationResult::Invalid(msg) = self.validate_urls_in_json(v) {
-                        return ValidationResult::Invalid(msg);
+                    let res = self.validate_urls_in_json(v);
+                    if let ValidationResult::Invalid(_) = res {
+                        return res;
                     }
                 }
+                ValidationResult::Valid
             }
-            _ => {}
+            _ => ValidationResult::Valid,
         }
-        ValidationResult::Valid
     }
 
     /// Validate concurrent tool calls
@@ -250,30 +202,27 @@ impl InputValidator {
         let mut errors = Vec::new();
 
         // Validate size
-        match self.validate_size(input) {
-            ValidationResult::Invalid(msg) => errors.push(ValidationError {
+        if let ValidationResult::Invalid(msg) = self.validate_size(input) {
+            errors.push(ValidationError {
                 field: "size".to_string(),
                 message: msg,
-            }),
-            _ => {}
+            });
         }
 
         // Validate message length
-        match self.validate_message_length(input) {
-            ValidationResult::Invalid(msg) => errors.push(ValidationError {
+        if let ValidationResult::Invalid(msg) = self.validate_message_length(input) {
+            errors.push(ValidationError {
                 field: "message_length".to_string(),
                 message: msg,
-            }),
-            _ => {}
+            });
         }
 
         // Check blocked keywords
-        match self.check_blocked_keywords(input) {
-            ValidationResult::Invalid(msg) => errors.push(ValidationError {
+        if let ValidationResult::Invalid(msg) = self.check_blocked_keywords(input) {
+            errors.push(ValidationError {
                 field: "keywords".to_string(),
                 message: msg,
-            }),
-            _ => {}
+            });
         }
 
         if errors.is_empty() {
@@ -292,20 +241,32 @@ impl InputValidator {
     pub fn update_config(&mut self, config: ValidationConfig) -> Result<(), String> {
         let allowed_url_patterns = config.allowed_url_patterns.clone();
         let blocked_url_patterns = config.blocked_url_patterns.clone();
-        let blocked_keywords = config.blocked_keywords.clone();
 
         self.config = config;
-        self.allowed_url_regexes = allowed_url_patterns
+
+        let allowed_url_regexes = allowed_url_patterns
             .iter()
-            .map(|pattern| Regex::new(pattern).map_err(|e| format!("Invalid allowed URL pattern: {}", e)))
+            .map(|pattern| {
+                Regex::new(pattern).map_err(|e| format!("Invalid allowed URL pattern: {}", e))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.blocked_url_regexes = blocked_url_patterns
+        let blocked_url_regexes = blocked_url_patterns
             .iter()
-            .map(|pattern| Regex::new(pattern).map_err(|e| format!("Invalid blocked URL pattern: {}", e)))
+            .map(|pattern| {
+                Regex::new(pattern).map_err(|e| format!("Invalid blocked URL pattern: {}", e))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.blocked_keywords_set = blocked_keywords
+        self.url_validator = URLValidator::new(allowed_url_regexes, blocked_url_regexes);
+        self.json_validator = JSONValidator::new(
+            self.config.max_json_nesting_depth,
+            self.config.max_json_array_length,
+        );
+
+        self.blocked_keywords_set = self
+            .config
+            .blocked_keywords
             .iter()
             .map(|k| k.to_lowercase())
             .collect();
@@ -321,24 +282,42 @@ mod tests {
     #[test]
     fn test_validate_size() {
         let validator = InputValidator::from_config().unwrap();
-        assert!(matches!(validator.validate_size("small"), ValidationResult::Valid));
+        assert!(matches!(
+            validator.validate_size("small"),
+            ValidationResult::Valid
+        ));
 
         let large_input = "x".repeat(11 * 1024 * 1024);
-        assert!(matches!(validator.validate_size(&large_input), ValidationResult::Invalid(_)));
+        assert!(matches!(
+            validator.validate_size(&large_input),
+            ValidationResult::Invalid(_)
+        ));
     }
 
     #[test]
     fn test_validate_url() {
         let validator = InputValidator::from_config().unwrap();
-        assert!(matches!(validator.validate_url("https://example.com"), ValidationResult::Valid));
-        assert!(matches!(validator.validate_url("file://etc/passwd"), ValidationResult::Invalid(_)));
+        assert!(matches!(
+            validator.validate_url("https://example.com"),
+            ValidationResult::Valid
+        ));
+        assert!(matches!(
+            validator.validate_url("file://etc/passwd"),
+            ValidationResult::Invalid(_)
+        ));
     }
 
     #[test]
     fn test_check_blocked_keywords() {
         let validator = InputValidator::from_config().unwrap();
-        assert!(matches!(validator.check_blocked_keywords("normal text"), ValidationResult::Valid));
-        assert!(matches!(validator.check_blocked_keywords("<script>alert('xss')</script>"), ValidationResult::Invalid(_)));
+        assert!(matches!(
+            validator.check_blocked_keywords("normal text"),
+            ValidationResult::Valid
+        ));
+        assert!(matches!(
+            validator.check_blocked_keywords("<script>alert('xss')</script>"),
+            ValidationResult::Invalid(_)
+        ));
     }
 
     #[test]

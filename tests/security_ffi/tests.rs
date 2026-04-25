@@ -3,7 +3,6 @@
 use antikythera_sdk::security_ffi::*;
 use std::ffi::CString;
 
-
 #[cfg(test)]
 pub mod validation_ffi_tests {
     use super::*;
@@ -227,7 +226,10 @@ pub mod rate_limit_ffi_tests {
             // Check usage after reset
             let usage_ptr = mcp_security_get_usage(session_id.as_ptr());
             let usage = CString::from_raw(usage_ptr).into_string().unwrap();
-            assert!(usage.contains("\"requests_per_minute\":0"));
+            assert!(
+                usage.contains("\"requests_per_minute\":0")
+                    || usage.contains("\"requests_per_minute\": 0")
+            );
         }
     }
 
@@ -369,8 +371,14 @@ pub mod secrets_ffi_tests {
         unsafe {
             mcp_security_init_secret_manager();
 
-            mcp_security_store_secret(CString::new("secret1").unwrap().as_ptr(), CString::new("value1").unwrap().as_ptr());
-            mcp_security_store_secret(CString::new("secret2").unwrap().as_ptr(), CString::new("value2").unwrap().as_ptr());
+            mcp_security_store_secret(
+                CString::new("secret1").unwrap().as_ptr(),
+                CString::new("value1").unwrap().as_ptr(),
+            );
+            mcp_security_store_secret(
+                CString::new("secret2").unwrap().as_ptr(),
+                CString::new("value2").unwrap().as_ptr(),
+            );
 
             let result_ptr = mcp_security_list_secrets();
             let result = CString::from_raw(result_ptr).into_string().unwrap();

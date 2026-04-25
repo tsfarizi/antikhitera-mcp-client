@@ -52,7 +52,11 @@ fn test_validate_url_valid() {
 
     for url in urls {
         let result = validator.validate_url(url);
-        assert!(matches!(result, ValidationResult::Valid), "URL {} should be valid", url);
+        assert!(
+            matches!(result, ValidationResult::Valid),
+            "URL {} should be valid",
+            url
+        );
     }
 }
 
@@ -66,7 +70,11 @@ fn test_validate_url_blocked() {
 
     for url in blocked_urls {
         let result = validator.validate_url(url);
-        assert!(matches!(result, ValidationResult::Invalid(_)), "URL {} should be blocked", url);
+        assert!(
+            matches!(result, ValidationResult::Invalid(_)),
+            "URL {} should be blocked",
+            url
+        );
     }
 }
 
@@ -82,7 +90,11 @@ fn test_check_blocked_keywords() {
 
     for input in valid_inputs {
         let result = validator.check_blocked_keywords(input);
-        assert!(matches!(result, ValidationResult::Valid), "Input '{}' should be valid", input);
+        assert!(
+            matches!(result, ValidationResult::Valid),
+            "Input '{}' should be valid",
+            input
+        );
     }
 
     let blocked_inputs = vec![
@@ -93,7 +105,11 @@ fn test_check_blocked_keywords() {
 
     for input in blocked_inputs {
         let result = validator.check_blocked_keywords(input);
-        assert!(matches!(result, ValidationResult::Invalid(_)), "Input '{}' should be blocked", input);
+        assert!(
+            matches!(result, ValidationResult::Invalid(_)),
+            "Input '{}' should be blocked",
+            input
+        );
     }
 }
 
@@ -192,9 +208,18 @@ fn test_validate_concurrent_calls() {
     };
     let validator = InputValidator::new(config).unwrap();
 
-    assert!(matches!(validator.validate_concurrent_calls(3), ValidationResult::Valid));
-    assert!(matches!(validator.validate_concurrent_calls(4), ValidationResult::Valid));
-    assert!(matches!(validator.validate_concurrent_calls(5), ValidationResult::Invalid(_)));
+    assert!(matches!(
+        validator.validate_concurrent_calls(3),
+        ValidationResult::Valid
+    ));
+    assert!(matches!(
+        validator.validate_concurrent_calls(4),
+        ValidationResult::Valid
+    ));
+    assert!(matches!(
+        validator.validate_concurrent_calls(5),
+        ValidationResult::Invalid(_)
+    ));
 }
 
 #[test]

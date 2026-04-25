@@ -46,7 +46,8 @@ impl TimeWindow {
         let now = Instant::now();
 
         // Remove old requests outside the window
-        self.requests.retain(|&timestamp| now.duration_since(timestamp) < self.window_size);
+        self.requests
+            .retain(|&timestamp| now.duration_since(timestamp) < self.window_size);
 
         // Check if limit exceeded
         let effective_limit = self.max_requests + self.burst_allowance;
@@ -89,8 +90,16 @@ pub enum RateLimitError {
 impl std::fmt::Display for RateLimitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RateLimitError::LimitExceeded { limit, current, window_secs } => {
-                write!(f, "Rate limit exceeded: {}/{} requests per {}s", current, limit, window_secs)
+            RateLimitError::LimitExceeded {
+                limit,
+                current,
+                window_secs,
+            } => {
+                write!(
+                    f,
+                    "Rate limit exceeded: {}/{} requests per {}s",
+                    current, limit, window_secs
+                )
             }
             RateLimitError::TooManyConcurrentSessions { max, current } => {
                 write!(f, "Too many concurrent sessions: {}/{}", current, max)
@@ -136,7 +145,9 @@ impl RateLimiter {
         let mut limits = self.session_limits.lock().unwrap();
 
         // Check concurrent session limit
-        if limits.len() as u32 >= self.config.max_concurrent_sessions && !limits.contains_key(session_id) {
+        if limits.len() as u32 >= self.config.max_concurrent_sessions
+            && !limits.contains_key(session_id)
+        {
             return Err(RateLimitError::TooManyConcurrentSessions {
                 max: self.config.max_concurrent_sessions,
                 current: limits.len() as u32,
@@ -144,14 +155,26 @@ impl RateLimiter {
         }
 
         // Get or create session limits
-        let session = limits.entry(session_id.to_string()).or_insert_with(|| {
-            SessionLimits {
-                minute_window: TimeWindow::new(60, self.config.requests_per_minute, self.config.burst_allowance),
-                hour_window: TimeWindow::new(3600, self.config.requests_per_hour, self.config.burst_allowance),
-                day_window: TimeWindow::new(86400, self.config.requests_per_day, self.config.burst_allowance),
+        let session = limits
+            .entry(session_id.to_string())
+            .or_insert_with(|| SessionLimits {
+                minute_window: TimeWindow::new(
+                    60,
+                    self.config.requests_per_minute,
+                    self.config.burst_allowance,
+                ),
+                hour_window: TimeWindow::new(
+                    3600,
+                    self.config.requests_per_hour,
+                    self.config.burst_allowance,
+                ),
+                day_window: TimeWindow::new(
+                    86400,
+                    self.config.requests_per_day,
+                    self.config.burst_allowance,
+                ),
                 last_activity: Instant::now(),
-            }
-        });
+            });
 
         session.last_activity = Instant::now();
 
@@ -205,9 +228,7 @@ impl RateLimiter {
             let now = Instant::now();
             let timeout = Duration::from_secs(300); // 5 minutes inactivity timeout
 
-            limits_guard.retain(|_, session| {
-                now.duration_since(session.last_activity) < timeout
-            });
+            limits_guard.retain(|_, session| now.duration_since(session.last_activity) < timeout);
         }
     }
 
@@ -286,7 +307,10 @@ mod tests {
         }
 
         // 6th request should fail
-        assert!(matches!(limiter.check(session_id), Err(RateLimitError::LimitExceeded { .. })));
+        assert!(matches!(
+            limiter.check(session_id),
+            Err(RateLimitError::LimitExceeded { .. })
+        ));
     }
 
     #[test]

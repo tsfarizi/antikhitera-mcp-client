@@ -1,10 +1,10 @@
 //! Secrets Management FFI
 
+use super::helpers::*;
+use crate::sdk_logging::SecurityFfiLogger;
+use antikythera_core::security::secrets::SecretManager;
 use std::os::raw::c_char;
 use std::sync::Mutex;
-use super::helpers::*;
-use antikythera_core::security::secrets::SecretManager;
-use crate::sdk_logging::SecurityFfiLogger;
 
 /// Global secret manager instance (thread-safe)
 static SECRET_MANAGER: Mutex<Option<SecretManager>> = Mutex::new(None);
@@ -41,7 +41,10 @@ pub extern "C" fn mcp_security_init_secret_manager() -> *mut c_char {
 /// # Returns
 /// `{"success": true}` or error
 #[unsafe(no_mangle)]
-pub extern "C" fn mcp_security_store_secret(id: *const c_char, value: *const c_char) -> *mut c_char {
+pub extern "C" fn mcp_security_store_secret(
+    id: *const c_char,
+    value: *const c_char,
+) -> *mut c_char {
     let logger = SecurityFfiLogger::new("security");
     let id_str = match from_c_string(id) {
         Ok(s) => s,
@@ -59,25 +62,29 @@ pub extern "C" fn mcp_security_store_secret(id: *const c_char, value: *const c_c
         }
     };
 
-    logger.ffi_call("mcp_security_store_secret", &format!("{{\"id\": \"{}\"}}", id_str));
+    logger.ffi_call(
+        "mcp_security_store_secret",
+        &format!("{{\"id\": \"{}\"}}", id_str),
+    );
 
     let guard = SECRET_MANAGER.lock().unwrap();
     match guard.as_ref() {
-        Some(manager) => {
-            match manager.store_secret(&id_str, &value_str) {
-                Ok(_) => {
-                    logger.secret_stored(&id_str);
-                    logger.ffi_result("mcp_security_store_secret", true, 0);
-                    success_response()
-                }
-                Err(e) => {
-                    logger.ffi_error("mcp_security_store_secret", &e.to_string());
-                    error_response(&e.to_string())
-                }
+        Some(manager) => match manager.store_secret(&id_str, &value_str) {
+            Ok(_) => {
+                logger.secret_stored(&id_str);
+                logger.ffi_result("mcp_security_store_secret", true, 0);
+                success_response()
             }
-        }
+            Err(e) => {
+                logger.ffi_error("mcp_security_store_secret", &e.to_string());
+                error_response(&e.to_string())
+            }
+        },
         None => {
-            logger.ffi_error("mcp_security_store_secret", "Secret manager not initialized");
+            logger.ffi_error(
+                "mcp_security_store_secret",
+                "Secret manager not initialized",
+            );
             error_response("Secret manager not initialized")
         }
     }
@@ -101,23 +108,24 @@ pub extern "C" fn mcp_security_get_secret(id: *const c_char) -> *mut c_char {
         }
     };
 
-    logger.ffi_call("mcp_security_get_secret", &format!("{{\"id\": \"{}\"}}", id_str));
+    logger.ffi_call(
+        "mcp_security_get_secret",
+        &format!("{{\"id\": \"{}\"}}", id_str),
+    );
 
     let guard = SECRET_MANAGER.lock().unwrap();
     match guard.as_ref() {
-        Some(manager) => {
-            match manager.get_secret(&id_str) {
-                Ok(value) => {
-                    logger.secret_retrieved(&id_str);
-                    logger.ffi_result("mcp_security_get_secret", true, value.len());
-                    success_with(&[("value", serde_json::json!(value))])
-                }
-                Err(e) => {
-                    logger.ffi_error("mcp_security_get_secret", &e.to_string());
-                    error_response(&e.to_string())
-                }
+        Some(manager) => match manager.get_secret(&id_str) {
+            Ok(value) => {
+                logger.secret_retrieved(&id_str);
+                logger.ffi_result("mcp_security_get_secret", true, value.len());
+                success_with(&[("value", serde_json::json!(value))])
             }
-        }
+            Err(e) => {
+                logger.ffi_error("mcp_security_get_secret", &e.to_string());
+                error_response(&e.to_string())
+            }
+        },
         None => {
             logger.ffi_error("mcp_security_get_secret", "Secret manager not initialized");
             error_response("Secret manager not initialized")
@@ -134,7 +142,10 @@ pub extern "C" fn mcp_security_get_secret(id: *const c_char) -> *mut c_char {
 /// # Returns
 /// `{"success": true}` or error
 #[unsafe(no_mangle)]
-pub extern "C" fn mcp_security_rotate_secret(id: *const c_char, new_value: *const c_char) -> *mut c_char {
+pub extern "C" fn mcp_security_rotate_secret(
+    id: *const c_char,
+    new_value: *const c_char,
+) -> *mut c_char {
     let logger = SecurityFfiLogger::new("security");
     let id_str = match from_c_string(id) {
         Ok(s) => s,
@@ -152,25 +163,29 @@ pub extern "C" fn mcp_security_rotate_secret(id: *const c_char, new_value: *cons
         }
     };
 
-    logger.ffi_call("mcp_security_rotate_secret", &format!("{{\"id\": \"{}\"}}", id_str));
+    logger.ffi_call(
+        "mcp_security_rotate_secret",
+        &format!("{{\"id\": \"{}\"}}", id_str),
+    );
 
     let guard = SECRET_MANAGER.lock().unwrap();
     match guard.as_ref() {
-        Some(manager) => {
-            match manager.rotate_secret(&id_str, &new_value_str) {
-                Ok(_) => {
-                    logger.secret_rotated(&id_str);
-                    logger.ffi_result("mcp_security_rotate_secret", true, 0);
-                    success_response()
-                }
-                Err(e) => {
-                    logger.ffi_error("mcp_security_rotate_secret", &e.to_string());
-                    error_response(&e.to_string())
-                }
+        Some(manager) => match manager.rotate_secret(&id_str, &new_value_str) {
+            Ok(_) => {
+                logger.secret_rotated(&id_str);
+                logger.ffi_result("mcp_security_rotate_secret", true, 0);
+                success_response()
             }
-        }
+            Err(e) => {
+                logger.ffi_error("mcp_security_rotate_secret", &e.to_string());
+                error_response(&e.to_string())
+            }
+        },
         None => {
-            logger.ffi_error("mcp_security_rotate_secret", "Secret manager not initialized");
+            logger.ffi_error(
+                "mcp_security_rotate_secret",
+                "Secret manager not initialized",
+            );
             error_response("Secret manager not initialized")
         }
     }
@@ -194,25 +209,29 @@ pub extern "C" fn mcp_security_delete_secret(id: *const c_char) -> *mut c_char {
         }
     };
 
-    logger.ffi_call("mcp_security_delete_secret", &format!("{{\"id\": \"{}\"}}", id_str));
+    logger.ffi_call(
+        "mcp_security_delete_secret",
+        &format!("{{\"id\": \"{}\"}}", id_str),
+    );
 
     let guard = SECRET_MANAGER.lock().unwrap();
     match guard.as_ref() {
-        Some(manager) => {
-            match manager.delete_secret(&id_str) {
-                Ok(_) => {
-                    logger.secret_deleted(&id_str);
-                    logger.ffi_result("mcp_security_delete_secret", true, 0);
-                    success_response()
-                }
-                Err(e) => {
-                    logger.ffi_error("mcp_security_delete_secret", &e.to_string());
-                    error_response(&e.to_string())
-                }
+        Some(manager) => match manager.delete_secret(&id_str) {
+            Ok(_) => {
+                logger.secret_deleted(&id_str);
+                logger.ffi_result("mcp_security_delete_secret", true, 0);
+                success_response()
             }
-        }
+            Err(e) => {
+                logger.ffi_error("mcp_security_delete_secret", &e.to_string());
+                error_response(&e.to_string())
+            }
+        },
         None => {
-            logger.ffi_error("mcp_security_delete_secret", "Secret manager not initialized");
+            logger.ffi_error(
+                "mcp_security_delete_secret",
+                "Secret manager not initialized",
+            );
             error_response("Secret manager not initialized")
         }
     }
@@ -235,7 +254,10 @@ pub extern "C" fn mcp_security_list_secrets() -> *mut c_char {
             success_with(&[("secrets", serde_json::json!(secrets))])
         }
         None => {
-            logger.ffi_error("mcp_security_list_secrets", "Secret manager not initialized");
+            logger.ffi_error(
+                "mcp_security_list_secrets",
+                "Secret manager not initialized",
+            );
             error_response("Secret manager not initialized")
         }
     }
@@ -259,24 +281,28 @@ pub extern "C" fn mcp_security_get_secret_metadata(id: *const c_char) -> *mut c_
         }
     };
 
-    logger.ffi_call("mcp_security_get_secret_metadata", &format!("{{\"id\": \"{}\"}}", id_str));
+    logger.ffi_call(
+        "mcp_security_get_secret_metadata",
+        &format!("{{\"id\": \"{}\"}}", id_str),
+    );
 
     let guard = SECRET_MANAGER.lock().unwrap();
     match guard.as_ref() {
-        Some(manager) => {
-            match manager.get_metadata(&id_str) {
-                Ok(metadata) => {
-                    logger.ffi_result("mcp_security_get_secret_metadata", true, 0);
-                    serialize_result(&metadata)
-                }
-                Err(e) => {
-                    logger.ffi_error("mcp_security_get_secret_metadata", &e.to_string());
-                    error_response(&e.to_string())
-                }
+        Some(manager) => match manager.get_metadata(&id_str) {
+            Ok(metadata) => {
+                logger.ffi_result("mcp_security_get_secret_metadata", true, 0);
+                serialize_result(&metadata)
             }
-        }
+            Err(e) => {
+                logger.ffi_error("mcp_security_get_secret_metadata", &e.to_string());
+                error_response(&e.to_string())
+            }
+        },
         None => {
-            logger.ffi_error("mcp_security_get_secret_metadata", "Secret manager not initialized");
+            logger.ffi_error(
+                "mcp_security_get_secret_metadata",
+                "Secret manager not initialized",
+            );
             error_response("Secret manager not initialized")
         }
     }
@@ -298,7 +324,10 @@ pub extern "C" fn mcp_security_get_secrets_config() -> *mut c_char {
             serialize_result(manager.config())
         }
         None => {
-            logger.ffi_error("mcp_security_get_secrets_config", "Secret manager not initialized");
+            logger.ffi_error(
+                "mcp_security_get_secrets_config",
+                "Secret manager not initialized",
+            );
             error_response("Secret manager not initialized")
         }
     }
@@ -336,20 +365,21 @@ pub extern "C" fn mcp_security_set_secrets_config(config_json: *const c_char) ->
 
     let mut guard = SECRET_MANAGER.lock().unwrap();
     match guard.as_mut() {
-        Some(manager) => {
-            match manager.update_config(config) {
-                Ok(_) => {
-                    logger.ffi_result("mcp_security_set_secrets_config", true, 0);
-                    success_response()
-                }
-                Err(e) => {
-                    logger.ffi_error("mcp_security_set_secrets_config", &e.to_string());
-                    error_response(&e.to_string())
-                }
+        Some(manager) => match manager.update_config(config) {
+            Ok(_) => {
+                logger.ffi_result("mcp_security_set_secrets_config", true, 0);
+                success_response()
             }
-        }
+            Err(e) => {
+                logger.ffi_error("mcp_security_set_secrets_config", &e.to_string());
+                error_response(&e.to_string())
+            }
+        },
         None => {
-            logger.ffi_error("mcp_security_set_secrets_config", "Secret manager not initialized");
+            logger.ffi_error(
+                "mcp_security_set_secrets_config",
+                "Secret manager not initialized",
+            );
             error_response("Secret manager not initialized")
         }
     }

@@ -130,8 +130,11 @@ impl SecurityFfiLogger {
 
     pub fn ffi_call(&self, function: &str, args: &str) {
         let context = format!("{{\"function\": \"{}\", \"args\": {}}}", function, args);
-        self.logger
-            .log_with_context(LogLevel::Debug, format!("Security FFI call: {}", function), context);
+        self.logger.log_with_context(
+            LogLevel::Debug,
+            format!("Security FFI call: {}", function),
+            context,
+        );
     }
 
     pub fn ffi_result(&self, function: &str, success: bool, result_size: usize) {
@@ -151,8 +154,11 @@ impl SecurityFfiLogger {
             "{{\"function\": \"{}\", \"error\": \"{}\"}}",
             function, error
         );
-        self.logger
-            .log_with_context(LogLevel::Error, format!("Security FFI error: {}", function), context);
+        self.logger.log_with_context(
+            LogLevel::Error,
+            format!("Security FFI error: {}", function),
+            context,
+        );
     }
 
     pub fn validation_passed(&self, input_type: &str) {
@@ -167,7 +173,10 @@ impl SecurityFfiLogger {
         self.logger.log_with_context(
             LogLevel::Warn,
             "Security validation failed",
-            format!("{{\"input_type\": \"{}\", \"reason\": \"{}\"}}", input_type, reason),
+            format!(
+                "{{\"input_type\": \"{}\", \"reason\": \"{}\"}}",
+                input_type, reason
+            ),
         );
     }
 
@@ -175,7 +184,10 @@ impl SecurityFfiLogger {
         self.logger.log_with_context(
             LogLevel::Debug,
             "Rate limit check",
-            format!("{{\"session_id\": \"{}\", \"allowed\": {}}}", session_id, allowed),
+            format!(
+                "{{\"session_id\": \"{}\", \"allowed\": {}}}",
+                session_id, allowed
+            ),
         );
     }
 
@@ -183,7 +195,10 @@ impl SecurityFfiLogger {
         self.logger.log_with_context(
             LogLevel::Warn,
             "Rate limit exceeded",
-            format!("{{\"session_id\": \"{}\", \"reason\": \"{}\"}}", session_id, reason),
+            format!(
+                "{{\"session_id\": \"{}\", \"reason\": \"{}\"}}",
+                session_id, reason
+            ),
         );
     }
 

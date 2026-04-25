@@ -1,7 +1,7 @@
 //! Common FFI utilities for security module
 
-use std::os::raw::c_char;
 use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
 
 /// Convert C string to Rust string
 pub fn from_c_string(ptr: *const c_char) -> Result<String, String> {
@@ -66,8 +66,12 @@ pub fn serialize_result<T: serde::Serialize>(value: &T) -> *mut c_char {
 }
 
 /// Free C string allocated by Rust
+///
+/// # Safety
+///
+/// The pointer must be a valid pointer to a C string allocated by Rust using `into_raw`.
 #[unsafe(no_mangle)]
-pub extern "C" fn mcp_security_free_string(ptr: *mut c_char) {
+pub unsafe extern "C" fn mcp_security_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
         unsafe {
             let _ = CString::from_raw(ptr);

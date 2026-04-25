@@ -278,7 +278,11 @@ mod tests {
             .expect("apply_policy failed");
 
         // Token count should be below budget
-        let tokens = (result.iter().map(|m| m.content().len()).sum::<usize>() + 3) / 4;
+        let tokens = result
+            .iter()
+            .map(|m| m.content().len())
+            .sum::<usize>()
+            .div_ceil(4);
         assert!(tokens <= 100);
     }
 

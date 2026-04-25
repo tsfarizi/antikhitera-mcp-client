@@ -1,6 +1,8 @@
 //! Security configuration tests
 
-use antikythera_core::security::config::{SecurityConfig, ValidationConfig, RateLimitConfig, SecretsConfig, SecretMetadata};
+use antikythera_core::security::config::{
+    RateLimitConfig, SecretMetadata, SecretsConfig, SecurityConfig, ValidationConfig,
+};
 
 #[test]
 fn test_security_config_default() {

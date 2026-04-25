@@ -2,7 +2,15 @@
 //!
 //! Secure storage and rotation of secrets with encryption at rest.
 
-use super::config::{SecretMetadata, SecretsConfig};
+pub mod crypto;
+pub mod error;
+pub mod storage;
+
+use crypto::CryptoProvider;
+pub use error::SecretManagerError;
+pub use storage::{SecretRotationPolicy, SecretStorage, StoredSecret};
+
+use crate::security::config::{SecretMetadata, SecretsConfig};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -14,66 +22,6 @@ pub struct SecretManager {
     rotation_task: Option<std::thread::JoinHandle<()>>,
 }
 
-/// Secret storage backend
-#[derive(Debug)]
-enum SecretStorage {
-    Memory {
-        secrets: HashMap<String, Vec<StoredSecret>>,
-    },
-    File {
-        secrets: HashMap<String, Vec<StoredSecret>>,
-        #[allow(dead_code)]
-        path: String,
-    },
-}
-
-/// Stored secret with metadata
-#[derive(Debug, Clone)]
-struct StoredSecret {
-    value: String,
-    metadata: SecretMetadata,
-}
-
-/// Secret rotation policy
-#[derive(Debug, Clone)]
-pub enum SecretRotationPolicy {
-    /// Rotate based on time interval
-    TimeBased {
-        interval_hours: u32,
-    },
-    /// Rotate based on usage count
-    UsageBased {
-        max_uses: u32,
-        current_uses: u32,
-    },
-    /// Manual rotation only
-    Manual,
-}
-
-/// Secret manager error
-#[derive(Debug, Clone)]
-pub enum SecretManagerError {
-    SecretNotFound(String),
-    SecretExpired(String),
-    StorageError(String),
-    EncryptionError(String),
-    InvalidConfig(String),
-}
-
-impl std::fmt::Display for SecretManagerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SecretManagerError::SecretNotFound(id) => write!(f, "Secret not found: {}", id),
-            SecretManagerError::SecretExpired(id) => write!(f, "Secret expired: {}", id),
-            SecretManagerError::StorageError(msg) => write!(f, "Storage error: {}", msg),
-            SecretManagerError::EncryptionError(msg) => write!(f, "Encryption error: {}", msg),
-            SecretManagerError::InvalidConfig(msg) => write!(f, "Invalid config: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for SecretManagerError {}
-
 impl SecretManager {
     pub fn new(config: SecretsConfig) -> Result<Self, SecretManagerError> {
         let storage = match config.storage_backend.as_str() {
@@ -81,7 +29,10 @@ impl SecretManager {
                 secrets: HashMap::new(),
             },
             "file" => {
-                let path = config.storage_path.clone().unwrap_or_else(|| ".secrets".to_string());
+                let path = config
+                    .storage_path
+                    .clone()
+                    .unwrap_or_else(|| ".secrets".to_string());
                 SecretStorage::File {
                     secrets: HashMap::new(),
                     path,
@@ -91,7 +42,7 @@ impl SecretManager {
                 return Err(SecretManagerError::InvalidConfig(format!(
                     "Unknown storage backend: {}",
                     backend
-                )))
+                )));
             }
         };
 
@@ -102,7 +53,7 @@ impl SecretManager {
             let interval = Duration::from_secs((config.rotation_interval_hours * 3600) as u64);
 
             Some(std::thread::spawn(move || {
-                Self::rotation_task(storage_clone, interval);
+                Self::run_rotation_task(storage_clone, interval);
             }))
         } else {
             None
@@ -122,11 +73,13 @@ impl SecretManager {
     /// Store a secret
     pub fn store_secret(&self, id: &str, value: &str) -> Result<(), SecretManagerError> {
         if !self.config.enabled {
-            return Err(SecretManagerError::InvalidConfig("Secrets management is disabled".to_string()));
+            return Err(SecretManagerError::InvalidConfig(
+                "Secrets management is disabled".to_string(),
+            ));
         }
 
         let encrypted_value = if self.config.encrypt_at_rest {
-            self.encrypt(value)?
+            CryptoProvider::encrypt(value)?
         } else {
             value.to_string()
         };
@@ -163,7 +116,9 @@ impl SecretManager {
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets.get(id).ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+        let entry = secrets
+            .get(id)
+            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
 
         // Get the latest active version
         let latest = entry
@@ -177,7 +132,7 @@ impl SecretManager {
         }
 
         let value = if self.config.encrypt_at_rest {
-            self.decrypt(&latest.value)?
+            CryptoProvider::decrypt(&latest.value)?
         } else {
             latest.value.clone()
         };
@@ -193,7 +148,9 @@ impl SecretManager {
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets.get_mut(id).ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+        let entry = secrets
+            .get_mut(id)
+            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
 
         // Deactivate old versions
         for secret in entry.iter_mut() {
@@ -203,7 +160,7 @@ impl SecretManager {
         // Add new version
         let version = entry.len() as u32 + 1;
         let encrypted_value = if self.config.encrypt_at_rest {
-            self.encrypt(new_value)?
+            CryptoProvider::encrypt(new_value)?
         } else {
             new_value.to_string()
         };
@@ -235,7 +192,9 @@ impl SecretManager {
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets.get(id).ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+        let entry = secrets
+            .get(id)
+            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
 
         let latest = entry
             .iter()
@@ -243,7 +202,9 @@ impl SecretManager {
             .max_by_key(|s| s.metadata.version)
             .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
 
-        Ok(latest.metadata.needs_rotation(self.config.max_secret_age_hours))
+        Ok(latest
+            .metadata
+            .needs_rotation(self.config.max_secret_age_hours))
     }
 
     /// Delete a secret
@@ -254,7 +215,9 @@ impl SecretManager {
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        secrets.remove(id).ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+        secrets
+            .remove(id)
+            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
         Ok(())
     }
 
@@ -277,7 +240,9 @@ impl SecretManager {
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets.get(id).ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+        let entry = secrets
+            .get(id)
+            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
 
         let latest = entry
             .iter()
@@ -288,25 +253,8 @@ impl SecretManager {
         Ok(latest.metadata.clone())
     }
 
-    /// Encrypt a value (simplified implementation - use proper crypto in production)
-    fn encrypt(&self, value: &str) -> Result<String, SecretManagerError> {
-        // In production, use proper encryption like AES-256-GCM
-        // This is a placeholder implementation
-        Ok(format!("ENC:{}", value))
-    }
-
-    /// Decrypt a value (simplified implementation - use proper crypto in production)
-    fn decrypt(&self, encrypted: &str) -> Result<String, SecretManagerError> {
-        // In production, use proper decryption
-        if encrypted.starts_with("ENC:") {
-            Ok(encrypted[4..].to_string())
-        } else {
-            Err(SecretManagerError::EncryptionError("Invalid encrypted format".to_string()))
-        }
-    }
-
     /// Rotation task for automatic secret rotation
-    fn rotation_task(storage: Arc<Mutex<SecretStorage>>, interval: Duration) {
+    fn run_rotation_task(storage: Arc<Mutex<SecretStorage>>, interval: Duration) {
         loop {
             std::thread::sleep(interval);
 
@@ -318,11 +266,14 @@ impl SecretManager {
 
             // Check for secrets that need rotation
             for (_id, entry) in secrets.iter_mut() {
-                if let Some(latest) = entry.iter_mut().filter(|s| s.metadata.active).max_by_key(|s| s.metadata.version) {
-                    if latest.metadata.needs_rotation(720) { // 30 days default
-                        // Mark for rotation (actual rotation would require new value)
-                        latest.metadata.active = false;
-                    }
+                if let Some(latest) = entry
+                    .iter_mut()
+                    .filter(|s| s.metadata.active)
+                    .max_by_key(|s| s.metadata.version)
+                    .filter(|s| s.metadata.needs_rotation(720))
+                {
+                    // Mark for rotation (actual rotation would require new value)
+                    latest.metadata.active = false;
                 }
             }
         }
@@ -345,7 +296,7 @@ impl SecretManager {
             let interval = Duration::from_secs((rotation_interval_hours * 3600) as u64);
 
             self.rotation_task = Some(std::thread::spawn(move || {
-                Self::rotation_task(storage_clone, interval);
+                Self::run_rotation_task(storage_clone, interval);
             }));
         }
 
@@ -356,7 +307,6 @@ impl SecretManager {
 impl Drop for SecretManager {
     fn drop(&mut self) {
         // Note: Thread cleanup is handled automatically when the thread completes
-        // We don't explicitly abort threads as it can cause resource leaks
         self.rotation_task.take();
     }
 }
