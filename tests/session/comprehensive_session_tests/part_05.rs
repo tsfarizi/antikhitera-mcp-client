@@ -15,7 +15,7 @@ fn test_concurrent_session_creation() {
         let handle = thread::spawn(move || {
             for i in 0..sessions_per_thread {
                 manager_clone.create_session(
-                    &format!("user-{}-{}", thread_id, i),
+                    format!("user-{}-{}", thread_id, i),
                     "gpt-4",
                 );
             }
@@ -46,7 +46,7 @@ fn test_concurrent_message_addition() {
         
         let handle = thread::spawn(move || {
             for msg_id in 0..messages_per_thread {
-                let msg = Message::user(&format!("t{}-m{}", thread_id, msg_id));
+                let msg = Message::user(format!("t{}-m{}", thread_id, msg_id));
                 manager_clone.add_message(&session_id_clone, msg).ok();
             }
         });
@@ -72,7 +72,7 @@ fn test_concurrent_read_write() {
         let manager_clone = manager.clone();
         let handle = thread::spawn(move || {
             for j in 0..100 {
-                manager_clone.create_session(&format!("user-{}-{}", i, j), "gpt-4");
+                manager_clone.create_session(format!("user-{}-{}", i, j), "gpt-4");
             }
         });
         handles.push(handle);

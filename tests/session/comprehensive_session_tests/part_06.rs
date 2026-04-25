@@ -18,10 +18,10 @@ fn test_message_history_ordering_on_concurrent_adds() {
         let handle = thread::spawn(move || {
             barrier_clone.wait(); // Synchronize all threads
             
-            for i in 0..10 {
-                let msg = Message::user(&format!("t{}-m{}", thread_id, i));
-                manager_clone.add_message(&session_id_clone, msg).ok();
-            }
+                for i in 0..10 {
+                    let msg = Message::user(format!("t{}-m{}", thread_id, i));
+                    manager_clone.add_message(&session_id_clone, msg).ok();
+                }
         });
         handles.push(handle);
     }
@@ -41,7 +41,7 @@ fn test_session_message_capacity() {
     
     // Add many messages
     for i in 0..10_000 {
-        let msg = Message::user(&format!("msg-{}", i));
+        let msg = Message::user(format!("msg-{}", i));
         manager.add_message(&id, msg).ok();
     }
     

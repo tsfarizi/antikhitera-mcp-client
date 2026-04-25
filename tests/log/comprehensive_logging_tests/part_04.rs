@@ -57,7 +57,7 @@ fn test_sequence_ordering_on_concurrent_logs() {
         let handle = thread::spawn(move || {
             barrier_clone.wait(); // Synchronize
             for i in 0..10 {
-                logger_clone.info(&format!("msg-{}", i));
+                logger_clone.info(format!("msg-{}", i));
             }
         });
         handles.push(handle);
@@ -84,7 +84,7 @@ fn test_log_batch_has_more_flag() {
     let logger = Logger::new("test");
     
     for i in 0..100 {
-        logger.info(&format!("msg-{}", i));
+        logger.info(format!("msg-{}", i));
     }
     
     // With limit < total, should indicate more

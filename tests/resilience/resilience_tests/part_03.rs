@@ -8,7 +8,7 @@ fn prune_messages_with_tight_budget_keeps_newest_messages() {
         } else {
             MessageRole::Assistant
         };
-        messages.push(ChatMessage::new(role, &format!("turn {i}")));
+        messages.push(ChatMessage::new(role, format!("turn {i}")));
     }
 
     let policy = ContextWindowPolicy {

@@ -1,5 +1,6 @@
 //! SDK-level conversions
 
+#[cfg(feature = "multi-agent")]
 use super::orchestrator::{
     GuardrailOptions, OrchestratorMonitorSnapshot, OrchestratorOptions, TaskResultDetail,
 };

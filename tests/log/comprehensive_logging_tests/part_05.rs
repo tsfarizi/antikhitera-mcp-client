@@ -8,7 +8,7 @@ fn test_rapid_sequential_logging() {
     let start = Instant::now();
     
     for i in 0..100_000 {
-        logger.info(&format!("msg-{}", i));
+        logger.info(format!("msg-{}", i));
     }
     
     let elapsed = start.elapsed();
@@ -26,7 +26,7 @@ fn test_large_batch_retrieval() {
     let logger = Logger::with_capacity("large-batch", 10_000);
     
     for i in 0..10_000 {
-        logger.info(&format!("msg-{}", i));
+        logger.info(format!("msg-{}", i));
     }
     
     let start = Instant::now();
@@ -57,7 +57,7 @@ fn test_filter_performance() {
     let batch = logger.get_logs(&filter);
     let elapsed = start.elapsed();
     
-    assert!(batch.entries.len() > 0);
+    assert!(!batch.entries.is_empty());
     println!("Filtered 50k entries in {:?}", elapsed);
     assert!(elapsed.as_millis() < 500, "Filter too slow");
 }
@@ -69,8 +69,8 @@ fn test_json_serialization_performance() {
     for i in 0..10_000 {
         logger.log_with_source(
             LogLevel::Info,
-            &format!("src-{}", i % 100),
-            &format!("msg-{}", i),
+            format!("src-{}", i % 100),
+            format!("msg-{}", i),
         );
     }
     

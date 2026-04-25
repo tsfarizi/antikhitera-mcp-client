@@ -14,7 +14,7 @@ fn test_concurrent_logging_basic() {
         let logger_clone = logger.clone();
         let handle = thread::spawn(move || {
             for msg_id in 0..messages_per_thread {
-                logger_clone.info(&format!("thread-{}-msg-{}", thread_id, msg_id));
+                logger_clone.info(format!("thread-{}-msg-{}", thread_id, msg_id));
             }
         });
         handles.push(handle);
@@ -58,7 +58,7 @@ fn test_concurrent_logging_stress() {
     // All messages should fit in capacity
     assert!(logger.len() <= 100_000);
     // At least some messages should be logged
-    assert!(logger.len() > 0);
+    assert!(!logger.is_empty());
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn test_concurrent_read_write() {
         let logger_clone = logger.clone();
         let handle = thread::spawn(move || {
             for i in 0..200 {
-                logger_clone.info(&format!("writer-{}-msg-{}", thread_id, i));
+                logger_clone.info(format!("writer-{}-msg-{}", thread_id, i));
             }
         });
         handles.push(handle);
@@ -94,7 +94,7 @@ fn test_concurrent_read_write() {
         handle.join().unwrap();
     }
     
-    assert!(logger.len() > 0);
+    assert!(!logger.is_empty());
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_concurrent_clear() {
     
     // Add initial messages
     for i in 0..100 {
-        logger.info(&format!("msg-{}", i));
+        logger.info(format!("msg-{}", i));
     }
     
     let barrier = Arc::new(Barrier::new(5));
@@ -120,7 +120,7 @@ fn test_concurrent_clear() {
                 logger_clone.clear();
             } else {
                 let _ = logger_clone.get_latest(10);
-                logger_clone.info(&format!("post-clear-{}", thread_id));
+                logger_clone.info(format!("post-clear-{}", thread_id));
             }
         });
         handles.push(handle);

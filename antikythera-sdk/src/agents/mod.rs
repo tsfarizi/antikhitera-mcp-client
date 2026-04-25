@@ -1,15 +1,17 @@
-pub mod types;
-pub mod orchestrator;
-pub mod validation;
-pub mod registry;
 pub mod conversions;
+pub mod orchestrator;
+pub mod registry;
+pub mod types;
+pub mod validation;
 
-pub use types::*;
+#[cfg(feature = "multi-agent")]
+pub use orchestrator::with_hardening_runtime;
 pub use orchestrator::{
-    OrchestratorMonitorSnapshot, OrchestratorOptions, TaskResultDetail, GuardrailOptions,
-    RetryConditionOption, TimeoutGuardrailOptions, BudgetGuardrailOptions, RateLimitGuardrailOptions,
-    with_hardening_runtime
+    BudgetGuardrailOptions, GuardrailOptions, OrchestratorMonitorSnapshot, OrchestratorOptions,
+    RateLimitGuardrailOptions, RetryConditionOption, TaskResultDetail, TimeoutGuardrailOptions,
 };
+pub use types::*;
+
 pub use registry::{AgentRegistry, global_agent_registry};
 pub use validation::{validate_guardrail_options_collect, validate_streaming_options_collect};
 
@@ -113,7 +115,6 @@ pub fn reset_hardening_runtime() -> Result<bool, String> {
 }
 
 // Orchestrator SDK methods
-
 
 /// Return the default [`OrchestratorOptions`] as a JSON string.
 pub fn mcp_default_orchestrator_options() -> OrchestratorOptions {

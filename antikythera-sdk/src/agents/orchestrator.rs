@@ -1,6 +1,7 @@
 //! Orchestrator options and monitoring
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "multi-agent")]
 use std::sync::{LazyLock, Mutex};
 
 /// SDK-level orchestrator configuration options.

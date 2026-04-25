@@ -7,7 +7,7 @@ use antikythera_core::security::secrets::{SecretManager, SecretManagerError};
 fn test_secret_manager_creation() {
     let config = SecretsConfig::default();
     let manager = SecretManager::new(config).unwrap();
-    assert_eq!(manager.config().enabled, true);
+    assert!(manager.config().enabled);
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn test_update_config() {
     };
 
     manager.update_config(new_config).unwrap();
-    assert_eq!(manager.config().auto_rotate, true);
+    assert!(manager.config().auto_rotate);
     assert_eq!(manager.config().rotation_interval_hours, 24);
 }
 

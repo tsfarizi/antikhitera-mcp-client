@@ -20,7 +20,7 @@ fn test_log_buffer_capacity() {
     let logger = Logger::with_capacity("test-capacity", 5);
 
     for i in 0..10 {
-        logger.info(&format!("msg-{}", i));
+        logger.info(format!("msg-{}", i));
     }
 
     assert_eq!(logger.len(), 5);

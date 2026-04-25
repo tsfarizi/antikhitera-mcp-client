@@ -8,7 +8,7 @@ fn test_rapid_session_creation() {
     let start = Instant::now();
     
     for i in 0..10_000 {
-        manager.create_session(&format!("user-{}", i), "gpt-4");
+        manager.create_session(format!("user-{}", i), "gpt-4");
     }
     
     let elapsed = start.elapsed();
@@ -26,7 +26,7 @@ fn test_rapid_message_addition() {
     let start = Instant::now();
     
     for i in 0..10_000 {
-        let msg = Message::user(&format!("msg-{}", i));
+        let msg = Message::user(format!("msg-{}", i));
         manager.add_message(&id, msg).ok();
     }
     
@@ -43,7 +43,7 @@ fn test_large_session_retrieval() {
     let id = manager.create_session("user", "gpt-4");
     
     for i in 0..5_000 {
-        let msg = Message::user(&format!("msg-{}", i));
+        let msg = Message::user(format!("msg-{}", i));
         manager.add_message(&id, msg).ok();
     }
     
@@ -60,7 +60,7 @@ fn test_many_sessions_list() {
     let manager = SessionManager::new();
     
     for i in 0..1_000 {
-        manager.create_session(&format!("user-{}", i), "gpt-4");
+        manager.create_session(format!("user-{}", i), "gpt-4");
     }
     
     let start = Instant::now();

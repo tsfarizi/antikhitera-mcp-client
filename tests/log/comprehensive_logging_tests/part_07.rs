@@ -36,7 +36,7 @@ fn test_multiple_filters_combined() {
     
     for level in &[LogLevel::Debug, LogLevel::Info, LogLevel::Warn, LogLevel::Error] {
         for source in &["src1", "src2", "src3"] {
-            logger.log_with_source(*level, *source, &format!("msg-{:?}", level));
+            logger.log_with_source(*level, *source, format!("msg-{:?}", level));
         }
     }
     
@@ -59,7 +59,7 @@ fn test_pagination_consistency() {
     let logger = Logger::new("test");
     
     for i in 0..100 {
-        logger.info(&format!("msg-{:03}", i));
+        logger.info(format!("msg-{:03}", i));
     }
     
     // Get all messages in pages of 10
@@ -74,10 +74,10 @@ fn test_pagination_consistency() {
     }
     
     assert_eq!(all_messages.len(), 100);
-    
+
     // Verify order and no duplicates
-    for i in 0..100 {
-        assert_eq!(all_messages[i], format!("msg-{:03}", i));
+    for (i, msg) in all_messages.iter().enumerate().take(100) {
+        assert_eq!(msg, &format!("msg-{:03}", i));
     }
 }
 

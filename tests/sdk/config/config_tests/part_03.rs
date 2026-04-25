@@ -8,6 +8,6 @@ fn test_config_with_custom_values() {
     let loaded = config_from_postcard(&binary).expect("Failed to deserialize");
 
     assert_eq!(loaded.agent.max_steps, 20);
-    assert_eq!(loaded.agent.verbose, true);
+    assert!(loaded.agent.verbose);
 }
 
