@@ -116,6 +116,110 @@ impl ConfigFfiLogger {
     }
 }
 
+/// Security FFI module logger
+pub struct SecurityFfiLogger {
+    logger: Arc<Logger>,
+}
+
+impl SecurityFfiLogger {
+    pub fn new(session_id: &str) -> Self {
+        Self {
+            logger: get_sdk_logger(session_id),
+        }
+    }
+
+    pub fn ffi_call(&self, function: &str, args: &str) {
+        let context = format!("{{\"function\": \"{}\", \"args\": {}}}", function, args);
+        self.logger
+            .log_with_context(LogLevel::Debug, format!("Security FFI call: {}", function), context);
+    }
+
+    pub fn ffi_result(&self, function: &str, success: bool, result_size: usize) {
+        let context = format!(
+            "{{\"function\": \"{}\", \"success\": {}, \"result_size\": {}}}",
+            function, success, result_size
+        );
+        self.logger.log_with_context(
+            LogLevel::Debug,
+            format!("Security FFI result: {}", function),
+            context,
+        );
+    }
+
+    pub fn ffi_error(&self, function: &str, error: &str) {
+        let context = format!(
+            "{{\"function\": \"{}\", \"error\": \"{}\"}}",
+            function, error
+        );
+        self.logger
+            .log_with_context(LogLevel::Error, format!("Security FFI error: {}", function), context);
+    }
+
+    pub fn validation_passed(&self, input_type: &str) {
+        self.logger.log_with_context(
+            LogLevel::Info,
+            "Security validation passed",
+            format!("{{\"input_type\": \"{}\"}}", input_type),
+        );
+    }
+
+    pub fn validation_failed(&self, input_type: &str, reason: &str) {
+        self.logger.log_with_context(
+            LogLevel::Warn,
+            "Security validation failed",
+            format!("{{\"input_type\": \"{}\", \"reason\": \"{}\"}}", input_type, reason),
+        );
+    }
+
+    pub fn rate_limit_checked(&self, session_id: &str, allowed: bool) {
+        self.logger.log_with_context(
+            LogLevel::Debug,
+            "Rate limit check",
+            format!("{{\"session_id\": \"{}\", \"allowed\": {}}}", session_id, allowed),
+        );
+    }
+
+    pub fn rate_limit_exceeded(&self, session_id: &str, reason: &str) {
+        self.logger.log_with_context(
+            LogLevel::Warn,
+            "Rate limit exceeded",
+            format!("{{\"session_id\": \"{}\", \"reason\": \"{}\"}}", session_id, reason),
+        );
+    }
+
+    pub fn secret_stored(&self, secret_id: &str) {
+        self.logger.log_with_context(
+            LogLevel::Info,
+            "Secret stored",
+            format!("{{\"secret_id\": \"{}\"}}", secret_id),
+        );
+    }
+
+    pub fn secret_retrieved(&self, secret_id: &str) {
+        self.logger.log_with_context(
+            LogLevel::Debug,
+            "Secret retrieved",
+            format!("{{\"secret_id\": \"{}\"}}", secret_id),
+        );
+    }
+
+    pub fn secret_rotated(&self, secret_id: &str) {
+        self.logger.log_with_context(
+            LogLevel::Info,
+            "Secret rotated",
+            format!("{{\"secret_id\": \"{}\"}}", secret_id),
+        );
+    }
+
+    pub fn secret_deleted(&self, secret_id: &str) {
+        self.logger.log_with_context(
+            LogLevel::Info,
+            "Secret deleted",
+            format!("{{\"secret_id\": \"{}\"}}", secret_id),
+        );
+    }
+}
+
 /// Server management logger
 pub struct ServerLogger {
     logger: Arc<Logger>,
