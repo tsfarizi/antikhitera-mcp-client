@@ -347,7 +347,12 @@ pub mod secrets_ffi_tests {
 
             let rotate_ptr = mcp_security_rotate_secret(id.as_ptr(), new_value.as_ptr());
             let rotate_result = CString::from_raw(rotate_ptr).into_string().unwrap();
-            assert!(rotate_result.contains("\"success\":true"));
+            assert!(
+                rotate_result.contains("\"success\":true")
+                    || rotate_result.contains("\"success\": true"),
+                "Rotate operation failed or returned unexpected JSON: {}",
+                rotate_result
+            );
 
             let get_ptr = mcp_security_get_secret(id.as_ptr());
             let get_result = CString::from_raw(get_ptr).into_string().unwrap();
@@ -367,7 +372,12 @@ pub mod secrets_ffi_tests {
 
             let delete_ptr = mcp_security_delete_secret(id.as_ptr());
             let delete_result = CString::from_raw(delete_ptr).into_string().unwrap();
-            assert!(delete_result.contains("\"success\":true"));
+            assert!(
+                delete_result.contains("\"success\":true")
+                    || delete_result.contains("\"success\": true"),
+                "Delete operation failed or returned unexpected JSON: {}",
+                delete_result
+            );
 
             let get_ptr = mcp_security_get_secret(id.as_ptr());
             let get_result = CString::from_raw(get_ptr).into_string().unwrap();
