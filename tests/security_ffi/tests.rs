@@ -2,6 +2,9 @@
 
 use antikythera_sdk::security_ffi::*;
 use std::ffi::CString;
+use std::sync::Mutex;
+
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 #[cfg(test)]
 pub mod validation_ffi_tests {
@@ -9,6 +12,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_init_validator() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         let result = unsafe {
             let ptr = mcp_security_init_validator();
             let json = CString::from_raw(ptr);
@@ -20,6 +24,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_validate_input_valid() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -33,6 +38,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_validate_input_invalid() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -46,6 +52,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_validate_url_valid() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -59,6 +66,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_validate_url_blocked() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -72,6 +80,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_validate_json_valid() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -85,6 +94,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_validate_json_invalid() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -98,6 +108,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_sanitize_html() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -111,6 +122,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_get_validation_config() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -124,6 +136,7 @@ pub mod validation_ffi_tests {
 
     #[test]
     fn test_set_validation_config() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_validator();
 
@@ -155,6 +168,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_init_rate_limiter() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         let result = unsafe {
             let ptr = mcp_security_init_rate_limiter();
             let json = CString::from_raw(ptr);
@@ -166,6 +180,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_check_rate_limit_allowed() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_rate_limiter();
 
@@ -179,6 +194,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_check_rate_limit_multiple_requests() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_rate_limiter();
 
@@ -195,6 +211,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_get_usage() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_rate_limiter();
 
@@ -215,6 +232,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_reset_session() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_rate_limiter();
 
@@ -244,6 +262,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_remove_session() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_rate_limiter();
 
@@ -264,6 +283,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_get_rate_limit_config() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_rate_limiter();
 
@@ -278,6 +298,7 @@ pub mod rate_limit_ffi_tests {
 
     #[test]
     fn test_set_rate_limit_config() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_rate_limiter();
 
@@ -307,6 +328,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_init_secret_manager() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         let result = unsafe {
             let ptr = mcp_security_init_secret_manager();
             let json = CString::from_raw(ptr);
@@ -318,6 +340,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_store_and_get_secret() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_secret_manager();
 
@@ -345,6 +368,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_rotate_secret() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_secret_manager();
 
@@ -382,6 +406,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_delete_secret() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_secret_manager();
 
@@ -417,6 +442,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_list_secrets() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_secret_manager();
 
@@ -464,6 +490,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_get_secret_metadata() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_secret_manager();
 
@@ -502,6 +529,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_get_secrets_config() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_secret_manager();
 
@@ -516,6 +544,7 @@ pub mod secrets_ffi_tests {
 
     #[test]
     fn test_set_secrets_config() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         unsafe {
             mcp_security_init_secret_manager();
 
