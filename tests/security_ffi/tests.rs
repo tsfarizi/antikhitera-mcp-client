@@ -321,16 +321,25 @@ pub mod secrets_ffi_tests {
         unsafe {
             mcp_security_init_secret_manager();
 
-            let id = CString::new("test-secret-1").unwrap();
+            let id = CString::new("test-secret-store-get").unwrap();
             let value = CString::new("my-secret-value").unwrap();
 
             let store_ptr = mcp_security_store_secret(id.as_ptr(), value.as_ptr());
             let store_result = CString::from_raw(store_ptr).into_string().unwrap();
-            assert!(store_result.contains("\"success\":true"));
+            assert!(
+                store_result.contains("\"success\":true"),
+                "Store failed: {}",
+                store_result
+            );
 
             let get_ptr = mcp_security_get_secret(id.as_ptr());
             let get_result = CString::from_raw(get_ptr).into_string().unwrap();
-            assert!(get_result.contains("\"value\":\"my-secret-value\""));
+            assert!(
+                get_result.contains("\"value\":\"my-secret-value\"")
+                    || get_result.contains("\"value\": \"my-secret-value\""),
+                "Get failed: {}",
+                get_result
+            );
         }
     }
 
@@ -339,11 +348,17 @@ pub mod secrets_ffi_tests {
         unsafe {
             mcp_security_init_secret_manager();
 
-            let id = CString::new("test-secret-2").unwrap();
+            let id = CString::new("test-secret-rotate").unwrap();
             let old_value = CString::new("old-value").unwrap();
             let new_value = CString::new("new-value").unwrap();
 
-            mcp_security_store_secret(id.as_ptr(), old_value.as_ptr());
+            let store_ptr = mcp_security_store_secret(id.as_ptr(), old_value.as_ptr());
+            let store_res = CString::from_raw(store_ptr).into_string().unwrap();
+            assert!(
+                store_res.contains("\"success\":true"),
+                "Initial store failed: {}",
+                store_res
+            );
 
             let rotate_ptr = mcp_security_rotate_secret(id.as_ptr(), new_value.as_ptr());
             let rotate_result = CString::from_raw(rotate_ptr).into_string().unwrap();
@@ -356,7 +371,12 @@ pub mod secrets_ffi_tests {
 
             let get_ptr = mcp_security_get_secret(id.as_ptr());
             let get_result = CString::from_raw(get_ptr).into_string().unwrap();
-            assert!(get_result.contains("\"value\":\"new-value\""));
+            assert!(
+                get_result.contains("\"value\":\"new-value\"")
+                    || get_result.contains("\"value\": \"new-value\""),
+                "Get after rotate failed: {}",
+                get_result
+            );
         }
     }
 
@@ -365,10 +385,16 @@ pub mod secrets_ffi_tests {
         unsafe {
             mcp_security_init_secret_manager();
 
-            let id = CString::new("test-secret-3").unwrap();
+            let id = CString::new("test-secret-delete").unwrap();
             let value = CString::new("value-to-delete").unwrap();
 
-            mcp_security_store_secret(id.as_ptr(), value.as_ptr());
+            let store_ptr = mcp_security_store_secret(id.as_ptr(), value.as_ptr());
+            let store_res = CString::from_raw(store_ptr).into_string().unwrap();
+            assert!(
+                store_res.contains("\"success\":true"),
+                "Store for delete failed: {}",
+                store_res
+            );
 
             let delete_ptr = mcp_security_delete_secret(id.as_ptr());
             let delete_result = CString::from_raw(delete_ptr).into_string().unwrap();
@@ -381,7 +407,11 @@ pub mod secrets_ffi_tests {
 
             let get_ptr = mcp_security_get_secret(id.as_ptr());
             let get_result = CString::from_raw(get_ptr).into_string().unwrap();
-            assert!(get_result.contains("error") || get_result.contains("not found"));
+            assert!(
+                get_result.contains("error") || get_result.contains("not found"),
+                "Secret still exists after delete: {}",
+                get_result
+            );
         }
     }
 
@@ -390,13 +420,25 @@ pub mod secrets_ffi_tests {
         unsafe {
             mcp_security_init_secret_manager();
 
-            mcp_security_store_secret(
-                CString::new("secret1").unwrap().as_ptr(),
-                CString::new("value1").unwrap().as_ptr(),
+            let s1 = CString::new("list-secret1").unwrap();
+            let s2 = CString::new("list-secret2").unwrap();
+            let v1 = CString::new("value1").unwrap();
+            let v2 = CString::new("value2").unwrap();
+
+            let res1_ptr = mcp_security_store_secret(s1.as_ptr(), v1.as_ptr());
+            let res1 = CString::from_raw(res1_ptr).into_string().unwrap();
+            assert!(
+                res1.contains("\"success\":true"),
+                "Store secret1 failed: {}",
+                res1
             );
-            mcp_security_store_secret(
-                CString::new("secret2").unwrap().as_ptr(),
-                CString::new("value2").unwrap().as_ptr(),
+
+            let res2_ptr = mcp_security_store_secret(s2.as_ptr(), v2.as_ptr());
+            let res2 = CString::from_raw(res2_ptr).into_string().unwrap();
+            assert!(
+                res2.contains("\"success\":true"),
+                "Store secret2 failed: {}",
+                res2
             );
 
             let result_ptr = mcp_security_list_secrets();
@@ -408,13 +450,13 @@ pub mod secrets_ffi_tests {
                 result
             );
             assert!(
-                result.contains("secret1"),
-                "Result should contain secret1: {}",
+                result.contains("list-secret1"),
+                "Result should contain list-secret1: {}",
                 result
             );
             assert!(
-                result.contains("secret2"),
-                "Result should contain secret2: {}",
+                result.contains("list-secret2"),
+                "Result should contain list-secret2: {}",
                 result
             );
         }
@@ -425,17 +467,23 @@ pub mod secrets_ffi_tests {
         unsafe {
             mcp_security_init_secret_manager();
 
-            let id = CString::new("test-secret-4").unwrap();
+            let id = CString::new("test-secret-metadata").unwrap();
             let value = CString::new("value").unwrap();
 
-            mcp_security_store_secret(id.as_ptr(), value.as_ptr());
+            let store_ptr = mcp_security_store_secret(id.as_ptr(), value.as_ptr());
+            let store_res = CString::from_raw(store_ptr).into_string().unwrap();
+            assert!(
+                store_res.contains("\"success\":true"),
+                "Store for metadata failed: {}",
+                store_res
+            );
 
             let result_ptr = mcp_security_get_secret_metadata(id.as_ptr());
             let result = CString::from_raw(result_ptr).into_string().unwrap();
 
             assert!(
-                result.contains("\"id\":\"test-secret-4\"")
-                    || result.contains("\"id\": \"test-secret-4\""),
+                result.contains("\"id\":\"test-secret-metadata\"")
+                    || result.contains("\"id\": \"test-secret-metadata\""),
                 "Result should contain correct ID: {}",
                 result
             );
