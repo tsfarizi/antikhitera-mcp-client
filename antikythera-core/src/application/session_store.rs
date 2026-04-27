@@ -77,13 +77,14 @@ impl SessionStore {
         if let Some(pos) = self.order.iter().position(|id| id == session_id) {
             self.order.remove(pos);
         } else if self.map.len() >= self.max_sessions
-            && let Some(lru_id) = self.order.pop_front() {
-                self.map.remove(&lru_id);
-                tracing::debug!(
-                    evicted_session = %lru_id,
-                    active_sessions = self.map.len(),
-                    "Evicted LRU session from in-memory store"
-                );
+            && let Some(lru_id) = self.order.pop_front()
+        {
+            self.map.remove(&lru_id);
+            tracing::debug!(
+                evicted_session = %lru_id,
+                active_sessions = self.map.len(),
+                "Evicted LRU session from in-memory store"
+            );
         }
         self.order.push_back(session_id.to_string());
     }
