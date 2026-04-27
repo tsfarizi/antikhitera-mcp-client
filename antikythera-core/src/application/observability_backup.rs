@@ -1,4 +1,4 @@
-//! Observability Hooks
+﻿//! Observability Hooks
 //!
 //! Framework primitives for propagating caller context, correlation IDs, and
 //! structured telemetry events through the agent runtime.
@@ -39,7 +39,7 @@ fn now_unix_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Caller context — propagated through all framework operations.
+/// Caller context ÔÇö propagated through all framework operations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct CallerContext {
     /// Unique ID for this request/session (for end-to-end tracing)
@@ -118,7 +118,7 @@ impl CallerContext {
     }
 }
 
-/// Telemetry event — structured observability data.
+/// Telemetry event ÔÇö structured observability data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TelemetryEvent {
     /// Event type (e.g., "agent_step", "tool_call", "llm_request")
@@ -517,7 +517,7 @@ impl TracingHook for InMemoryTracingHook {
     }
 }
 
-/// Observability hook — implement to receive telemetry events.
+/// Observability hook ÔÇö implement to receive telemetry events.
 pub trait ObservabilityHook: Send + Sync {
     /// Record a telemetry event.
     fn record_event(&self, event: TelemetryEvent);

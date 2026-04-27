@@ -25,6 +25,7 @@ pub mod model_provider;
 pub mod observability;
 pub mod resilience;
 pub mod services;
+pub(super) mod session_store;
 #[cfg(feature = "native-transport")]
 pub mod stdio;
 pub mod streaming;

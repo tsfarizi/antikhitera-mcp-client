@@ -1,6 +1,7 @@
 mod context;
 mod execution;
 mod instructions;
+pub(super) mod json_retry;
 mod parser;
 
 use std::collections::HashMap;

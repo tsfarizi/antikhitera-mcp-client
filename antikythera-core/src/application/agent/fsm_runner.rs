@@ -15,6 +15,7 @@ use super::errors::AgentError;
 use super::memory::{AgentStateSnapshot, ConversationTurn, MemoryProvider};
 use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
+use super::runtime::json_retry::MAX_JSON_RETRIES;
 use super::state::{AgentState, Event, TerminationReason};
 use crate::application::client::{ChatRequest, McpClient};
 use crate::application::model_provider::ModelProvider;
@@ -23,9 +24,6 @@ use std::sync::Arc;
 #[cfg(feature = "native-transport")]
 use sysinfo::System;
 use tracing::{debug, error, info, warn};
-
-/// Maximum retry attempts for JSON parsing failures
-const MAX_JSON_RETRIES: u8 = 3;
 
 /// Maximum retry attempts for transient errors
 const MAX_TRANSIENT_RETRIES: u32 = 3;
@@ -96,11 +94,22 @@ impl<P: ModelProvider> FsmAgent<P> {
         Ok(outcome)
     }
 
-    /// Resume agent execution from a specific context ID
+    /// Resume agent execution from a specific context ID.
+    ///
+    /// Restores the persisted FSM state and continues execution.  If
+    /// `new_input` is supplied it is injected as a [`Event::ContextReceived`]
+    /// transition before the loop resumes, allowing callers to provide
+    /// additional context to a paused agent.
+    ///
+    /// The `options` parameter carries session metadata (session_id,
+    /// system_prompt, max_steps) that must be forwarded to
+    /// `execute_fsm_loop` so the resumed agent runs with the same
+    /// configuration as the original invocation.
     pub async fn resume(
         &self,
         context_id: &str,
         new_input: Option<String>,
+        options: AgentOptions,
     ) -> Result<AgentOutcome, AgentError> {
         info!(
             context_id = %context_id,
@@ -117,15 +126,32 @@ impl<P: ModelProvider> FsmAgent<P> {
 
         let mut state = self.rehydrate_from_snapshot(snapshot)?;
 
-        // If new input provided, inject it as context
-        if let Some(input) = new_input {
-            state = state.transition(Event::ContextReceived { context: input });
+        // Inject new input as context if provided
+        if let Some(input) = &new_input {
+            state = state.transition(Event::ContextReceived {
+                context: input.clone(),
+            });
         }
 
-        // Continue execution
-        let outcome = self.continue_fsm_loop(state).await?;
+        // When new_input is None the continuation prompt is empty.  The FSM
+        // loop handles this correctly for states that set next_prompt
+        // internally (e.g. ExecutingTool sets it from the tool result).
+        // States that require a user-supplied prompt (ParsingDirective reached
+        // from a resumed snapshot) will surface an explicit error instead of
+        // silently sending an empty message to the model.
+        let continuation_prompt = new_input.unwrap_or_else(|| {
+            warn!(
+                context_id = %context_id,
+                "Resuming FSM agent without new user input; \
+                 FSM state must supply next_prompt internally"
+            );
+            String::new()
+        });
 
-        // Save updated state
+        let outcome = self
+            .execute_fsm_loop(state, continuation_prompt, options)
+            .await?;
+
         self.save_state(&outcome).await?;
 
         Ok(outcome)
@@ -203,8 +229,17 @@ impl<P: ModelProvider> FsmAgent<P> {
         let mut remaining_steps = options.max_steps as u32;
         let mut transient_retries = 0u32;
 
-        // Prepare initial context
-        let context = self.runtime.build_context(Some(&prompt)).await;
+        // Prepare initial context.  When resuming with an empty prompt the
+        // context is built without a user query so that prior conversation
+        // history isn't re-framed around a blank message.
+        let context = self
+            .runtime
+            .build_context(if prompt.is_empty() {
+                None
+            } else {
+                Some(&prompt)
+            })
+            .await;
         let instructions = self
             .runtime
             .compose_system_instructions(&context, self.client.prompts());
@@ -215,11 +250,19 @@ impl<P: ModelProvider> FsmAgent<P> {
             _ => instructions,
         };
 
-        let mut next_prompt = self.runtime.initial_user_prompt(prompt.clone(), &context);
-        logs.push(format!(
-            "Initial agent request: {}",
-            McpClient::<P>::summarise(&prompt)
-        ));
+        // Only build an initial user prompt when there is actual input;
+        // resumed executions rely on each FSM branch to set next_prompt.
+        let mut next_prompt = if prompt.is_empty() {
+            String::new()
+        } else {
+            self.runtime.initial_user_prompt(prompt.clone(), &context)
+        };
+        if !prompt.is_empty() {
+            logs.push(format!(
+                "Initial agent request: {}",
+                McpClient::<P>::summarise(&prompt)
+            ));
+        }
 
         let mut system_prompt_to_send = Some(system_prompt);
         let mut first_call = true;
@@ -252,6 +295,13 @@ impl<P: ModelProvider> FsmAgent<P> {
             // Handle state-specific logic
             match &state.clone() {
                 AgentState::ParsingDirective => {
+                    if next_prompt.is_empty() {
+                        return Err(AgentError::InvalidResponse(
+                            "FSM reached ParsingDirective with an empty prompt; \
+                             call resume() with new_input to supply context."
+                                .into(),
+                        ));
+                    }
                     let request = ChatRequest {
                         prompt: next_prompt.clone(),
                         attachments: if first_call {
@@ -278,7 +328,13 @@ impl<P: ModelProvider> FsmAgent<P> {
 
                             // Parse directive with retry logic
                             match self
-                                .parse_with_retry(&result.content, &mut logs, &session_id)
+                                .runtime
+                                .parse_with_retry(
+                                    &result.content,
+                                    &self.client,
+                                    &mut logs,
+                                    &session_id,
+                                )
                                 .await
                             {
                                 Ok(directive) => {
@@ -433,16 +489,6 @@ impl<P: ModelProvider> FsmAgent<P> {
         }
     }
 
-    /// Continue FSM loop from intermediate state
-    async fn continue_fsm_loop(
-        &self,
-        initial_state: AgentState,
-    ) -> Result<AgentOutcome, AgentError> {
-        // Simplified continuation - in practice would need to pass more context
-        self.execute_fsm_loop(initial_state, String::new(), AgentOptions::default())
-            .await
-    }
-
     /// Handle directive from LLM
     async fn handle_directive(
         &self,
@@ -455,59 +501,43 @@ impl<P: ModelProvider> FsmAgent<P> {
             AgentDirective::Final { response } => {
                 info!("Agent returned final response");
 
-                // Format response as JSON if it's a string
-                let formatted_response = {
-                    // Try to parse as JSON first
-                    match serde_json::from_str::<serde_json::Value>(&response) {
-                        Ok(json_value) => {
-                            // Already valid JSON
-                            json_value.to_string()
-                        }
-                        Err(_) => {
-                            // Not JSON - wrap in JSON structure
-                            serde_json::json!({
-                                "response": response,
-                                "type": "text"
-                            })
-                            .to_string()
-                        }
-                    }
-                };
+                // response is already a serde_json::Value — work with it directly
+                // rather than round-tripping through a string.
+                let (content, data, metadata) = match response {
+                    Value::String(s) => (s, None, None),
+                    Value::Object(ref obj) => {
+                        // Prefer an explicit "response" or "content" text field;
+                        // fall back to the full JSON string so nothing is silently
+                        // dropped when neither key is present.
+                        let content = obj
+                            .get("response")
+                            .or_else(|| obj.get("content"))
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string)
+                            .unwrap_or_else(|| {
+                                serde_json::to_string(&response).unwrap_or_default()
+                            });
 
-                // Try to extract structured data if response is JSON
-                let (content, data, metadata) = if let Ok(json) =
-                    serde_json::from_str::<serde_json::Value>(&formatted_response)
-                {
-                    // Check if it has 'response' or 'content' field
-                    let content = json
-                        .get("response")
-                        .or_else(|| json.get("content"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
+                        let data = obj.get("data").cloned();
 
-                    // Extract data field if present
-                    let data = json.get("data").cloned();
-
-                    // Build metadata from remaining fields
-                    let mut metadata_obj = serde_json::Map::new();
-                    if let Some(obj) = json.as_object() {
+                        let mut metadata_obj = serde_json::Map::new();
                         for (key, value) in obj {
                             if key != "response" && key != "content" && key != "data" {
                                 metadata_obj.insert(key.clone(), value.clone());
                             }
                         }
-                    }
-                    let metadata = if metadata_obj.is_empty() {
-                        None
-                    } else {
-                        Some(serde_json::Value::Object(metadata_obj))
-                    };
+                        let metadata = if metadata_obj.is_empty() {
+                            None
+                        } else {
+                            Some(Value::Object(metadata_obj))
+                        };
 
-                    (content, data, metadata)
-                } else {
-                    // Plain text response
-                    (formatted_response.clone(), None, None)
+                        (content, data, metadata)
+                    }
+                    other => {
+                        // Arrays, numbers, booleans, null — serialise to string
+                        (other.to_string(), None, None)
+                    }
                 };
 
                 Ok(AgentState::FinalMessage {
@@ -535,12 +565,26 @@ impl<P: ModelProvider> FsmAgent<P> {
                     return Err(AgentError::MaxStepsExceeded);
                 }
                 *remaining_steps -= 1;
+
+                // The FSM state machine models one active tool execution at a
+                // time via `ExecutingTool { tool_id, input }`.  True parallel
+                // execution is supported by the non-FSM `Agent` runner which
+                // uses `ToolRuntime::execute_parallel`.  Here we execute the
+                // first requested tool sequentially; remaining tools are
+                // dropped with a warning so the caller is aware.
+                if tools.len() > 1 {
+                    warn!(
+                        total = tools.len(),
+                        "FsmAgent received CallTools with multiple tools; \
+                         only the first will be executed — use Agent for \
+                         parallel tool execution"
+                    );
+                }
                 info!(
                     count = tools.len(),
-                    "Agent requested parallel tool execution"
+                    "Agent requested tool execution (FSM: sequential)"
                 );
 
-                // For simplicity, execute first tool - parallel execution would be similar
                 if let Some((tool, input)) = tools.into_iter().next() {
                     Ok(AgentState::ExecutingTool {
                         tool_id: tool,
@@ -674,70 +718,5 @@ impl<P: ModelProvider> FsmAgent<P> {
 
         info!("Final agent state saved");
         Ok(())
-    }
-
-    /// Parse agent action with retry logic
-    async fn parse_with_retry(
-        &self,
-        content: &str,
-        logs: &mut Vec<String>,
-        session_id: &Option<String>,
-    ) -> Result<AgentDirective, AgentError> {
-        let mut retry_count = 0u8;
-        let mut current_content = content.to_string();
-
-        loop {
-            match self.runtime.parse_agent_action(&current_content) {
-                Ok(directive) => return Ok(directive),
-                Err(e) if retry_count < MAX_JSON_RETRIES => {
-                    retry_count += 1;
-                    warn!(
-                        attempt = retry_count,
-                        max_attempts = MAX_JSON_RETRIES,
-                        error = %e,
-                        "JSON parse failed, requesting correction"
-                    );
-                    logs.push(format!(
-                        "JSON parse retry {}/{}: {}",
-                        retry_count, MAX_JSON_RETRIES, e
-                    ));
-
-                    let retry_message = format!(
-                        "{}\n\nError: {}",
-                        self.client.prompts().json_retry_message(),
-                        e
-                    );
-
-                    let retry_request = ChatRequest {
-                        prompt: retry_message,
-                        attachments: Vec::new(),
-                        system_prompt: None,
-                        session_id: session_id.clone(),
-                        raw_mode: false,
-                        bypass_template: true,
-                        force_json: true,
-                    };
-
-                    match self.client.chat(retry_request).await {
-                        Ok(result) => {
-                            logs.extend(result.logs.clone());
-                            current_content = result.content;
-                        }
-                        Err(chat_err) => {
-                            return Err(AgentError::InvalidResponse(format!(
-                                "Retry failed: {}",
-                                chat_err
-                            )));
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(AgentError::InvalidResponse(format!(
-                        "Invalid JSON after {} retries: {}",
-                        MAX_JSON_RETRIES, e
-                    )));
-                }
-            }
-        }
     }
 }

@@ -36,18 +36,19 @@ impl ToolRuntime {
                             })
                         }
                         "final" => {
-                            let response = map.get("response").ok_or_else(|| {
-                                AgentError::InvalidResponse(
-                                    "final action missing response field".into(),
-                                )
-                            })?;
+                            let response = map
+                                .get("response")
+                                .ok_or_else(|| {
+                                    AgentError::InvalidResponse(
+                                        "final action missing response field".into(),
+                                    )
+                                })?
+                                .clone();
 
-                            Ok(AgentDirective::Final {
-                                response: response.as_str().unwrap_or("").to_string(),
-                            })
+                            Ok(AgentDirective::Final { response })
                         }
                         other => {
-                            // Unknown action: try to extract a response string using
+                            // Unknown action: try to extract a response value using
                             // the configurable fallback keys.  Extra fields the model
                             // may add are simply ignored — developers can add proper
                             // variants to AgentDirective when they need to handle a
@@ -55,12 +56,8 @@ impl ToolRuntime {
                             let response = self
                                 .fallback_response_keys
                                 .iter()
-                                .find_map(|k| map.get(k.as_str()).and_then(Value::as_str))
-                                .map(str::to_string)
-                                .unwrap_or_else(|| {
-                                    serde_json::to_string(&Value::Object(map.clone()))
-                                        .unwrap_or_default()
-                                });
+                                .find_map(|k| map.get(k.as_str()).cloned())
+                                .unwrap_or_else(|| Value::Object(map.clone()));
                             warn!(
                                 action = other,
                                 "Unknown action value — treating as final response"
@@ -74,8 +71,7 @@ impl ToolRuntime {
                     let response = self
                         .fallback_response_keys
                         .iter()
-                        .find_map(|k| map.get(k.as_str()).and_then(Value::as_str))
-                        .map(str::to_string);
+                        .find_map(|k| map.get(k.as_str()).cloned());
 
                     if let Some(r) = response {
                         warn!("No action field in agent response — treating as final response");

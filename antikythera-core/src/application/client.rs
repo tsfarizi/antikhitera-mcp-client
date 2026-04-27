@@ -21,6 +21,7 @@
 //! }
 //! ```
 
+use super::session_store::{DEFAULT_MAX_SESSIONS, SessionStore};
 use super::tooling::{ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::domain::types::MessagePart;
@@ -29,7 +30,6 @@ use crate::infrastructure::model::{
     HostModelResponse, ModelError, ModelProvider, ModelRequest, ModelResponse,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -222,13 +222,15 @@ pub struct ClientConfigSnapshot {
 /// # Session model
 ///
 /// Each session is identified by a `session_id` string.  History is stored
-/// in-memory in a `Mutex<HashMap<session_id, Vec<ChatMessage>>>` and is scoped
-/// to the lifetime of this instance.  Use [`McpClient::prune_session`] to trim
-/// old messages before a request when the conversation grows long.
+/// in-memory in a `Mutex<SessionStore>` and is scoped to the lifetime of this
+/// instance.  The store evicts least-recently-used sessions once
+/// `max_sessions` is exceeded (default: [`DEFAULT_MAX_SESSIONS`]).
+/// Use [`McpClient::prune_session`] to trim old messages before a request
+/// when the conversation grows long.
 pub struct McpClient<P: ModelProvider> {
     provider: P,
     config: ClientConfig,
-    sessions: Mutex<HashMap<String, Vec<ChatMessage>>>,
+    sessions: Mutex<SessionStore>,
     server_bridge: Arc<dyn ToolServerInterface>,
 }
 
@@ -236,14 +238,31 @@ impl<P: ModelProvider> McpClient<P> {
     /// Construct a new client from a provider and a [`ClientConfig`].
     ///
     /// A [`ServerManager`] is created from `config.servers` and stored as the
-    /// active [`ToolServerInterface`].  Session history starts empty.
+    /// active [`ToolServerInterface`].  Session history starts empty with a
+    /// default LRU capacity of [`DEFAULT_MAX_SESSIONS`].
     pub fn new(provider: P, config: ClientConfig) -> Self {
         let server_manager = Arc::new(ServerManager::new(config.servers.clone()));
         let bridge: Arc<dyn ToolServerInterface> = server_manager;
         Self {
             provider,
             config,
-            sessions: Mutex::new(HashMap::new()),
+            sessions: Mutex::new(SessionStore::new(DEFAULT_MAX_SESSIONS)),
+            server_bridge: bridge,
+        }
+    }
+
+    /// Construct a client with a custom session capacity limit.
+    ///
+    /// Use this when you need finer control over memory usage, e.g. in
+    /// single-session embedded deployments (`max_sessions = 1`) or high-
+    /// throughput services that need a larger LRU pool.
+    pub fn with_session_limit(provider: P, config: ClientConfig, max_sessions: usize) -> Self {
+        let server_manager = Arc::new(ServerManager::new(config.servers.clone()));
+        let bridge: Arc<dyn ToolServerInterface> = server_manager;
+        Self {
+            provider,
+            config,
+            sessions: Mutex::new(SessionStore::new(max_sessions.max(1))),
             server_bridge: bridge,
         }
     }
@@ -323,10 +342,13 @@ impl<P: ModelProvider> McpClient<P> {
             // configured template, and prepend both before the outgoing user message.
             let history = {
                 let start_wait = std::time::Instant::now();
-                let mut sessions = self.sessions.lock().await;
+                let sessions = self.sessions.lock().await;
                 let elapsed = start_wait.elapsed();
                 tracing::debug!(lock_wait_us = ?elapsed.as_micros(), "Acquired session lock for reading history");
-                sessions.entry(session_id.clone()).or_default().clone()
+                sessions
+                    .get(session_id.as_str())
+                    .cloned()
+                    .unwrap_or_default()
             };
             debug!(
                 session_id = session_id.as_str(),
@@ -542,7 +564,7 @@ impl<P: ModelProvider> McpClient<P> {
         let elapsed = start_wait.elapsed();
         tracing::debug!(lock_wait_us = ?elapsed.as_micros(), "Acquired session lock to persist exchange");
 
-        let history = sessions.entry(session_id.to_string()).or_default();
+        let history = sessions.get_or_create(session_id);
         history.push(user_message);
         history.push(assistant);
         debug!(

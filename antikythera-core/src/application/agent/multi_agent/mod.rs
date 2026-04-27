@@ -69,7 +69,7 @@ pub use guardrails::{
 };
 pub use orchestrator::MultiAgentOrchestrator;
 pub use registry::{
-    AgentProfile, AgentRegistry, AgentRole, ContextId, MemoryConfig, MemoryProvider,
+    AgentProfile, AgentRegistry, AgentRole, ContextId, MemoryConfig, SyncMemoryProvider,
 };
 pub use router::{AgentRouter, DirectRouter, FirstAvailableRouter, RoleRouter, RoundRobinRouter};
 pub use scheduler::TaskScheduler;

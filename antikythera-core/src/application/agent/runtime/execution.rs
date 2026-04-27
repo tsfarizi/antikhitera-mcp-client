@@ -27,7 +27,7 @@ impl ToolRuntime {
                 input,
                 output,
                 message: Some(format!(
-                    "Configured tools tersedia: {} item.",
+                    "Configured tools available: {} item(s).",
                     manifest.tools.len()
                 )),
             };

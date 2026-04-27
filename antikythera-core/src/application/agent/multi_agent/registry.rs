@@ -43,7 +43,7 @@ pub struct AgentProfile {
 }
 
 /// Agent role enum
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgentRole {
     GeneralAssistant,
     CodeReviewer,
@@ -52,8 +52,41 @@ pub enum AgentRole {
     Custom(String),
 }
 
-/// Memory provider trait
-pub trait MemoryProvider: Send + Sync {
+impl AgentRole {
+    /// Parse a role string into the corresponding [`AgentRole`] variant.
+    ///
+    /// Matching is case-insensitive and hyphen/underscore-tolerant.  Strings
+    /// that do not match a known variant are wrapped in [`AgentRole::Custom`].
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(s: &str) -> Self {
+        match s.to_ascii_lowercase().replace('-', "_").as_str() {
+            "general_assistant" | "general" | "assistant" => AgentRole::GeneralAssistant,
+            "code_reviewer" | "reviewer" => AgentRole::CodeReviewer,
+            "data_analyst" | "analyst" => AgentRole::DataAnalyst,
+            "researcher" | "research" => AgentRole::Researcher,
+            _ => AgentRole::Custom(s.to_string()),
+        }
+    }
+}
+
+impl AgentProfile {
+    /// Return the [`AgentRole`] enum value that corresponds to `self.role`.
+    ///
+    /// The string field is kept for backwards-compatible serialisation;
+    /// callers that need enum-based dispatch should use this accessor.
+    pub fn role_typed(&self) -> AgentRole {
+        AgentRole::from_str(&self.role)
+    }
+}
+
+/// Simplified synchronous memory-provider trait used by the multi-agent
+/// registry layer.
+///
+/// For the full async persistence contract used by [`FsmAgent`] refer to
+/// [`crate::application::agent::memory::MemoryProvider`].
+///
+/// [`FsmAgent`]: crate::application::agent::FsmAgent
+pub trait SyncMemoryProvider: Send + Sync {
     type Error: std::fmt::Debug;
 
     fn save_state(&self, agent_id: &str, state: &str) -> Result<(), Self::Error>;

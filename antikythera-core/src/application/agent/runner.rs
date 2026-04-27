@@ -10,9 +10,6 @@ use std::sync::Arc;
 use sysinfo::System;
 use tracing::{debug, info, warn};
 
-/// Maximum retry attempts for JSON parsing failures
-const MAX_JSON_RETRIES: u8 = 3;
-
 pub struct Agent<P: ModelProvider> {
     client: Arc<McpClient<P>>,
     runtime: ToolRuntime,
@@ -116,7 +113,8 @@ impl<P: ModelProvider> Agent<P> {
 
             // Parse agent action with retry logic for malformed JSON
             let directive = self
-                .parse_with_retry(&result.content, &mut logs, &session_id)
+                .runtime
+                .parse_with_retry(&result.content, &self.client, &mut logs, &session_id)
                 .await?;
 
             match directive {
@@ -128,7 +126,7 @@ impl<P: ModelProvider> Agent<P> {
                     return Ok(AgentOutcome {
                         logs,
                         session_id: result.session_id,
-                        response: Value::String(response),
+                        response,
                         steps,
                     });
                 }
@@ -400,77 +398,5 @@ impl<P: ModelProvider> Agent<P> {
 
         // Otherwise, return the output as-is
         output.clone()
-    }
-
-    /// Parse agent action with retry logic for malformed JSON
-    async fn parse_with_retry(
-        &self,
-        content: &str,
-        logs: &mut Vec<String>,
-        session_id: &Option<String>,
-    ) -> Result<AgentDirective, AgentError> {
-        let mut retry_count = 0u8;
-        let mut current_content = content.to_string();
-
-        loop {
-            match self.runtime.parse_agent_action(&current_content) {
-                Ok(directive) => return Ok(directive),
-                Err(e) if retry_count < MAX_JSON_RETRIES => {
-                    retry_count += 1;
-                    warn!(
-                        attempt = retry_count,
-                        max_attempts = MAX_JSON_RETRIES,
-                        error = %e,
-                        "JSON parse failed, requesting correction from model"
-                    );
-                    logs.push(format!(
-                        "JSON parse retry attempt {}/{}: {}",
-                        retry_count, MAX_JSON_RETRIES, e
-                    ));
-
-                    // Get retry message from config
-                    let retry_message = format!(
-                        "{}\n\nError details: {}",
-                        self.client.prompts().json_retry_message(),
-                        e
-                    );
-
-                    // Send correction request to model
-                    let retry_request = ChatRequest {
-                        prompt: retry_message,
-                        attachments: Vec::new(),
-                        system_prompt: None,
-                        session_id: session_id.clone(),
-                        raw_mode: false,
-                        bypass_template: true, // Agent composes its own complete system prompt
-                        force_json: true,
-                    };
-
-                    match self.client.chat(retry_request).await {
-                        Ok(retry_result) => {
-                            logs.extend(retry_result.logs.clone());
-                            current_content = retry_result.content;
-                        }
-                        Err(chat_err) => {
-                            warn!(error = %chat_err, "Retry chat request failed");
-                            return Err(AgentError::InvalidResponse(format!(
-                                "Failed to get correction after JSON parse error: {}",
-                                chat_err
-                            )));
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!(
-                        attempts = retry_count,
-                        "JSON parse failed after max retries"
-                    );
-                    return Err(AgentError::InvalidResponse(format!(
-                        "Invalid JSON after {} retry attempts: {}",
-                        MAX_JSON_RETRIES, e
-                    )));
-                }
-            }
-        }
     }
 }

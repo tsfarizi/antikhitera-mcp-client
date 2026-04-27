@@ -110,12 +110,12 @@ impl AgentStateSnapshot {
 
     /// Serialize to Postcard binary format
     pub fn to_postcard(&self) -> Result<Vec<u8>, MemoryError> {
-        to_allocvec(self).map_err(MemoryError::Serialization)
+        to_allocvec(self).map_err(|e| MemoryError::Serialization(e.to_string()))
     }
 
     /// Deserialize from Postcard binary format
     pub fn from_postcard(bytes: &[u8]) -> Result<Self, MemoryError> {
-        from_bytes(bytes).map_err(MemoryError::Serialization)
+        from_bytes(bytes).map_err(|e| MemoryError::Serialization(e.to_string()))
     }
 }
 
@@ -172,7 +172,7 @@ pub enum MemoryError {
     Io(#[from] std::io::Error),
 
     #[error("Serialization error: {0}")]
-    Serialization(#[from] postcard::Error),
+    Serialization(String),
 
     #[error("State not found: {0}")]
     NotFound(ContextId),
