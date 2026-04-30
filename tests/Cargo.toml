@@ -40,6 +40,10 @@ path = "log/logger_tests.rs"
 name = "comprehensive_logging_tests"
 path = "log/comprehensive_logging_tests.rs"
 
+[[test]]
+name = "logging_behavior_tests"
+path = "log/logger_behavior_tests.rs"
+
 # ============================================================================
 # Session Module Tests
 # ============================================================================
@@ -141,7 +145,7 @@ path = "config_tests.rs"
 # ============================================================================
 
 [dependencies]
-antikythera-log = { path = "../antikythera-log" }
+antikythera-log = { path = "../antikythera-log", features = ["subscriber"] }
 antikythera-session = { path = "../antikythera-session" }
 antikythera-core = { path = "../antikythera-core", features = ["full"] }
 antikythera-cli = { path = "../antikythera-cli" }

@@ -4,16 +4,15 @@
 //! the CLI-owned version; the core crate is free of this HTTP dependency.
 
 use antikythera_core::infrastructure::model::traits::ModelClient;
-
-use super::super::types::ModelProviderConfig;
 use antikythera_core::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use antikythera_core::ProviderLogger;
 
 use super::super::adapter::MessageAdapter;
 use super::super::http_client::HttpClientBase;
 use super::super::streaming::{StreamEvent, emit_stream_event};
+use super::super::types::ModelProviderConfig;
 
 /// Ollama client for a local LLM inference server.
 #[derive(Clone)]
@@ -46,15 +45,16 @@ impl ModelClient for OllamaClient {
             stream: true,
         };
 
-        info!(
-            provider = self.base.id.as_str(),
-            model = request.model.as_str(),
-            messages = request.messages.len(),
-            "Sending request to Ollama"
-        );
+        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&antikythera_core::get_active_session()));
+        log.info(format!(
+            "Sending request to Ollama | provider={} model={} messages={}",
+            self.base.id.as_str(),
+            request.model.as_str(),
+            request.messages.len()
+        ));
 
         let raw = self.base.post_no_auth_text(&url, &payload).await?;
-        debug!("Received response from Ollama");
+        log.debug("Received response from Ollama");
 
         let content = extract_ollama_stream_content(
             &raw,

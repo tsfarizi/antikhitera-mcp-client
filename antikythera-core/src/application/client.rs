@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tracing::{debug, info};
+use crate::logging::ChatLogger;
 use uuid::Uuid;
 
 /// Client configuration for the MCP client.
@@ -344,17 +344,17 @@ impl<P: ModelProvider> McpClient<P> {
                 let start_wait = std::time::Instant::now();
                 let sessions = self.sessions.lock().await;
                 let elapsed = start_wait.elapsed();
-                tracing::debug!(lock_wait_us = ?elapsed.as_micros(), "Acquired session lock for reading history");
+                ChatLogger::new(&session_id).debug(format!("Acquired session lock for reading history | lock_wait_us={:?}", elapsed.as_micros()));
                 sessions
                     .get(session_id.as_str())
                     .cloned()
                     .unwrap_or_default()
             };
-            debug!(
-                session_id = session_id.as_str(),
-                history_count = history.len(),
-                "Preparing chat request with prior history"
-            );
+            ChatLogger::new(&session_id).debug(format!(
+                "Preparing chat request with prior history | session_id={} history_count={}",
+                session_id.as_str(),
+                history.len()
+            ));
 
             if !history.is_empty() {
                 logs.push(format!(
@@ -439,14 +439,15 @@ impl<P: ModelProvider> McpClient<P> {
         let mut logs = prepared.logs;
         logs.push(format!("Model: {response_preview}"));
 
-        info!(
-            session_id = final_session.as_str(),
-            provider = prepared.provider.as_str(),
-            model = prepared.model.as_str(),
-            "Response received from model provider"
-        );
+        let log = ChatLogger::new(&final_session);
+        log.info(format!(
+            "Response received from model provider | session_id={} provider={} model={}",
+            final_session.as_str(),
+            prepared.provider.as_str(),
+            prepared.model.as_str()
+        ));
         for entry in &logs {
-            info!(session_id = final_session.as_str(), %entry, "Interaction log");
+            log.info(format!("Interaction log | session_id={} entry={}", final_session.as_str(), entry));
         }
 
         self.persist_exchange(&final_session, prepared.user_message, assistant_message)
@@ -484,12 +485,12 @@ impl<P: ModelProvider> McpClient<P> {
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
         let prepared = self.prepare_chat(request).await;
 
-        info!(
-            session_id = prepared.session_id.as_str(),
-            provider = prepared.provider.as_str(),
-            model = prepared.model.as_str(),
-            "Dispatching prepared request to model host"
-        );
+        ChatLogger::new(&prepared.session_id).info(format!(
+            "Dispatching prepared request to model host | session_id={} provider={} model={}",
+            prepared.session_id.as_str(),
+            prepared.provider.as_str(),
+            prepared.model.as_str()
+        ));
 
         let response = self.provider.chat(prepared.model_request.clone()).await?;
         self.complete_chat(prepared, response).await
@@ -562,16 +563,16 @@ impl<P: ModelProvider> McpClient<P> {
         let start_wait = std::time::Instant::now();
         let mut sessions = self.sessions.lock().await;
         let elapsed = start_wait.elapsed();
-        tracing::debug!(lock_wait_us = ?elapsed.as_micros(), "Acquired session lock to persist exchange");
+        ChatLogger::new(session_id).debug(format!("Acquired session lock to persist exchange | lock_wait_us={:?}", elapsed.as_micros()));
 
         let history = sessions.get_or_create(session_id);
         history.push(user_message);
         history.push(assistant);
-        debug!(
+        ChatLogger::new(session_id).debug(format!(
+            "Persisted chat exchange to session history | session_id={} total_messages={}",
             session_id,
-            total_messages = history.len(),
-            "Persisted chat exchange to session history"
-        );
+            history.len()
+        ));
     }
 
     /// Prune old non-system messages from `session_id` to fit within `policy`.
@@ -591,12 +592,12 @@ impl<P: ModelProvider> McpClient<P> {
             *history = pruned;
             let removed = before - history.len();
             if removed > 0 {
-                tracing::info!(
+                ChatLogger::new(session_id).info(format!(
+                    "Context window pruned | session_id={} removed={} remaining={}",
                     session_id,
                     removed,
-                    remaining = history.len(),
-                    "Context window pruned"
-                );
+                    history.len()
+                ));
             }
             removed
         } else {

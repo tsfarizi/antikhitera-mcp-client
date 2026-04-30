@@ -35,7 +35,7 @@ use crate::application::tooling::spawn_and_list_tools;
 use crate::config::ServerConfig;
 use std::collections::HashMap;
 use std::path::Path;
-use tracing::{debug, error, info, warn};
+use crate::logging::DiscoveryLogger;
 
 /// Load all discovered servers and fetch their tools.
 ///
@@ -63,7 +63,8 @@ use tracing::{debug, error, info, warn};
 /// println!("Loaded {} servers with {} total tools", summary.loaded, summary.total_tools);
 /// ```
 pub async fn load_all(servers: &mut [DiscoveredServer]) -> DiscoverySummary {
-    info!(count = servers.len(), "Loading discovered servers");
+    let log = DiscoveryLogger::new("discovery");
+    log.info(format!("Loading discovered servers | count={}", servers.len()));
 
     for server in servers.iter_mut() {
         load_server(server).await;
@@ -71,12 +72,10 @@ pub async fn load_all(servers: &mut [DiscoveredServer]) -> DiscoverySummary {
 
     let summary = DiscoverySummary::from_servers(servers);
 
-    info!(
-        loaded = summary.loaded,
-        failed = summary.failed,
-        total_tools = summary.total_tools,
-        "Server loading complete"
-    );
+    log.info(format!(
+        "Server loading complete | loaded={} failed={} total_tools={}",
+        summary.loaded, summary.failed, summary.total_tools
+    ));
 
     summary
 }
@@ -106,11 +105,12 @@ pub async fn load_all(servers: &mut [DiscoveredServer]) -> DiscoverySummary {
 /// }
 /// ```
 pub async fn load_server(server: &mut DiscoveredServer) {
-    debug!(
-        name = %server.name,
-        path = %server.binary_path.display(),
-        "Loading server"
-    );
+    let log = DiscoveryLogger::new("discovery");
+    log.debug(format!(
+        "Loading server | name={} path={}",
+        server.name,
+        server.binary_path.display()
+    ));
 
     // Create ServerConfig from binary path
     let config = create_server_config(&server.name, &server.binary_path);
@@ -119,23 +119,21 @@ pub async fn load_server(server: &mut DiscoveredServer) {
     match spawn_and_list_tools(&config).await {
         Ok(tools) => {
             if tools.is_empty() {
-                info!(name = %server.name, "Server loaded but has no tools");
+                log.info(format!("Server loaded but has no tools | name={}", server.name));
                 server.load_status = LoadStatus::NoTools;
             } else {
-                info!(
-                    name = %server.name,
-                    tool_count = tools.len(),
-                    "Server loaded successfully"
-                );
+                log.info(format!(
+                    "Server loaded successfully | name={} tool_count={}",
+                    server.name,
+                    tools.len()
+                ));
 
                 // Log each tool for debugging
                 for (name, desc) in &tools {
-                    debug!(
-                        server = %server.name,
-                        tool = %name,
-                        description = %desc,
-                        "Discovered tool"
-                    );
+                    log.debug(format!(
+                        "Discovered tool | server={} tool={} description={}",
+                        server.name, name, desc
+                    ));
                 }
 
                 server.tools = tools;
@@ -144,11 +142,10 @@ pub async fn load_server(server: &mut DiscoveredServer) {
         }
         Err(e) => {
             let error_msg = e.to_string();
-            error!(
-                name = %server.name,
-                error = %error_msg,
-                "Failed to load server"
-            );
+            log.error(format!(
+                "Failed to load server | name={} error={}",
+                server.name, error_msg
+            ));
             server.load_status = LoadStatus::Failed(error_msg);
         }
     }
@@ -214,7 +211,7 @@ pub async fn scan_and_load(
     let mut servers = scanner::scan_folder(folder_path)?;
 
     if servers.is_empty() {
-        warn!("No servers found in folder");
+        DiscoveryLogger::new("discovery").warn("No servers found in folder");
         return Ok((servers, DiscoverySummary::default()));
     }
 

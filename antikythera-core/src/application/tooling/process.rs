@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::{Mutex as AsyncMutex, oneshot};
-use tracing::{debug, warn};
+use crate::logging::TransportLogger;
 
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
@@ -195,30 +195,26 @@ impl McpProcessInner {
                         continue;
                     }
                     if trimmed.starts_with('\u{1b}') {
-                        debug!(
-                            server = %self.server.name,
-                            line = trimmed,
-                            "skipping non-JSON ANSI log line from MCP server"
-                        );
+                        TransportLogger::new(&self.server.name).debug(format!(
+                            "skipping non-JSON ANSI log line from MCP server | server={} line={}",
+                            self.server.name, trimmed
+                        ));
                         continue;
                     }
                     match serde_json::from_str::<Value>(&raw) {
                         Ok(value) => {
                             if let Err(err) = self.process_inbound_message(value).await {
-                                warn!(
-                                    server = %self.server.name,
-                                    %err,
-                                    "failed to process message from MCP server"
-                                );
+                                TransportLogger::new(&self.server.name).warn(format!(
+                                    "failed to process message from MCP server | server={} error={}",
+                                    self.server.name, err
+                                ));
                             }
                         }
                         Err(source) => {
-                            warn!(
-                                server = %self.server.name,
-                                line = raw,
-                                %source,
-                                "received invalid JSON from MCP server"
-                            );
+                            TransportLogger::new(&self.server.name).warn(format!(
+                                "received invalid JSON from MCP server | server={} line={} source={}",
+                                self.server.name, raw, source
+                            ));
                         }
                     }
                 }
@@ -279,11 +275,10 @@ impl McpProcessInner {
                 let _ = sender.send(Ok(value));
             }
         } else {
-            debug!(
-                server = %self.server.name,
-                response_id = key,
-                "received response for unknown request"
-            );
+            TransportLogger::new(&self.server.name).debug(format!(
+                "received response for unknown request | server={} response_id={}",
+                self.server.name, key
+            ));
         }
         Ok(())
     }
@@ -303,11 +298,10 @@ impl McpProcessInner {
                 self.send_response(id, response).await?;
             }
             other => {
-                warn!(
-                    server = %self.server.name,
-                    method = other,
-                    "server sent unsupported request"
-                );
+                TransportLogger::new(&self.server.name).warn(format!(
+                    "server sent unsupported request | server={} method={}",
+                    self.server.name, other
+                ));
                 let error = json!({
                     "code": -32601,
                     "message": format!("client does not implement method '{other}'"),
@@ -337,19 +331,17 @@ impl McpProcessInner {
 
     async fn handle_notification(&self, value: Value) {
         if let Some(method) = value.get("method").and_then(Value::as_str) {
-            debug!(
-                server = %self.server.name,
-                method,
-                "received notification from server"
-            );
+            TransportLogger::new(&self.server.name).debug(format!(
+                "received notification from server | server={} method={}",
+                self.server.name, method
+            ));
             if method == "notifications/tools/list_changed"
                 && let Err(err) = self.refresh_tools().await
             {
-                warn!(
-                    server = %self.server.name,
-                    %err,
-                    "failed to refresh tool catalogue"
-                );
+                TransportLogger::new(&self.server.name).warn(format!(
+                    "failed to refresh tool catalogue | server={} error={}",
+                    self.server.name, err
+                ));
             }
         }
     }
@@ -457,11 +449,10 @@ impl McpProcessInner {
         let mut state = self.state.lock().await;
         if let Some(mut running) = state.take() {
             if let Err(err) = running.child.kill().await {
-                debug!(
-                    server = %self.server.name,
-                    %err,
-                    "failed to kill MCP server process (may have already exited)"
-                );
+                TransportLogger::new(&self.server.name).debug(format!(
+                    "failed to kill MCP server process (may have already exited) | server={} error={}",
+                    self.server.name, err
+                ));
             }
             let _ = running.child.wait().await;
         }

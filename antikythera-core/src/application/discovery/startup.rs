@@ -14,7 +14,7 @@
 use super::types::{DiscoveredServer, DiscoverySummary, LoadStatus};
 use super::{DEFAULT_SERVERS_FOLDER, load_all, scan_folder};
 use std::path::Path;
-use tracing::{error, info, warn};
+use crate::logging::DiscoveryLogger;
 
 /// Result of the startup discovery process.
 #[derive(Debug, Clone)]
@@ -82,18 +82,19 @@ impl StartupDiscoveryResult {
 /// }
 /// ```
 pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDiscoveryResult {
+    let log = DiscoveryLogger::new("discovery");
     let folder = servers_folder
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| Path::new(DEFAULT_SERVERS_FOLDER).to_path_buf());
 
-    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    info!("🔍 MCP Server Discovery");
-    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    info!(path = %folder.display(), "Scanning servers folder");
+    log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    log.info("🔍 MCP Server Discovery");
+    log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    log.info(format!("Scanning servers folder | path={}", folder.display()));
 
     // Check if folder exists
     if !folder.exists() {
-        warn!(path = %folder.display(), "Servers folder not found - skipping discovery");
+        log.warn(format!("Servers folder not found - skipping discovery | path={}", folder.display()));
         return StartupDiscoveryResult {
             servers: Vec::new(),
             summary: DiscoverySummary::default(),
@@ -105,7 +106,7 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
     let mut servers = match scan_folder(&folder) {
         Ok(s) => s,
         Err(e) => {
-            error!(error = %e, "Failed to scan servers folder");
+            log.error(format!("Failed to scan servers folder | error={}", e));
             return StartupDiscoveryResult {
                 servers: Vec::new(),
                 summary: DiscoverySummary::default(),
@@ -115,7 +116,7 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
     };
 
     if servers.is_empty() {
-        info!("No server binaries found in folder");
+        log.info("No server binaries found in folder");
         return StartupDiscoveryResult {
             servers: Vec::new(),
             summary: DiscoverySummary::default(),
@@ -123,76 +124,73 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
         };
     }
 
-    info!(count = servers.len(), "Found server binaries");
+    log.info(format!("Found server binaries | count={}", servers.len()));
 
     // Log each discovered binary
     for server in &servers {
-        info!(
-            name = %server.name,
-            path = %server.binary_path.display(),
-            "📦 Discovered server binary"
-        );
+        log.info(format!(
+            "📦 Discovered server binary | name={} path={}",
+            server.name,
+            server.binary_path.display()
+        ));
     }
 
-    info!("⏳ Loading servers and fetching tools via MCP...");
+    log.info("⏳ Loading servers and fetching tools via MCP...");
 
     // Load all servers
     let summary = load_all(&mut servers).await;
 
     // Log results for each server
-    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    info!("📋 Discovery Results");
-    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    log.info("📋 Discovery Results");
+    log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     for server in &servers {
         match &server.load_status {
             LoadStatus::Success => {
-                info!(
-                    name = %server.name,
-                    tools = server.tools.len(),
-                    "✅ Server loaded successfully"
-                );
+                log.info(format!(
+                    "✅ Server loaded successfully | name={} tools={}",
+                    server.name,
+                    server.tools.len()
+                ));
                 // Log each tool
                 for (tool_name, description) in &server.tools {
                     let desc_preview: String = description.chars().take(50).collect();
-                    info!(
-                        server = %server.name,
-                        tool = %tool_name,
-                        desc = %desc_preview,
-                        "   🔧 Tool available"
-                    );
+                    log.info(format!(
+                        "   🔧 Tool available | server={} tool={} desc={}",
+                        server.name, tool_name, desc_preview
+                    ));
                 }
             }
             LoadStatus::NoTools => {
-                warn!(
-                    name = %server.name,
-                    "⚠️  Server loaded but has no tools"
-                );
+                log.warn(format!(
+                    "⚠️  Server loaded but has no tools | name={}",
+                    server.name
+                ));
             }
             LoadStatus::Failed(err) => {
-                error!(
-                    name = %server.name,
-                    error = %err,
-                    "❌ Failed to load server"
-                );
+                log.error(format!(
+                    "❌ Failed to load server | name={} error={}",
+                    server.name, err
+                ));
             }
             LoadStatus::Pending => {
-                warn!(name = %server.name, "⏳ Server not loaded (pending)");
+                log.warn(format!("⏳ Server not loaded (pending) | name={}", server.name));
             }
         }
     }
 
     // Final summary
-    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    info!(
-        total = summary.total_found,
-        loaded = summary.loaded,
-        failed = summary.failed,
-        no_tools = summary.no_tools,
-        total_tools = summary.total_tools,
-        "📊 Discovery Summary"
-    );
-    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    log.info(format!(
+        "📊 Discovery Summary | total={} loaded={} failed={} no_tools={} total_tools={}",
+        summary.total_found,
+        summary.loaded,
+        summary.failed,
+        summary.no_tools,
+        summary.total_tools
+    ));
+    log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     StartupDiscoveryResult {
         servers,
@@ -207,46 +205,46 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
 /// configured a structured log subscriber.
 pub fn print_discovery_summary(result: &StartupDiscoveryResult) {
     if !result.folder_exists {
-        println!("⚠️  Servers folder not found - no auto-discovery performed");
+        antikythera_log::cli_print!("⚠️  Servers folder not found - no auto-discovery performed");
         return;
     }
 
     if result.servers.is_empty() {
-        println!("📂 No server binaries found in servers folder");
+        antikythera_log::cli_print!("📂 No server binaries found in servers folder");
         return;
     }
 
-    println!();
-    println!("🔍 MCP Server Discovery Results:");
-    println!("─────────────────────────────────");
+    antikythera_log::cli_print!();
+    antikythera_log::cli_print!("🔍 MCP Server Discovery Results:");
+    antikythera_log::cli_print!("─────────────────────────────────");
 
     for server in &result.servers {
         match &server.load_status {
             LoadStatus::Success => {
-                println!("  ✅ {} ({} tools)", server.name, server.tools.len());
+                antikythera_log::cli_print!("  ✅ {} ({} tools)", server.name, server.tools.len());
                 for (tool_name, _) in &server.tools {
-                    println!("     └─ {}", tool_name);
+                    antikythera_log::cli_print!("     └─ {}", tool_name);
                 }
             }
             LoadStatus::NoTools => {
-                println!("  ⚠️  {} (no tools)", server.name);
+                antikythera_log::cli_print!("  ⚠️  {} (no tools)", server.name);
             }
             LoadStatus::Failed(e) => {
-                println!("  ❌ {} - Error: {}", server.name, e);
+                antikythera_log::cli_print!("  ❌ {} - Error: {}", server.name, e);
             }
             LoadStatus::Pending => {}
         }
     }
 
-    println!("─────────────────────────────────");
-    println!(
+    antikythera_log::cli_print!("─────────────────────────────────");
+    antikythera_log::cli_print!(
         "📊 Total: {} servers | ✅ {} loaded | ❌ {} failed | 🔧 {} tools",
         result.summary.total_found,
         result.summary.loaded,
         result.summary.failed,
         result.summary.total_tools
     );
-    println!();
+    antikythera_log::cli_print!();
 }
 
 #[cfg(test)]

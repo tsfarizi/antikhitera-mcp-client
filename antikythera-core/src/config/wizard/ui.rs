@@ -14,9 +14,9 @@ const DIM: &str = "\x1b[2m";
 pub fn print_header(title: &str) {
     let width = 54;
 
-    println!();
-    println!("{}╔{}╗{}", CYAN, "═".repeat(width), RESET);
-    println!(
+    antikythera_log::cli_print!();
+    antikythera_log::cli_print!("{}╔{}╗{}", CYAN, "═".repeat(width), RESET);
+    antikythera_log::cli_print!(
         "{}║{:^width$}{}║{}",
         CYAN,
         format!("{}🔧  {}{}", BOLD, title, RESET),
@@ -24,22 +24,22 @@ pub fn print_header(title: &str) {
         RESET,
         width = width
     );
-    println!("{}╚{}╝{}", CYAN, "═".repeat(width), RESET);
-    println!();
+    antikythera_log::cli_print!("{}╚{}╝{}", CYAN, "═".repeat(width), RESET);
+    antikythera_log::cli_print!();
 }
 
 /// Print a section divider with title
 pub fn print_section(title: &str) {
-    println!();
-    println!("{}╠{}╣{}", CYAN, "═".repeat(54), RESET);
-    println!("{}║  {}{}{}", CYAN, BOLD, title, RESET);
-    println!("{}╠{}╣{}", CYAN, "═".repeat(54), RESET);
-    println!();
+    antikythera_log::cli_print!();
+    antikythera_log::cli_print!("{}╠{}╣{}", CYAN, "═".repeat(54), RESET);
+    antikythera_log::cli_print!("{}║  {}{}{}", CYAN, BOLD, title, RESET);
+    antikythera_log::cli_print!("{}╠{}╣{}", CYAN, "═".repeat(54), RESET);
+    antikythera_log::cli_print!();
 }
 
 /// Print a simple divider line
 pub fn print_divider() {
-    println!(
+    antikythera_log::cli_print!(
         "{}─────────────────────────────────────────────{}",
         DIM, RESET
     );
@@ -47,28 +47,28 @@ pub fn print_divider() {
 
 /// Print informational text
 pub fn print_info(message: &str) {
-    println!("  {}", message);
+    antikythera_log::cli_print!("  {}", message);
 }
 
 /// Print a hint (dimmed)
 pub fn print_hint(message: &str) {
-    println!("  {}→ {}{}", DIM, message, RESET);
+    antikythera_log::cli_print!("  {}→ {}{}", DIM, message, RESET);
 }
 
 /// Print success message
 pub fn print_success(message: &str) {
-    println!();
-    println!("  {}{}✅ {}{}", GREEN, BOLD, message, RESET);
+    antikythera_log::cli_print!();
+    antikythera_log::cli_print!("  {}{}✅ {}{}", GREEN, BOLD, message, RESET);
 }
 
 /// Print warning message
 pub fn print_warning(message: &str) {
-    println!("  {}⚠️  {}{}", YELLOW, message, RESET);
+    antikythera_log::cli_print!("  {}⚠️  {}{}", YELLOW, message, RESET);
 }
 
 /// Print error message
 pub fn print_error(message: &str) {
-    println!("  {}❌ {}{}", RED, message, RESET);
+    antikythera_log::cli_print!("  {}❌ {}{}", RED, message, RESET);
 }
 
 /// Flush stdout

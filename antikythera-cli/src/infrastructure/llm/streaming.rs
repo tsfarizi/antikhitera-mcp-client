@@ -82,7 +82,7 @@ pub fn install_terminal_stream_sink() {
 }
 
 pub(crate) fn emit_stream_event(event: StreamEvent) {
-    // Emit tracing events for Start and Completion so they appear in the log
+    // Emit log entries for Start and Completion so they appear in the log
     // panel under the "cli:streaming" source label.  Chunks are intentionally
     // skipped here — they are too frequent and the content appears in the chat
     // area anyway.
@@ -91,21 +91,21 @@ pub(crate) fn emit_stream_event(event: StreamEvent) {
             provider_id,
             session_id,
         } => {
-            tracing::info!(
-                provider = provider_id.as_str(),
-                session = session_id.as_deref().unwrap_or("-"),
-                "Stream started"
-            );
+            antikythera_core::StreamingLogger::new(session_id.as_deref().unwrap_or("tui")).info(format!(
+                "Stream started | provider={} session={}",
+                provider_id.as_str(),
+                session_id.as_deref().unwrap_or("-")
+            ));
         }
         StreamEvent::Completed {
             provider_id,
             session_id,
         } => {
-            tracing::info!(
-                provider = provider_id.as_str(),
-                session = session_id.as_deref().unwrap_or("-"),
-                "Stream completed"
-            );
+            antikythera_core::StreamingLogger::new(session_id.as_deref().unwrap_or("tui")).info(format!(
+                "Stream completed | provider={} session={}",
+                provider_id.as_str(),
+                session_id.as_deref().unwrap_or("-")
+            ));
         }
         StreamEvent::Chunk { .. } => {}
     }

@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use thiserror::Error;
-use tracing::{debug, warn};
 use wasmtime::{Caller, Engine, Extern, Linker, Module, Store};
+use crate::logging::WasmLogger;
 
 use crate::application::agent::multi_agent::task::{AgentTask, TaskResult};
 
@@ -165,7 +165,7 @@ impl WasmAgentRunner {
                     None => return -1,
                 };
 
-                debug!(req_len = req_len, "WASM agent calling LLM");
+                WasmLogger::new(&crate::logging::get_active_session()).debug(format!("WASM agent calling LLM | req_len={}", req_len));
                 let response = (llm_handler)(req_json);
                 let response_bytes = response.into_bytes();
                 let response_len = response_bytes.len() as i32;
@@ -200,7 +200,7 @@ impl WasmAgentRunner {
                 ((result_ptr as i64) << 32) | response_len as i64
             },
         ) {
-            warn!(error = %e, "Failed to register call_llm_sync host function");
+            WasmLogger::new(&crate::logging::get_active_session()).warn(format!("Failed to register call_llm_sync host function | error={}", e));
             return TaskResult::failure(
                 task.task_id,
                 self.agent_id.clone(),

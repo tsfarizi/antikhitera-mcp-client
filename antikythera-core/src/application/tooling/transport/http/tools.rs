@@ -5,7 +5,7 @@
 use serde_json::Value;
 use std::collections::HashMap;
 use tokio::sync::Mutex as AsyncMutex;
-use tracing::debug;
+use crate::logging::TransportLogger;
 
 use crate::application::tooling::interface::ServerToolInfo;
 
@@ -35,10 +35,10 @@ pub async fn populate_tool_cache(
                 );
             }
         }
-        debug!(
-            server = %server_name,
-            tool_count = cache.len(),
-            "Refreshed tool cache from HTTP server"
-        );
+        TransportLogger::new(server_name).debug(format!(
+            "Refreshed tool cache from HTTP server | server={} tool_count={}",
+            server_name,
+            cache.len()
+        ));
     }
 }

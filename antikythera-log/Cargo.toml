@@ -11,6 +11,8 @@ default = ["std"]
 std = []
 wasm = ["dep:wasm-bindgen"]
 subscriber = ["dep:tokio", "dep:crossbeam-channel"]
+# Enable compile-time lint that blocks println!, eprintln!, dbg!, and tracing macros
+lint = []
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }

@@ -11,7 +11,7 @@ use tokio::sync::Mutex as AsyncMutex;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_stream::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
-use tracing::{debug, info, warn};
+use crate::logging::TransportLogger;
 
 use crate::application::tooling::error::ToolInvokeError;
 
@@ -32,7 +32,8 @@ pub fn start_sse_listener(
     session_endpoint: Arc<AsyncMutex<Option<String>>>,
 ) {
     tokio::spawn(async move {
-        debug!(server = %name, %url, "Starting SSE listener");
+        let log = TransportLogger::new(&name);
+        log.debug(format!("Starting SSE listener | server={} url={}", name, url));
 
         let mut request = client.get(&url);
 
@@ -51,22 +52,22 @@ pub fn start_sse_listener(
         while let Some(event) = es.next().await {
             match event {
                 Ok(Event::Open) => {
-                    info!(server = %name, "SSE connection opened");
+                    log.info(format!("SSE connection opened | server={}", name));
                 }
                 Ok(Event::Message(message)) => {
-                    debug!(server = %name, event = %message.event, "Received SSE event");
+                    log.debug(format!("Received SSE event | server={} event={}", name, message.event));
                     if message.event == "endpoint" {
                         let endpoint = message.data.trim().to_string();
-                        info!(server = %name, %endpoint, "Received session endpoint");
+                        log.info(format!("Received session endpoint | server={} endpoint={}", name, endpoint));
                         *session_endpoint.lock().await = Some(endpoint);
                     }
                 }
                 Err(err) => {
-                    warn!(server = %name, %err, "Error in SSE stream");
+                    log.warn(format!("Error in SSE stream | server={} error={}", name, err));
                 }
             }
         }
-        warn!(server = %name, "SSE stream ended");
+        log.warn(format!("SSE stream ended | server={}", name));
     });
 }
 

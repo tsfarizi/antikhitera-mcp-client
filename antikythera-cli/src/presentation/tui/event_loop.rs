@@ -738,7 +738,10 @@ fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut Cha
             if let Some(ref sid) = session_id {
                 let removed = client_arc.prune_session(sid, &cw_policy).await;
                 if removed > 0 {
-                    tracing::info!(removed, "Context window pruned before request");
+                    antikythera_core::SessionLogger::new(sid).info(format!(
+                        "Context window pruned before request | removed={}",
+                        removed
+                    ));
                 }
             }
 

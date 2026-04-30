@@ -12,7 +12,7 @@ use antikythera_core::infrastructure::model::traits::ModelClient;
 
 use super::types::ModelProviderConfig;
 use std::env;
-use tracing::warn;
+use antikythera_core::ProviderLogger;
 
 use super::clients::{GeminiClient, OllamaClient, OpenAIClient};
 
@@ -28,12 +28,10 @@ pub fn resolve_api_key(provider: &str, spec: Option<&str>) -> Option<String> {
     match env::var(raw) {
         Ok(value) => Some(value),
         Err(err) => {
-            warn!(
-                provider,
-                env_var = raw,
-                %err,
-                "API key environment variable is not set"
-            );
+            ProviderLogger::new(&antikythera_core::get_active_session()).warn(format!(
+                "API key environment variable is not set | provider={} env_var={} error={}",
+                provider, raw, err
+            ));
             None
         }
     }

@@ -58,7 +58,7 @@ pub fn prompt_password(label: &str, default: Option<&str>) -> Result<String, Box
 
 /// Prompt for selection using arrow keys
 pub fn prompt_select(label: &str, options: &[&str]) -> Result<String, Box<dyn Error>> {
-    println!("  {}:", label);
+    antikythera_log::cli_print!("  {}:", label);
     let mut selected = 0;
 
     enable_raw_mode()?;
@@ -166,7 +166,7 @@ pub fn prompt_models() -> Result<Vec<(String, String)>, Box<dyn Error>> {
         if !prompt_confirm("Add another model?", false)? {
             break;
         }
-        println!();
+        antikythera_log::cli_print!();
     }
 
     Ok(models)

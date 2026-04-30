@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::domain::types::ChatMessage;
+use crate::logging::SessionLogger;
 
 /// Default maximum number of concurrent sessions kept in memory.
 ///
@@ -80,11 +81,10 @@ impl SessionStore {
             && let Some(lru_id) = self.order.pop_front()
         {
             self.map.remove(&lru_id);
-            tracing::debug!(
-                evicted_session = %lru_id,
-                active_sessions = self.map.len(),
-                "Evicted LRU session from in-memory store"
-            );
+            SessionLogger::new(&lru_id).debug(format!(
+                "Evicted LRU session from in-memory store | evicted_session={} active_sessions={}",
+                lru_id, self.map.len()
+            ));
         }
         self.order.push_back(session_id.to_string());
     }

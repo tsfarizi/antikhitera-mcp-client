@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tokio::time::sleep;
-use tracing::{info, warn};
+use crate::logging::OrchestratorLogger;
 
 use super::super::budget::OrchestratorBudget;
 use super::super::cancellation::CancellationToken;
@@ -174,6 +174,9 @@ pub(super) async fn execute_task<P: ModelProvider>(
         }
 
         attempt = attempt.saturating_add(1);
+        let log = OrchestratorLogger::new(
+            task.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()),
+        );
         let agent = Agent::new(client.clone());
         let options = AgentOptions {
             system_prompt: profile.system_prompt.clone(),
@@ -182,12 +185,10 @@ pub(super) async fn execute_task<P: ModelProvider>(
             attachments: Vec::new(),
         };
 
-        info!(
-            task_id = %task.task_id,
-            agent_id = %profile.id,
-            attempt = attempt,
-            "Dispatching task to agent"
-        );
+        log.info(format!(
+            "Dispatching task to agent | task_id={} agent_id={} attempt={}",
+            task.task_id, profile.id, attempt
+        ));
 
         let run_future = agent.run(task.input.clone(), options);
         let run_result = if let Some(timeout_ms) = task.timeout_ms {
@@ -232,7 +233,10 @@ pub(super) async fn execute_task<P: ModelProvider>(
 
         match run_result {
             Ok(outcome) => {
-                info!(task_id = %task.task_id, agent_id = %profile.id, "Task completed");
+                log.info(format!(
+                    "Task completed | task_id={} agent_id={}",
+                    task.task_id, profile.id
+                ));
                 let metadata = TaskExecutionMetadata {
                     attempt_count: attempt,
                     duration_ms: started.elapsed().as_millis() as u64,
@@ -278,14 +282,10 @@ pub(super) async fn execute_task<P: ModelProvider>(
                 let err_str = e.to_string();
                 let kind = classify_agent_error(&err_str);
 
-                warn!(
-                    task_id = %task.task_id,
-                    agent_id = %profile.id,
-                    error = %err_str,
-                    attempt = attempt,
-                    kind = ?kind,
-                    "Task failed"
-                );
+                log.warn(format!(
+                    "Task failed | task_id={} agent_id={} error={} attempt={} kind={:?}",
+                    task.task_id, profile.id, err_str, attempt, kind
+                ));
 
                 let should_retry = attempt <= retry_policy.max_retries
                     && match retry_policy.condition {

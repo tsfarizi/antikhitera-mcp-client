@@ -49,13 +49,14 @@ pub use infrastructure::model::{
     DynamicModelProvider, HostModelClient, HostModelResponse, HostModelTransport, ModelProvider,
 };
 
-/// Re-export log entry types used by the TUI tracing bridge.
+/// Re-export log entry types for downstream crates.
 pub use antikythera_log::LogLevel;
 /// Re-export logging for easy access
 pub use logging::{
-    AgentLogger, ConfigLogger, ProviderLogger, TransportLogger, clear_all_loggers, clear_logs,
-    get_active_session, get_latest_logs, get_logger, get_logs_json, logger_count, query_logs,
-    set_active_session, subscribe_logs,
+    AgentLogger, ChatLogger, ConfigLogger, DiscoveryLogger, OrchestratorLogger, ProviderLogger,
+    ResilienceLogger, SessionLogger, StdioLogger, StreamingLogger, TransportLogger, WasmLogger,
+    clear_all_loggers, clear_logs, get_active_session, get_latest_logs, get_logger, get_logs_json,
+    logger_count, query_logs, set_active_session, subscribe_logs,
 };
 
 /// Crate version

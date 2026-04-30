@@ -1,7 +1,7 @@
 use super::{ToolError, ToolInvokeError, ToolRuntime, Value};
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::time::Instant;
-use tracing::{debug, info, warn};
+use crate::logging::AgentLogger;
 
 pub(crate) struct ToolExecution {
     pub tool: String,
@@ -17,10 +17,11 @@ impl ToolRuntime {
         tool_name: &str,
         input: Value,
     ) -> Result<ToolExecution, ToolError> {
+        let log = AgentLogger::new(&crate::logging::get_active_session());
         if tool_name.eq_ignore_ascii_case("list_tools") {
             let manifest = self.build_context(None).await;
             let output = serde_json::to_value(&manifest).unwrap_or(Value::Null);
-            debug!("Agent requested tool catalogue via list_tools");
+            log.debug("Agent requested tool catalogue via list_tools");
             let execution = ToolExecution {
                 tool: "list_tools".to_string(),
                 success: true,
@@ -31,13 +32,13 @@ impl ToolRuntime {
                     manifest.tools.len()
                 )),
             };
-            info!(tool = %execution.tool, success = execution.success, "Tool executed");
+            log.info(format!("Tool executed | tool={} success={}", execution.tool, execution.success));
             return Ok(execution);
         }
 
         let key = tool_name.to_lowercase();
         let Some(tool) = self.index.get(&key).cloned() else {
-            warn!(requested_tool = %tool_name, "Unknown tool requested by agent");
+            log.warn(format!("Unknown tool requested by agent | requested_tool={}", tool_name));
             return Err(ToolError::UnknownTool(tool_name.to_string()));
         };
 
@@ -46,7 +47,7 @@ impl ToolRuntime {
         let server_name = match tool.server.as_deref() {
             Some(name) => name,
             None => {
-                warn!(tool = %tool_name, "Tool configured without server binding");
+                log.warn(format!("Tool configured without server binding | tool={}", tool_name));
                 return Err(ToolError::UnboundTool(tool_name));
             }
         };
@@ -56,7 +57,7 @@ impl ToolRuntime {
             other => other,
         };
 
-        debug!(tool = %tool_name, server = %server_name, "Dispatching tool via MCP");
+        log.debug(format!("Dispatching tool via MCP | tool={} server={}", tool_name, server_name));
         let start_time = Instant::now();
         match self
             .bridge
@@ -65,7 +66,7 @@ impl ToolRuntime {
         {
             Ok(result) => {
                 let elapsed = start_time.elapsed();
-                info!(latency_ms = ?elapsed.as_millis(), tool = %tool_name, "MCP tool execution round-trip completed");
+                log.info(format!("MCP tool execution round-trip completed | latency_ms={} tool={}", elapsed.as_millis(), tool_name));
                 let is_error = result
                     .get("isError")
                     .and_then(Value::as_bool)
@@ -78,12 +79,12 @@ impl ToolRuntime {
                     output: result,
                     message,
                 };
-                info!(tool = %execution.tool, success = execution.success, "Tool executed");
+                log.info(format!("Tool executed | tool={} success={}", execution.tool, execution.success));
                 Ok(execution)
             }
             Err(ToolInvokeError::NotConfigured { .. }) => Err(ToolError::UnboundTool(tool_name)),
             Err(source) => {
-                warn!(tool = %tool_name, server = %server_name, %source, "Tool execution failed");
+                log.warn(format!("Tool execution failed | tool={} server={} source={}", tool_name, server_name, source));
                 Err(ToolError::Execution {
                     tool: tool_name,
                     source,

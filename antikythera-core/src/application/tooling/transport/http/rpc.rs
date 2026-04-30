@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tracing::{debug, info, warn};
+use crate::logging::TransportLogger;
 
 use crate::application::tooling::error::ToolInvokeError;
 
@@ -48,13 +48,11 @@ pub async fn send_request(
         "params": params
     });
 
-    info!(
-        server = %server_name,
-        method = method,
-        url = %url,
-        request_id = %request_id,
-        "Sending HTTP JSON-RPC request"
-    );
+    let log = TransportLogger::new(server_name);
+    log.info(format!(
+        "Sending HTTP JSON-RPC request | server={} method={} url={} request_id={}",
+        server_name, method, url, request_id
+    ));
 
     let mut request = client
         .post(url)
@@ -67,11 +65,10 @@ pub async fn send_request(
     }
 
     let response = request.send().await.map_err(|e| {
-        warn!(
-            server = %server_name,
-            error = %e,
-            "HTTP request failed"
-        );
+        log.warn(format!(
+            "HTTP request failed | server={} error={}",
+            server_name, e
+        ));
         ToolInvokeError::Transport {
             server: server_name.to_string(),
             message: format!("HTTP request failed: {}", e),
@@ -80,11 +77,10 @@ pub async fn send_request(
 
     let status = response.status();
     if !status.is_success() {
-        warn!(
-            server = %server_name,
-            status = %status,
-            "HTTP request returned error status"
-        );
+        log.warn(format!(
+            "HTTP request returned error status | server={} status={}",
+            server_name, status
+        ));
         return Err(ToolInvokeError::Transport {
             server: server_name.to_string(),
             message: format!("HTTP error: {}", status),
@@ -107,12 +103,10 @@ pub async fn send_request(
             .and_then(Value::as_str)
             .unwrap_or("Unknown error")
             .to_string();
-        warn!(
-            server = %server_name,
-            code = code,
-            error_message = %message,
-            "JSON-RPC error received"
-        );
+        log.warn(format!(
+            "JSON-RPC error received | server={} code={} error_message={}",
+            server_name, code, message
+        ));
         return Err(ToolInvokeError::Rpc {
             server: server_name.to_string(),
             code,
@@ -121,10 +115,10 @@ pub async fn send_request(
     }
 
     let result = body.get("result").cloned().unwrap_or(Value::Null);
-    debug!(
-        server = %server_name,
-        "HTTP JSON-RPC request completed successfully"
-    );
+    log.debug(format!(
+        "HTTP JSON-RPC request completed successfully | server={}",
+        server_name
+    ));
     Ok(result)
 }
 

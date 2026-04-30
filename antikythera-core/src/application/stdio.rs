@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tracing::{debug, error, info, warn};
+use crate::logging::StdioLogger;
 
 #[derive(Debug, Error)]
 pub enum StdioError {
@@ -163,7 +163,7 @@ async fn handle_command<P: ModelProvider>(
     let name = parts.next().unwrap_or("").to_ascii_lowercase();
     let args: Vec<String> = parts.map(|part| part.to_string()).collect();
 
-    debug!(command = %name, "Processing STDIO command");
+    StdioLogger::new("stdio").debug(format!("Processing STDIO command | command={}", name));
 
     match name.as_str() {
         "" => {
@@ -310,15 +310,16 @@ async fn handle_prompt<P: ModelProvider + 'static>(
     message: String,
     stdout: &mut io::Stdout,
 ) -> Result<(), StdioError> {
+    let log = StdioLogger::new(state.session_id.as_deref().unwrap_or("stdio"));
     if state.agent_mode {
-        info!("Processing interactive STDIO request in agent mode");
+        log.info("Processing interactive STDIO request in agent mode");
         let options = AgentOptions {
             session_id: state.session_id.clone(),
             ..AgentOptions::default()
         };
         run_agent_interaction(client, state, message, stdout, options).await?;
     } else {
-        info!("Processing interactive STDIO chat request");
+        log.info("Processing interactive STDIO chat request");
         let direct_prompt = message.clone();
         match client
             .chat(ChatRequest {
@@ -371,7 +372,7 @@ async fn handle_prompt<P: ModelProvider + 'static>(
                 }
             }
             Err(err) => {
-                error!(%err, "STDIO chat request failed");
+                log.error(format!("STDIO chat request failed | error={}", err));
                 write_line(stdout, "\nPermintaan gagal:").await?;
                 write_line(stdout, &err.user_message()).await?;
                 state.clear_logs();
@@ -430,7 +431,8 @@ where
             }
         }
         Err(err) => {
-            error!(%err, "Agent processing failed via STDIO");
+            StdioLogger::new(state.session_id.as_deref().unwrap_or("stdio"))
+                .error(format!("Agent processing failed via STDIO | error={}", err));
             write_line(stdout, "\nAgent mengalami kegagalan:").await?;
             write_line(stdout, &err.user_message()).await?;
             state.clear_logs();
@@ -533,7 +535,7 @@ async fn show_config<P: ModelProvider>(
             }
         }
         Err(error) => {
-            warn!(%error, "Gagal membaca berkas konfigurasi");
+            StdioLogger::new("stdio").warn(format!("Gagal membaca berkas konfigurasi | error={}", error));
             write_line(
                 stdout,
                 &format!("Gagal membaca berkas konfigurasi: {error}"),

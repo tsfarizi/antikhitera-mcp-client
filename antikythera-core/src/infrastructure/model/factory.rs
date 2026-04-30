@@ -4,7 +4,7 @@ use super::clients::{GeminiClient, OllamaClient, OpenAIClient};
 use super::traits::ModelClient;
 use crate::config::ModelProviderConfig;
 use std::env;
-use tracing::warn;
+use crate::logging::ProviderLogger;
 
 /// Resolve API key from environment variable
 pub fn resolve_api_key(provider: &str, spec: Option<&str>) -> Option<String> {
@@ -17,12 +17,10 @@ pub fn resolve_api_key(provider: &str, spec: Option<&str>) -> Option<String> {
     match env::var(raw) {
         Ok(value) => Some(value),
         Err(err) => {
-            warn!(
-                provider,
-                env_var = raw,
-                %err,
-                "API key environment variable is not set"
-            );
+            ProviderLogger::new(&crate::logging::get_active_session()).warn(format!(
+                "API key environment variable is not set | provider={} env_var={} error={}",
+                provider, raw, err
+            ));
             None
         }
     }

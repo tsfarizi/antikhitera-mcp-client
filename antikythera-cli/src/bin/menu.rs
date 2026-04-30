@@ -23,13 +23,12 @@ use antikythera_cli::domain::use_cases::{render_wasm_stream_report, run_wasm_str
 use antikythera_cli::infrastructure::llm::install_terminal_stream_sink;
 use antikythera_cli::infrastructure::llm::providers_from_postcard;
 use antikythera_cli::presentation::tui;
-use antikythera_cli::presentation::tui_tracing::AntikytheraTuiLayer;
 use antikythera_cli::runtime::{build_runtime_client, materialize_runtime_config};
+use antikythera_log::{cli_eprint, cli_print};
 use antikythera_core::application::agent::multi_agent::task::AgentTask;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use antikythera_core::{AppConfig, McpClient};
 use clap::Parser;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[cfg(feature = "multi-agent")]
 use antikythera_core::application::agent::multi_agent::{
@@ -46,17 +45,6 @@ use antikythera_core::application::agent::multi_agent::guardrails::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Install the TUI tracing bridge first — routes all tracing::debug!/info!/
-    // warn!/error! events from antikythera-core into the LOGGERS system so they
-    // appear in the WASM/FFI Logs panel. Must be installed before any crate code runs.
-    tracing_subscriber::registry()
-        .with(AntikytheraTuiLayer)
-        .init();
-
-    // Load .env at process startup so GEMINI_API_KEY / OPENAI_API_KEY are
-    // available for provider auto-detection. Missing .env file is fine.
-    let _ = dotenvy::dotenv();
-
     let cli = Cli::parse();
 
     let config_path = cli.config.as_deref().map(Path::new);
@@ -102,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tui::run_chat_app(runtime_config, providers).await?;
         }
         RunMode::Setup => {
-            eprintln!(
+            cli_eprint!(
                 "Setup mode requires the wizard feature. \
                  Run `antikythera-config init` to create a default config."
             );
@@ -135,18 +123,18 @@ async fn run_wasm_harness(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 
     // In harness mode we force stream diagnostics on to expose all runtime phases.
     if !cli.stream {
-        eprintln!("[wasm-harness] enabling stream diagnostics for dev tooling output");
+        cli_eprint!("[wasm-harness] enabling stream diagnostics for dev tooling output");
     }
     let stream_report = run_wasm_stream_probe(&task_input, &llm_payload, true)?;
 
-    println!("== WASM Host FFI Harness ==");
-    println!("artifact: {}", wasm_path);
-    println!("mode: ffi-host-probe");
-    println!();
-    println!("{}", render_wasm_stream_report(&stream_report)?);
+    cli_print!("== WASM Host FFI Harness ==");
+    cli_print!("artifact: {}", wasm_path);
+    cli_print!("mode: ffi-host-probe");
+    cli_print!();
+    cli_print!("{}", render_wasm_stream_report(&stream_report)?);
 
-    println!("\n== WASM Dev Summary JSON ==");
-    println!(
+    cli_print!("\n== WASM Dev Summary JSON ==");
+    cli_print!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
             "artifact": wasm_path,
@@ -202,7 +190,7 @@ async fn run_multi_agent(
         let target = target.to_string();
         let router = Arc::new(DirectRouter);
         orch = orch.with_router(router);
-        eprintln!("Routing all tasks to agent: {target}");
+        cli_eprint!("Routing all tasks to agent: {target}");
     } else if orch.agent_count() > 1 {
         orch = orch.with_router(Arc::new(RoundRobinRouter::new()));
     }
@@ -227,7 +215,7 @@ async fn run_multi_agent(
 
     orch = orch.with_budget(budget).with_guardrails(guardrails);
 
-    eprintln!(
+    cli_eprint!(
         "Multi-agent orchestrator ready: {} agent(s), mode={}, guardrails={}",
         orch.agent_count(),
         exec_mode,
@@ -240,7 +228,7 @@ async fn run_multi_agent(
     let task_input = if let Some(t) = cli.task.as_deref() {
         t.to_string()
     } else {
-        eprintln!("Reading task from stdin (send EOF when done)...");
+        cli_eprint!("Reading task from stdin (send EOF when done)...");
         let mut buf = String::new();
         {
             use std::io::Read;
@@ -262,7 +250,7 @@ async fn run_multi_agent(
     // ----------------------------------------------------------------
     // Output result as JSON
     // ----------------------------------------------------------------
-    println!("{}", serde_json::to_string_pretty(&result)?);
+    cli_print!("{}", serde_json::to_string_pretty(&result)?);
 
     if !result.success {
         std::process::exit(1);

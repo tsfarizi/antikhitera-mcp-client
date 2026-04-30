@@ -6,6 +6,7 @@
 
 use antikythera_cli::config::*;
 use antikythera_cli::error::{CliError, CliResult};
+use antikythera_log::{cli_eprint, cli_print};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -73,15 +74,15 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
     match command {
         ConfigCommand::Init => {
             if config_exists() {
-                println!("Configuration already exists at: {}", CONFIG_PATH);
-                println!("Use 'reset' to overwrite.");
+                cli_print!("Configuration already exists at: {}", CONFIG_PATH);
+                cli_print!("Use 'reset' to overwrite.");
                 return Ok(());
             }
             let config = init_default_config()?;
-            println!("✓ Default configuration created at: {}", CONFIG_PATH);
-            println!("  Providers tersedia: {}", config.providers.len());
+            cli_print!("✓ Default configuration created at: {}", CONFIG_PATH);
+            cli_print!("  Providers tersedia: {}", config.providers.len());
             for provider in &config.providers {
-                println!(
+                cli_print!(
                     "  - {} [{}] -> {}",
                     provider.id, provider.provider_type, provider.endpoint
                 );
@@ -92,14 +93,14 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
         ConfigCommand::Show => {
             let config = load_app_config(None)?;
             let json = serde_json::to_string_pretty(&config)?;
-            println!("{}", json);
+            cli_print!("{}", json);
             Ok(())
         }
 
         ConfigCommand::Get { field } => {
             let config = load_app_config(None)?;
             let value = get_field(&config, &field)?;
-            println!("{}", value);
+            cli_print!("{}", value);
             Ok(())
         }
 
@@ -107,7 +108,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             let mut config = load_app_config(None)?;
             set_field(&mut config, &field, &value)?;
             save_app_config(&config, None)?;
-            println!("✓ Set '{}' = '{}'", field, value);
+            cli_print!("✓ Set '{}' = '{}'", field, value);
             Ok(())
         }
 
@@ -136,7 +137,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             });
 
             save_app_config(&config, None)?;
-            println!("✓ Provider '{}' added", id);
+            cli_print!("✓ Provider '{}' added", id);
             Ok(())
         }
 
@@ -149,7 +150,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 Err(CliError::Validation(format!("Provider '{}' not found", id)))
             } else {
                 save_app_config(&config, None)?;
-                println!("✓ Provider '{}' removed", id);
+                cli_print!("✓ Provider '{}' removed", id);
                 Ok(())
             }
         }
@@ -168,7 +169,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             config.model.model = model.clone();
 
             save_app_config(&config, None)?;
-            println!("✓ Default model set: {} / {}", provider, model);
+            cli_print!("✓ Default model set: {} / {}", provider, model);
             Ok(())
         }
 
@@ -176,7 +177,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             let mut config = load_app_config(None)?;
             config.server.bind = address.clone();
             save_app_config(&config, None)?;
-            println!("✓ Bind address set to: {}", address);
+            cli_print!("✓ Bind address set to: {}", address);
             Ok(())
         }
 
@@ -187,9 +188,9 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             match output {
                 Some(path) => {
                     std::fs::write(&path, &json)?;
-                    println!("✓ Exported to: {}", path);
+                    cli_print!("✓ Exported to: {}", path);
                 }
-                None => println!("{}", json),
+                None => cli_print!("{}", json),
             }
             Ok(())
         }
@@ -200,30 +201,30 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             let config: AppConfig = serde_json::from_str(&json)?;
 
             save_app_config(&config, None)?;
-            println!("✓ Imported from: {}", input);
+            cli_print!("✓ Imported from: {}", input);
             Ok(())
         }
 
         ConfigCommand::Reset => {
             init_default_config()?;
-            println!("✓ Configuration reset to defaults");
-            println!("  Path: {}", CONFIG_PATH);
+            cli_print!("✓ Configuration reset to defaults");
+            cli_print!("  Path: {}", CONFIG_PATH);
             Ok(())
         }
 
         ConfigCommand::Status => {
             if config_exists() {
                 let config = load_app_config(None)?;
-                println!("✓ Config exists at: {}", CONFIG_PATH);
-                println!("  Providers: {}", config.providers.len());
-                println!(
+                cli_print!("✓ Config exists at: {}", CONFIG_PATH);
+                cli_print!("  Providers: {}", config.providers.len());
+                cli_print!(
                     "  Default: {}/{}",
                     config.model.default_provider, config.model.model
                 );
-                println!("  Server: {}", config.server.bind);
+                cli_print!("  Server: {}", config.server.bind);
             } else {
-                println!("✗ No config found at: {}", CONFIG_PATH);
-                println!("  Run 'init' to create default config.");
+                cli_print!("✗ No config found at: {}", CONFIG_PATH);
+                cli_print!("  Run 'init' to create default config.");
             }
             Ok(())
         }
@@ -251,7 +252,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 display_name: display_name.clone().unwrap_or_default(),
             });
             save_app_config(&config, None)?;
-            println!("✓ Model '{}' ditambahkan ke provider '{}'", model, provider);
+            cli_print!("✓ Model '{}' ditambahkan ke provider '{}'", model, provider);
             Ok(())
         }
 
@@ -272,7 +273,7 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 )));
             }
             save_app_config(&config, None)?;
-            println!("✓ Model '{}' dihapus dari provider '{}'", model, provider);
+            cli_print!("✓ Model '{}' dihapus dari provider '{}'", model, provider);
             Ok(())
         }
     }
@@ -309,7 +310,7 @@ fn set_field(config: &mut AppConfig, field: &str, value: &str) -> CliResult<()> 
 fn main() {
     let args = ConfigCli::parse();
     if let Err(e) = execute_config_cli(args.command) {
-        eprintln!("Error: {}", e);
+        cli_eprint!("Error: {}", e);
         std::process::exit(1);
     }
 }

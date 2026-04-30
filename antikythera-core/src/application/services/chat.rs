@@ -1,10 +1,10 @@
 use crate::application::agent::{Agent, AgentOptions, AgentStep};
-use crate::application::client::{ChatRequest, McpClient, McpError};
+use crate::application::client::{ChatRequest, McpClient};
 use crate::application::model_provider::ModelProvider;
 use crate::domain::types::MessagePart;
 use serde_json::{Value, json};
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use crate::logging::ChatLogger;
 
 pub struct ChatService<P: ModelProvider> {
     client: Arc<McpClient<P>>,
@@ -68,6 +68,7 @@ impl<P: ModelProvider> ChatService<P> {
         provider: String,
         model: String,
     ) -> Result<ChatServiceOutcome, String> {
+        let log_session = session_id.clone();
         let mut options = AgentOptions {
             system_prompt,
             session_id,
@@ -81,10 +82,7 @@ impl<P: ModelProvider> ChatService<P> {
         let agent_runner = Agent::new(self.client.clone());
         match agent_runner.run_ui_layout(prompt, options).await {
             Ok((outcome, content_json)) => {
-                info!(
-                    session_id = outcome.session_id.as_str(),
-                    "Agent run completed successfully"
-                );
+                ChatLogger::new(&outcome.session_id).info("Agent run completed successfully");
 
                 Ok(self.construct_outcome(
                     debug_mode,
@@ -97,7 +95,8 @@ impl<P: ModelProvider> ChatService<P> {
                 ))
             }
             Err(error) => {
-                error!(%error, "Agent run failed");
+                ChatLogger::new(log_session.as_deref().unwrap_or("tui"))
+                    .error(format!("Agent run failed | error={}", error));
                 Err(error.user_message())
             }
         }
@@ -111,7 +110,8 @@ impl<P: ModelProvider> ChatService<P> {
         session_id: Option<String>,
         debug_mode: bool,
     ) -> Result<ChatServiceOutcome, String> {
-        debug!("Forwarding /chat request to model provider (raw mode)");
+        let log = ChatLogger::new(session_id.as_deref().unwrap_or("tui"));
+        log.debug("Forwarding /chat request to model provider (raw mode)");
         let result = self
             .client
             .chat(ChatRequest {
@@ -127,12 +127,12 @@ impl<P: ModelProvider> ChatService<P> {
 
         match result {
             Ok(result) => {
-                info!(
-                    session_id = result.session_id.as_str(),
-                    provider = result.provider.as_str(),
-                    model = result.model.as_str(),
-                    "Chat request completed successfully"
-                );
+                log.info(format!(
+                    "Chat request completed successfully | session_id={} provider={} model={}",
+                    result.session_id.as_str(),
+                    result.provider.as_str(),
+                    result.model.as_str()
+                ));
 
                 let content = json!(result.content);
 
@@ -146,9 +146,9 @@ impl<P: ModelProvider> ChatService<P> {
                     Vec::new(),
                 ))
             }
-            Err(McpError::Model(error)) => {
-                error!(%error, "Model provider returned an error");
-                Err(error.user_message())
+            Err(error) => {
+                log.error(format!("Model provider returned an error | error={}", error));
+                Err(error.to_string())
             }
         }
     }

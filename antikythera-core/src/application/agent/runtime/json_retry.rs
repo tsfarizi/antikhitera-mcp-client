@@ -8,7 +8,7 @@ use super::{AgentDirective, AgentError, ToolRuntime};
 use crate::application::client::{ChatRequest, McpClient};
 use crate::application::model_provider::ModelProvider;
 use std::sync::Arc;
-use tracing::warn;
+use crate::logging::AgentLogger;
 
 /// Maximum retry attempts for JSON parsing failures.
 pub(crate) const MAX_JSON_RETRIES: u8 = 3;
@@ -31,6 +31,9 @@ impl ToolRuntime {
         logs: &mut Vec<String>,
         session_id: &Option<String>,
     ) -> Result<AgentDirective, AgentError> {
+        let log = AgentLogger::new(
+            session_id.as_deref().unwrap_or(&crate::logging::get_active_session()),
+        );
         let mut retry_count = 0u8;
         let mut current_content = content.to_string();
 
@@ -39,12 +42,10 @@ impl ToolRuntime {
                 Ok(directive) => return Ok(directive),
                 Err(e) if retry_count < MAX_JSON_RETRIES => {
                     retry_count += 1;
-                    warn!(
-                        attempt = retry_count,
-                        max_attempts = MAX_JSON_RETRIES,
-                        error = %e,
-                        "JSON parse failed, requesting correction from model"
-                    );
+                    log.warn(format!(
+                        "JSON parse failed, requesting correction from model | attempt={} max_attempts={} error={}",
+                        retry_count, MAX_JSON_RETRIES, e
+                    ));
                     logs.push(format!(
                         "JSON parse retry attempt {}/{}: {}",
                         retry_count, MAX_JSON_RETRIES, e
@@ -72,7 +73,7 @@ impl ToolRuntime {
                             current_content = retry_result.content;
                         }
                         Err(chat_err) => {
-                            warn!(error = %chat_err, "Retry chat request failed");
+                            log.warn(format!("Retry chat request failed | error={}", chat_err));
                             return Err(AgentError::InvalidResponse(format!(
                                 "Failed to get correction after JSON parse error: {}",
                                 chat_err
@@ -81,10 +82,10 @@ impl ToolRuntime {
                     }
                 }
                 Err(e) => {
-                    warn!(
-                        attempts = retry_count,
-                        "JSON parse failed after max retries"
-                    );
+                    log.warn(format!(
+                        "JSON parse failed after max retries | attempts={}",
+                        retry_count
+                    ));
                     return Err(AgentError::InvalidResponse(format!(
                         "Invalid JSON after {} retry attempts: {}",
                         MAX_JSON_RETRIES, e

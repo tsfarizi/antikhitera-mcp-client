@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use crate::logging::ProviderLogger;
 
 use super::base::HttpClientBase;
 use crate::config::ModelProviderConfig;
@@ -47,15 +47,16 @@ impl ModelClient for OpenAIClient {
             stream: false,
         };
 
-        info!(
-            provider = self.base.id.as_str(),
-            model = request.model.as_str(),
-            messages = request.messages.len(),
-            "Sending request to OpenAI-compatible provider"
-        );
+        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()));
+        log.info(format!(
+            "Sending request to OpenAI-compatible provider | provider={} model={} messages={}",
+            self.base.id.as_str(),
+            request.model.as_str(),
+            request.messages.len()
+        ));
 
         let response: OpenAIResponse = self.base.post_with_bearer(&url, &payload).await?;
-        debug!("Received response from OpenAI-compatible provider");
+        log.debug("Received response from OpenAI-compatible provider");
 
         let content = response
             .choices

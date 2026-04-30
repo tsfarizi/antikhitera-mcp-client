@@ -17,7 +17,7 @@
 
 use super::policy::RetryPolicy;
 use std::future::Future;
-use tracing::warn;
+use crate::logging::ResilienceLogger;
 
 // ── Core executor ─────────────────────────────────────────────────────────────
 
@@ -57,13 +57,10 @@ where
                     return Err(err);
                 }
                 let delay = policy.delay_for_attempt(attempt - 1);
-                warn!(
-                    attempt = attempt,
-                    max = policy.max_attempts,
-                    delay_ms = delay.as_millis(),
-                    error = %err,
-                    "Transient failure — retrying after back-off"
-                );
+                ResilienceLogger::new(&crate::logging::get_active_session()).warn(format!(
+                    "Transient failure — retrying after back-off | attempt={} max={} delay_ms={} error={}",
+                    attempt, policy.max_attempts, delay.as_millis(), err
+                ));
                 tokio::time::sleep(delay).await;
             }
         }

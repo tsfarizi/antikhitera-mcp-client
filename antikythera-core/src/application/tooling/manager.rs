@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tracing::warn;
+use crate::logging::TransportLogger;
 
 /// Unified server instance that wraps either STDIO or HTTP transport.
 enum ServerInstance {
@@ -218,7 +218,10 @@ impl ToolServerInterface for ServerManager {
                 }
             }
             Err(err) => {
-                warn!(server, %err, "Failed to fetch server instructions");
+                TransportLogger::new(server).warn(format!(
+                    "Failed to fetch server instructions | server={} error={}",
+                    server, err
+                ));
                 None
             }
         }
@@ -234,7 +237,10 @@ impl ToolServerInterface for ServerManager {
                 }
             }
             Err(err) => {
-                warn!(server, tool, %err, "Failed to fetch tool metadata");
+                TransportLogger::new(server).warn(format!(
+                    "Failed to fetch tool metadata | server={} tool={} error={}",
+                    server, tool, err
+                ));
                 None
             }
         }

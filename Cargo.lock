@@ -102,6 +102,7 @@ name = "antikythera-cli"
 version = "1.0.3"
 dependencies = [
  "antikythera-core",
+ "antikythera-log",
  "antikythera-sdk",
  "async-trait",
  "base64 0.22.1",

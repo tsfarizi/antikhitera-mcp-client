@@ -25,7 +25,7 @@
 
 use super::types::{DiscoveredServer, DiscoveryError};
 use std::path::Path;
-use tracing::{debug, info, trace, warn};
+use crate::logging::DiscoveryLogger;
 
 /// Scan a folder for MCP server binaries.
 ///
@@ -55,20 +55,21 @@ use tracing::{debug, info, trace, warn};
 /// println!("Found {} servers", servers.len());
 /// ```
 pub fn scan_folder(folder_path: impl AsRef<Path>) -> Result<Vec<DiscoveredServer>, DiscoveryError> {
+    let log = DiscoveryLogger::new("discovery");
     let folder = folder_path.as_ref();
 
-    info!(path = %folder.display(), "Scanning servers folder");
+    log.info(format!("Scanning servers folder | path={}", folder.display()));
 
     // Check if folder exists
     if !folder.exists() {
-        warn!(path = %folder.display(), "Servers folder not found");
+        log.warn(format!("Servers folder not found | path={}", folder.display()));
         return Err(DiscoveryError::FolderNotFound {
             path: folder.to_path_buf(),
         });
     }
 
     if !folder.is_dir() {
-        warn!(path = %folder.display(), "Path is not a directory");
+        log.warn(format!("Path is not a directory | path={}", folder.display()));
         return Err(DiscoveryError::FolderNotFound {
             path: folder.to_path_buf(),
         });
@@ -76,7 +77,7 @@ pub fn scan_folder(folder_path: impl AsRef<Path>) -> Result<Vec<DiscoveredServer
 
     // Read directory contents
     let entries = std::fs::read_dir(folder).map_err(|e| {
-        warn!(path = %folder.display(), error = %e, "Failed to read servers folder");
+        log.warn(format!("Failed to read servers folder | path={} error={}", folder.display(), e));
         DiscoveryError::ReadError { source: e }
     })?;
 
@@ -86,38 +87,38 @@ pub fn scan_folder(folder_path: impl AsRef<Path>) -> Result<Vec<DiscoveredServer
         let entry = match entry {
             Ok(e) => e,
             Err(e) => {
-                warn!(error = %e, "Failed to read directory entry, skipping");
+                log.warn(format!("Failed to read directory entry, skipping | error={}", e));
                 continue;
             }
         };
 
         let path = entry.path();
-        trace!(path = %path.display(), "Checking file");
+        log.debug(format!("Checking file | path={}", path.display()));
 
         // Skip directories
         if path.is_dir() {
-            trace!(path = %path.display(), "Skipping directory");
+            log.debug(format!("Skipping directory | path={}", path.display()));
             continue;
         }
 
         // Check if file is executable
         if !is_executable(&path) {
-            trace!(path = %path.display(), "Skipping non-executable file");
+            log.debug(format!("Skipping non-executable file | path={}", path.display()));
             continue;
         }
 
         // Extract server name from filename
         let name = extract_server_name(&path);
-        debug!(name = %name, path = %path.display(), "Found MCP server binary");
+        log.debug(format!("Found MCP server binary | name={} path={}", name, path.display()));
 
         servers.push(DiscoveredServer::new(name, path));
     }
 
-    info!(
-        count = servers.len(),
-        path = %folder.display(),
-        "Server scan complete"
-    );
+    log.info(format!(
+        "Server scan complete | count={} path={}",
+        servers.len(),
+        folder.display()
+    ));
 
     Ok(servers)
 }

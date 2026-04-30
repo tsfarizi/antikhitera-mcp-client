@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 #[cfg(feature = "native-transport")]
 use sysinfo::System;
-use tracing::{debug, info, warn};
+use crate::logging::AgentLogger;
 
 pub struct Agent<P: ModelProvider> {
     client: Arc<McpClient<P>>,
@@ -36,7 +36,10 @@ impl<P: ModelProvider> Agent<P> {
         prompt: String,
         mut options: AgentOptions,
     ) -> Result<AgentOutcome, AgentError> {
-        info!("Agent run started");
+        let log = AgentLogger::new(
+            options.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()),
+        );
+        log.info("Agent run started");
         let mut session_id = options.session_id.clone();
         let mut steps = Vec::new();
         let mut logs = Vec::new();
@@ -77,17 +80,17 @@ impl<P: ModelProvider> Agent<P> {
                 let rss_mb = system.used_memory() / 1024 / 1024;
                 let cpu = system.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>()
                     / system.cpus().len().max(1) as f32;
-                debug!(
-                    rss_mb = rss_mb,
-                    cpu_usage = cpu,
-                    "Agent resource utilization"
-                );
+                log.debug(format!(
+                    "Agent resource utilization | rss_mb={} cpu_usage={}",
+                    rss_mb, cpu
+                ));
             }
 
-            debug!(
-                session = session_id.as_deref(),
-                remaining_steps, "Submitting agent turn to model provider"
-            );
+            log.debug(format!(
+                "Submitting agent turn to model provider | session={:?} remaining_steps={}",
+                session_id.as_deref(),
+                remaining_steps
+            ));
             let request = ChatRequest {
                 prompt: next_prompt.clone(),
                 attachments: if first_call {
@@ -119,10 +122,10 @@ impl<P: ModelProvider> Agent<P> {
 
             match directive {
                 AgentDirective::Final { response } => {
-                    info!(
-                        session_id = result.session_id.as_str(),
-                        "Agent returned final response"
-                    );
+                    log.info(format!(
+                        "Agent returned final response | session_id={}",
+                        result.session_id.as_str()
+                    ));
                     return Ok(AgentOutcome {
                         logs,
                         session_id: result.session_id,
@@ -132,13 +135,13 @@ impl<P: ModelProvider> Agent<P> {
                 }
                 AgentDirective::CallTool { tool, input } => {
                     if remaining_steps == 0 {
-                        warn!("Agent exceeded max tool interactions");
+                        log.warn("Agent exceeded max tool interactions");
                         return Err(AgentError::InvalidResponse(
                             self.client.prompts().agent_max_steps_error().into(),
                         ));
                     }
                     remaining_steps -= 1;
-                    info!(tool = %tool, "Agent requested tool execution");
+                    log.info(format!("Agent requested tool execution | tool={}", tool));
                     let execution = self.runtime.execute(&tool, input).await?;
                     logs.push(format!(
                         "Tool '{}' executed (success: {})",
@@ -176,16 +179,16 @@ impl<P: ModelProvider> Agent<P> {
                 }
                 AgentDirective::CallTools(tools) => {
                     if remaining_steps == 0 {
-                        warn!("Agent exceeded max tool interactions");
+                        log.warn("Agent exceeded max tool interactions");
                         return Err(AgentError::InvalidResponse(
                             self.client.prompts().agent_max_steps_error().into(),
                         ));
                     }
                     remaining_steps -= 1;
-                    info!(
-                        count = tools.len(),
-                        "Agent requested parallel tool execution"
-                    );
+                    log.info(format!(
+                        "Agent requested parallel tool execution | count={}",
+                        tools.len()
+                    ));
 
                     let executions = self.runtime.clone().execute_parallel(tools).await?;
                     let mut aggregated_results = Vec::new();
@@ -221,7 +224,7 @@ impl<P: ModelProvider> Agent<P> {
                                 }));
                             }
                             Err(e) => {
-                                warn!("One of the parallel tools failed: {}", e);
+                                log.warn(format!("One of the parallel tools failed: {}", e));
                                 logs.push(format!("Parallel tool failure: {}", e));
                             }
                         }

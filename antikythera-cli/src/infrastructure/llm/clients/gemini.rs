@@ -13,7 +13,7 @@ use antikythera_core::infrastructure::model::types::{ModelError, ModelRequest, M
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
-use tracing::{debug, info};
+use antikythera_core::ProviderLogger;
 
 use super::super::adapter::MessageAdapter;
 use super::super::factory::resolve_api_key;
@@ -65,15 +65,16 @@ impl ModelClient for GeminiClient {
             payload["generationConfig"] = json!({ "responseMimeType": "application/json" });
         }
 
-        info!(
-            provider = self.base.id.as_str(),
-            model = request.model.as_str(),
-            messages = request.messages.len(),
-            "Sending request to Gemini"
-        );
+        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&antikythera_core::get_active_session()));
+        log.info(format!(
+            "Sending request to Gemini | provider={} model={} messages={}",
+            self.base.id.as_str(),
+            request.model.as_str(),
+            request.messages.len()
+        ));
 
         let response: GeminiResponse = self.base.post_with_query_key(&url, &payload).await?;
-        debug!("Received response from Gemini");
+        log.debug("Received response from Gemini");
 
         let content = response
             .candidates

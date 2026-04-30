@@ -1,9 +1,10 @@
 use super::{AgentDirective, AgentError, ToolRuntime, Value};
 use std::time::Instant;
-use tracing::{debug, warn};
+use crate::logging::AgentLogger;
 
 impl ToolRuntime {
     pub fn parse_agent_action(&self, content: &str) -> Result<AgentDirective, AgentError> {
+        let log = AgentLogger::new(&crate::logging::get_active_session());
         let start_time = Instant::now();
         let result = if let Some(value) = extract_json(content) {
             self.parse_action_value(value)
@@ -13,11 +14,12 @@ impl ToolRuntime {
             ))
         };
         let elapsed = start_time.elapsed();
-        debug!(latency_us = ?elapsed.as_micros(), "Action parsing completed");
+        log.debug(format!("Action parsing completed | latency_us={:?}", elapsed.as_micros()));
         result
     }
 
     fn parse_action_value(&self, value: Value) -> Result<AgentDirective, AgentError> {
+        let log = AgentLogger::new(&crate::logging::get_active_session());
         match value {
             Value::Object(map) => {
                 if let Some(action) = map.get("action").and_then(Value::as_str) {
@@ -58,10 +60,10 @@ impl ToolRuntime {
                                 .iter()
                                 .find_map(|k| map.get(k.as_str()).cloned())
                                 .unwrap_or_else(|| Value::Object(map.clone()));
-                            warn!(
-                                action = other,
-                                "Unknown action value — treating as final response"
-                            );
+                            log.warn(format!(
+                                "Unknown action value — treating as final response | action={}",
+                                other
+                            ));
                             Ok(AgentDirective::Final { response })
                         }
                     }
@@ -74,7 +76,7 @@ impl ToolRuntime {
                         .find_map(|k| map.get(k.as_str()).cloned());
 
                     if let Some(r) = response {
-                        warn!("No action field in agent response — treating as final response");
+                        log.warn("No action field in agent response — treating as final response");
                         Ok(AgentDirective::Final { response: r })
                     } else {
                         Err(AgentError::InvalidResponse(

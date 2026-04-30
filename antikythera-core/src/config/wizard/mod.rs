@@ -94,9 +94,9 @@ pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
 pub async fn run_setup_menu() -> Result<bool, Box<dyn Error>> {
     loop {
         ui::print_header("Setup Menu");
-        println!("  [1] Manage Providers");
-        println!("  [2] Manage Prompt Template");
-        println!("  [0] Back\n");
+        antikythera_log::cli_print!("  [1] Manage Providers");
+        antikythera_log::cli_print!("  [2] Manage Prompt Template");
+        antikythera_log::cli_print!("  [0] Back\n");
 
         let choice = prompts::prompt_text("Select option", None)?;
 
@@ -127,7 +127,7 @@ async fn manage_providers() -> Result<(), Box<dyn Error>> {
         } else {
             ""
         };
-        println!(
+        antikythera_log::cli_print!(
             "  [{}] {} ({}) - {}{}",
             i + 1,
             provider.id,
@@ -137,11 +137,11 @@ async fn manage_providers() -> Result<(), Box<dyn Error>> {
         );
     }
     ui::print_hint(&format!("Default: {}", config.model.default_provider));
-    println!();
+    antikythera_log::cli_print!();
 
-    println!("  [1] Edit Provider");
-    println!("  [2] Set Default Provider");
-    println!("  [0] Back\n");
+    antikythera_log::cli_print!("  [1] Edit Provider");
+    antikythera_log::cli_print!("  [2] Set Default Provider");
+    antikythera_log::cli_print!("  [0] Back\n");
 
     let choice = prompts::prompt_text("Select action", None)?;
 
@@ -197,17 +197,17 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
     ui::print_divider();
     let template = &config.prompts.template;
     let preview: String = template.lines().take(10).collect::<Vec<&str>>().join("\n");
-    println!("{}", preview);
+    antikythera_log::cli_print!("{}", preview);
     if template.lines().count() > 10 {
-        println!("  ... (truncated)");
+        antikythera_log::cli_print!("  ... (truncated)");
     }
 
     ui::print_divider();
-    println!();
+    antikythera_log::cli_print!();
 
-    println!("  [1] Replace with default template");
-    println!("  [2] Enter new template");
-    println!("  [0] Cancel\n");
+    antikythera_log::cli_print!("  [1] Replace with default template");
+    antikythera_log::cli_print!("  [2] Enter new template");
+    antikythera_log::cli_print!("  [0] Cancel\n");
 
     let choice = prompts::prompt_text("Select option", None)?;
 

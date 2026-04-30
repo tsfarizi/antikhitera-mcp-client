@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
-use tracing::{debug, info};
+use crate::logging::AgentLogger;
 
 use super::{ServerGuidance, ToolContext, ToolDescriptor, ToolRuntime};
 use crate::domain::sanitize::sanitize_for_toml;
 
 impl ToolRuntime {
     pub async fn build_context(&self, input: Option<&str>) -> ToolContext {
+        let log = AgentLogger::new(&crate::logging::get_active_session());
         let start_time = Instant::now();
         if self.configs.is_empty() {
             return ToolContext::default();
@@ -102,16 +103,16 @@ impl ToolRuntime {
                     pruned_tools.push(context.tools[idx].clone());
                 }
             }
-            debug!(
-                original_count = context.tools.len(),
-                pruned_count = pruned_tools.len(),
-                "JIT Context Injection applied"
-            );
+            log.debug(format!(
+                "JIT Context Injection applied | original_count={} pruned_count={}",
+                context.tools.len(),
+                pruned_tools.len()
+            ));
             context.tools = pruned_tools;
         }
 
         let elapsed = start_time.elapsed();
-        info!(latency_ms = ?elapsed.as_millis(), "Context selection and injection completed");
+        log.info(format!("Context selection and injection completed | latency_ms={:?}", elapsed.as_millis()));
 
         context
     }
