@@ -46,7 +46,7 @@ pub struct AgentStateSnapshot {
     /// Serialized FSM state
     pub fsm_state: String,
     /// Conversation history
-    pub history: Vec<ConversationTurn>,
+    pub history: Vec<antikythera_session::Message>,
     /// Tool execution cache
     pub tool_cache: HashMap<String, serde_json::Value>,
     /// Context variables
@@ -55,23 +55,6 @@ pub struct AgentStateSnapshot {
     pub timestamp: i64,
     /// Execution metadata
     pub metadata: StateMetadata,
-}
-
-/// Single conversation turn
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConversationTurn {
-    pub role: String,
-    pub content: String,
-    pub timestamp: i64,
-    pub attachments: Vec<Attachment>,
-}
-
-/// Attachment in conversation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Attachment {
-    pub mime_type: String,
-    pub data: String,
-    pub name: Option<String>,
 }
 
 /// Execution metadata

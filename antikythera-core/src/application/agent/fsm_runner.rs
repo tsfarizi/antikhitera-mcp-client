@@ -12,7 +12,7 @@
 
 use super::directive::AgentDirective;
 use super::errors::AgentError;
-use super::memory::{AgentStateSnapshot, ConversationTurn, MemoryProvider};
+use super::memory::{AgentStateSnapshot, MemoryProvider};
 use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use super::runtime::json_retry::MAX_JSON_RETRIES;
@@ -687,12 +687,7 @@ impl<P: ModelProvider> FsmAgent<P> {
         snapshot.fsm_state = state_name.to_string();
         snapshot.history = logs
             .iter()
-            .map(|log| ConversationTurn {
-                role: "system".into(),
-                content: log.clone(),
-                timestamp: chrono::Utc::now().timestamp(),
-                attachments: Vec::new(),
-            })
+            .map(|log| antikythera_session::Message::system(log.clone()))
             .collect();
         snapshot.metadata.steps_executed = steps.len() as u32;
 
@@ -713,12 +708,7 @@ impl<P: ModelProvider> FsmAgent<P> {
         snapshot.history = outcome
             .logs
             .iter()
-            .map(|log| ConversationTurn {
-                role: "system".into(),
-                content: log.clone(),
-                timestamp: chrono::Utc::now().timestamp(),
-                attachments: Vec::new(),
-            })
+            .map(|log| antikythera_session::Message::system(log.clone()))
             .collect();
         snapshot.metadata.steps_executed = outcome.steps.len() as u32;
 

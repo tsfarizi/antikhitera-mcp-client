@@ -37,8 +37,7 @@ pub use context::{ServerGuidance, ToolContext, ToolDescriptor};
 pub use errors::{AgentError, ToolError};
 pub use fsm_runner::FsmAgent;
 pub use memory::{
-    AgentStateSnapshot, Attachment, ConversationTurn, MemoryError, MemoryProvider,
-    STATE_SCHEMA_VERSION, StateMetadata,
+    AgentStateSnapshot, MemoryError, MemoryProvider, STATE_SCHEMA_VERSION, StateMetadata,
 };
 pub use models::{AgentOptions, AgentOutcome, AgentStep};
 pub use runner::Agent;
