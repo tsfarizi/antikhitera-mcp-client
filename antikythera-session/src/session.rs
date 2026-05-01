@@ -176,9 +176,7 @@ impl<'de> serde::Deserialize<'de> for MessagePart {
             let bin_part = BinaryPart::deserialize(deserializer)?;
             match bin_part {
                 BinaryPart::Text { text } => Ok(MessagePart::Text { text }),
-                BinaryPart::Image { mime_type, data } => {
-                    Ok(MessagePart::Image { mime_type, data })
-                }
+                BinaryPart::Image { mime_type, data } => Ok(MessagePart::Image { mime_type, data }),
                 BinaryPart::File {
                     name,
                     mime_type,
@@ -192,7 +190,6 @@ impl<'de> serde::Deserialize<'de> for MessagePart {
         }
     }
 }
-
 
 impl MessagePart {
     pub fn text(content: impl Into<String>) -> Self {
