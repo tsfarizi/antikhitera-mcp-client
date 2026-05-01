@@ -44,6 +44,7 @@ tasks:
         echo "  task check         - Check code without building"
         echo "  task check-wasm    - Check WASM compilation"
         echo "  task test          - Run all tests"
+        echo "  task test-scenario - Run hands-on CLI scenario test (real LLM)"
         echo "  task test-cli-wasm-host - Run CLI host-FFI WASM smoke test"
         echo "  task test-sdk      - Run SDK tests"
         echo "  task test-ffi      - Run FFI tests"
@@ -200,6 +201,15 @@ tasks:
       - cargo test -p antikythera-sdk --lib component
       - echo ""
       - echo "✓ Component tests passed"
+
+  test-scenario:
+    desc: Run hands-on CLI scenario test (real LLM, auto-detects provider from env)
+    cmds:
+      - echo "Running CLI scenario test..."
+      - echo "  Provider resolved via GEMINI_API_KEY / OPENAI_API_KEY / Ollama fallback"
+      - cargo test -p antikythera-cli --test scenario -- --nocapture
+      - echo ""
+      - echo "✓ Scenario test passed — hasil di scenario.txt"
 
   # ===========================================================================
   # Check Tasks

@@ -15,7 +15,7 @@ fn test_rapid_sequential_logging() {
     let per_second = (100_000.0 / elapsed.as_secs_f64()) as u64;
     
     assert_eq!(logger.len(), 100_000);
-    println!("Logged 100k messages in {:?} ({} msg/sec)", elapsed, per_second);
+    cli_print!("Logged 100k messages in {:?} ({} msg/sec)", elapsed, per_second);
     
     // Should complete in reasonable time (adjust threshold as needed)
     assert!(elapsed.as_secs() < 10, "Logging too slow: {:?}", elapsed);
@@ -34,7 +34,7 @@ fn test_large_batch_retrieval() {
     let elapsed = start.elapsed();
     
     assert_eq!(batch.entries.len(), 10_000);
-    println!("Retrieved 10k entries in {:?}", elapsed);
+    cli_print!("Retrieved 10k entries in {:?}", elapsed);
     assert!(elapsed.as_millis() < 1000, "Retrieval too slow");
 }
 
@@ -58,7 +58,7 @@ fn test_filter_performance() {
     let elapsed = start.elapsed();
     
     assert!(!batch.entries.is_empty());
-    println!("Filtered 50k entries in {:?}", elapsed);
+    cli_print!("Filtered 50k entries in {:?}", elapsed);
     assert!(elapsed.as_millis() < 500, "Filter too slow");
 }
 
@@ -79,7 +79,7 @@ fn test_json_serialization_performance() {
     let elapsed = start.elapsed();
     
     assert!(!json.is_empty());
-    println!("Serialized 10k entries to JSON in {:?}", elapsed);
+    cli_print!("Serialized 10k entries to JSON in {:?}", elapsed);
     assert!(elapsed.as_millis() < 2000, "JSON serialization too slow");
 }
 

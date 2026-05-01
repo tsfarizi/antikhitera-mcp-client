@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use antikythera_sdk::StreamEventKind;
 
+use crate::domain::use_cases::mcp_time_tool::{dispatch_mcp_tool, mcp_time_tool_definition};
 use crate::error::{CliError, CliResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,7 +89,8 @@ pub fn run_wasm_stream_probe(
                     "required": true
                 }
             ]
-        }
+        },
+        mcp_time_tool_definition()
     ])
     .to_string();
 
@@ -209,6 +211,14 @@ pub fn run_wasm_stream_probe(
     validate_tool_call(&registry, "echo", &serde_json::json!({"text": "probe"}))
         .map_err(|e| CliError::Validation(e.to_string()))?;
     capability_probes.insert("tool_call_validation".to_string(), serde_json::json!("ok"));
+
+    // Probe: CLI host mengeksekusi mcp_get_current_time atas nama WASM agent.
+    // Ini mensimulasikan aliran: WASM call_tool → CLI host dispatch → hasil ke WASM.
+    ffi_calls.push("host_dispatch:mcp_get_current_time".to_string());
+    let time_output = dispatch_mcp_tool("mcp_get_current_time", &serde_json::json!({}))?;
+    let time_value: serde_json::Value =
+        serde_json::from_str(&time_output).map_err(CliError::Serialization)?;
+    capability_probes.insert("mcp_get_current_time".to_string(), time_value);
 
     ffi_calls.push("sweep_idle_sessions".to_string());
     let swept_sessions = sweep_idle_sessions(None).map_err(map_ffi_err("sweep_idle_sessions"))?;

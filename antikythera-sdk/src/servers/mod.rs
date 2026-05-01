@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
 // ============================================================================
 // Types
@@ -94,8 +94,15 @@ impl McpServerConfig {
         if self.name.is_empty() {
             errors.push("Server name cannot be empty".to_string());
         }
-        if !self.name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-            errors.push("Server name can only contain alphanumeric characters, hyphens, and underscores".to_string());
+        if !self
+            .name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            errors.push(
+                "Server name can only contain alphanumeric characters, hyphens, and underscores"
+                    .to_string(),
+            );
         }
 
         // Command validation
@@ -104,17 +111,21 @@ impl McpServerConfig {
         }
 
         // HTTP/SSE URL validation
-        if matches!(self.transport, ServerTransport::Http | ServerTransport::Sse) {
-            if !self.command.starts_with("http://") && !self.command.starts_with("https://") {
-                errors.push("HTTP/SSE servers require a valid URL starting with http:// or https://".to_string());
-            }
+        if matches!(self.transport, ServerTransport::Http | ServerTransport::Sse)
+            && !self.command.starts_with("http://")
+            && !self.command.starts_with("https://")
+        {
+            errors.push(
+                "HTTP/SSE servers require a valid URL starting with http:// or https://"
+                    .to_string(),
+            );
         }
 
         // Timeout validation
-        if let Some(timeout) = self.timeout_ms {
-            if timeout == 0 {
-                errors.push("Timeout must be greater than 0".to_string());
-            }
+        if let Some(timeout) = self.timeout_ms
+            && timeout == 0
+        {
+            errors.push("Timeout must be greater than 0".to_string());
         }
 
         ServerValidationResult {
@@ -130,7 +141,8 @@ impl McpServerConfig {
 // ============================================================================
 
 /// Global server registry
-static SERVERS: LazyLock<Mutex<HashMap<String, McpServerConfig>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static SERVERS: LazyLock<Mutex<HashMap<String, McpServerConfig>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Get mutable access to server registry (for tests)
 #[allow(dead_code)]
@@ -175,7 +187,12 @@ fn serialize_result<T: serde::Serialize>(result: &T) -> *mut c_char {
 pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
-        Err(e) => return to_c_string(&format!(r#"{{"valid":false,"errors":["{}"],"server_name":""}}"#, e)),
+        Err(e) => {
+            return to_c_string(&format!(
+                r#"{{"valid":false,"errors":["{}"],"server_name":""}}"#,
+                e
+            ));
+        }
     };
 
     let config: McpServerConfig = match serde_json::from_str(&json_str) {
@@ -226,12 +243,14 @@ pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
 pub fn mcp_remove_server(name: *const c_char) -> *mut c_char {
     let name_str = match from_c_string(name) {
         Ok(s) => s,
-        Err(e) => return serialize_result(&ServerOperationResult {
-            success: false,
-            error_message: Some(e),
-            server_name: String::new(),
-            tools_affected: 0,
-        }),
+        Err(e) => {
+            return serialize_result(&ServerOperationResult {
+                success: false,
+                error_message: Some(e),
+                server_name: String::new(),
+                tools_affected: 0,
+            });
+        }
     };
 
     match SERVERS.lock() {
@@ -284,7 +303,10 @@ pub fn mcp_get_server(name: *const c_char) -> *mut c_char {
             if let Some(config) = servers.get(&name_str) {
                 serialize_result(config)
             } else {
-                to_c_string(&format!(r#"{{"error": "Server '{}' not found"}}"#, name_str))
+                to_c_string(&format!(
+                    r#"{{"error": "Server '{}' not found"}}"#,
+                    name_str
+                ))
             }
         }
         Err(e) => to_c_string(&format!(r#"{{"error": "{}"}}"#, e)),
@@ -295,20 +317,24 @@ pub fn mcp_get_server(name: *const c_char) -> *mut c_char {
 pub fn mcp_validate_server(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
-        Err(e) => return serialize_result(&ServerValidationResult {
-            valid: false,
-            errors: vec![format!("Invalid JSON: {}", e)],
-            server_name: String::new(),
-        }),
+        Err(e) => {
+            return serialize_result(&ServerValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {}", e)],
+                server_name: String::new(),
+            });
+        }
     };
 
     let config: McpServerConfig = match serde_json::from_str(&json_str) {
         Ok(c) => c,
-        Err(e) => return serialize_result(&ServerValidationResult {
-            valid: false,
-            errors: vec![format!("Invalid JSON: {}", e)],
-            server_name: String::new(),
-        }),
+        Err(e) => {
+            return serialize_result(&ServerValidationResult {
+                valid: false,
+                errors: vec![format!("Invalid JSON: {}", e)],
+                server_name: String::new(),
+            });
+        }
     };
 
     serialize_result(&config.validate())
@@ -329,22 +355,26 @@ pub fn mcp_export_servers_config() -> *mut c_char {
 pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
-        Err(e) => return serialize_result(&ServerOperationResult {
-            success: false,
-            error_message: Some(e),
-            server_name: "import".to_string(),
-            tools_affected: 0,
-        }),
+        Err(e) => {
+            return serialize_result(&ServerOperationResult {
+                success: false,
+                error_message: Some(e),
+                server_name: "import".to_string(),
+                tools_affected: 0,
+            });
+        }
     };
 
     let configs: Vec<McpServerConfig> = match serde_json::from_str(&json_str) {
         Ok(c) => c,
-        Err(e) => return serialize_result(&ServerOperationResult {
-            success: false,
-            error_message: Some(format!("Invalid JSON: {}", e)),
-            server_name: "import".to_string(),
-            tools_affected: 0,
-        }),
+        Err(e) => {
+            return serialize_result(&ServerOperationResult {
+                success: false,
+                error_message: Some(format!("Invalid JSON: {}", e)),
+                server_name: "import".to_string(),
+                tools_affected: 0,
+            });
+        }
     };
 
     let count = configs.len();
@@ -369,4 +399,3 @@ pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
         }),
     }
 }
-

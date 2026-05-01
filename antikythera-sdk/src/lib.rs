@@ -172,6 +172,15 @@ pub use sdk_logging::{
     subscribe_sdk_logs,
 };
 
+/// Server Management feature slice (Config, Validation, FFI)
+pub mod servers;
+
+#[cfg(feature = "sdk-core")]
+pub use servers::{
+    mcp_add_server, mcp_export_servers_config, mcp_get_server, mcp_import_servers_config,
+    mcp_list_servers, mcp_remove_server, mcp_validate_server,
+};
+
 /// Security FFI module (validation, rate limiting, secrets management)
 #[cfg(feature = "sdk-core")]
 pub mod security_ffi;
