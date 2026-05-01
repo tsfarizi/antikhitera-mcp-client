@@ -2,11 +2,11 @@
 //!
 //! Handles sending JSON-RPC requests and notifications.
 
+use crate::logging::TransportLogger;
 use reqwest::Client;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use crate::logging::TransportLogger;
 
 use crate::application::tooling::error::ToolInvokeError;
 

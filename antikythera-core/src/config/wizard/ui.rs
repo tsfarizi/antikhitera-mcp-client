@@ -41,7 +41,8 @@ pub fn print_section(title: &str) {
 pub fn print_divider() {
     antikythera_log::cli_print!(
         "{}─────────────────────────────────────────────{}",
-        DIM, RESET
+        DIM,
+        RESET
     );
 }
 

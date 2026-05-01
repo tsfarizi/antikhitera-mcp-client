@@ -1,6 +1,6 @@
+use crate::logging::AgentLogger;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
-use crate::logging::AgentLogger;
 
 use super::{ServerGuidance, ToolContext, ToolDescriptor, ToolRuntime};
 use crate::domain::sanitize::sanitize_for_toml;
@@ -112,7 +112,10 @@ impl ToolRuntime {
         }
 
         let elapsed = start_time.elapsed();
-        log.info(format!("Context selection and injection completed | latency_ms={:?}", elapsed.as_millis()));
+        log.info(format!(
+            "Context selection and injection completed | latency_ms={:?}",
+            elapsed.as_millis()
+        ));
 
         context
     }

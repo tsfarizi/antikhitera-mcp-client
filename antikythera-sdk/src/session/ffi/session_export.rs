@@ -60,11 +60,13 @@ pub fn mcp_session_import(export_data: *const c_char) -> *mut c_char {
     match SessionExport::from_postcard(&data) {
         Ok(export) => {
             let session_id = export.session.id.clone();
-            // Note: In real implementation, would add to manager here
-            success_with(&[
-                ("session_id", serde_json::json!(session_id)),
-                ("imported", serde_json::json!(true)),
-            ])
+            match SESSION_MANAGER.import_session(export.into_session()) {
+                Ok(()) => success_with(&[
+                    ("session_id", serde_json::json!(session_id)),
+                    ("imported", serde_json::json!(true)),
+                ]),
+                Err(e) => error_response(&e),
+            }
         }
         Err(e) => error_response(&e),
     }
@@ -112,10 +114,17 @@ pub fn mcp_batch_import(export_data: *const c_char) -> *mut c_char {
     };
 
     match BatchExport::from_postcard(&data) {
-        Ok(batch) => success_with(&[
-            ("session_count", serde_json::json!(batch.session_count())),
-            ("imported", serde_json::json!(true)),
-        ]),
+        Ok(batch) => {
+            let session_count = batch.session_count();
+            match SESSION_MANAGER.import_sessions(batch.into_sessions()) {
+                Ok(imported) => success_with(&[
+                    ("session_count", serde_json::json!(session_count)),
+                    ("imported_count", serde_json::json!(imported)),
+                    ("imported", serde_json::json!(true)),
+                ]),
+                Err(e) => error_response(&e),
+            }
+        }
         Err(e) => error_response(&e),
     }
 }

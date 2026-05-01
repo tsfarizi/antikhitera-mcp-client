@@ -16,8 +16,8 @@
 //! ```
 
 use super::policy::RetryPolicy;
-use std::future::Future;
 use crate::logging::ResilienceLogger;
+use std::future::Future;
 
 // ── Core executor ─────────────────────────────────────────────────────────────
 

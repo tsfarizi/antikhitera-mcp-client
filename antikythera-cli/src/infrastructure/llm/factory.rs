@@ -11,8 +11,8 @@
 use antikythera_core::infrastructure::model::traits::ModelClient;
 
 use super::types::ModelProviderConfig;
-use std::env;
 use antikythera_core::ProviderLogger;
+use std::env;
 
 use super::clients::{GeminiClient, OllamaClient, OpenAIClient};
 

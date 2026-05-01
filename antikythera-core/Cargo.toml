@@ -57,6 +57,7 @@ async-trait.workspace = true
 
 # Logging
 antikythera-log = { path = "../antikythera-log", version = "1.0.0", features = ["subscriber"] }
+antikythera-session = { path = "../antikythera-session", version = "1.0.0" }
 
 # HTTP and networking
 reqwest.workspace = true

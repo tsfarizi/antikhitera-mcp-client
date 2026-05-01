@@ -8,12 +8,12 @@
 use antikythera_core::constants::DEFAULT_GEMINI_API_PATH;
 
 use super::super::types::ModelProviderConfig;
+use antikythera_core::ProviderLogger;
 use antikythera_core::infrastructure::model::traits::ModelClient;
 use antikythera_core::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
-use antikythera_core::ProviderLogger;
 
 use super::super::adapter::MessageAdapter;
 use super::super::factory::resolve_api_key;
@@ -65,7 +65,12 @@ impl ModelClient for GeminiClient {
             payload["generationConfig"] = json!({ "responseMimeType": "application/json" });
         }
 
-        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&antikythera_core::get_active_session()));
+        let log = ProviderLogger::new(
+            request
+                .session_id
+                .as_deref()
+                .unwrap_or(&antikythera_core::get_active_session()),
+        );
         log.info(format!(
             "Sending request to Gemini | provider={} model={} messages={}",
             self.base.id.as_str(),

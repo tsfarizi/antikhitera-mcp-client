@@ -91,21 +91,25 @@ pub(crate) fn emit_stream_event(event: StreamEvent) {
             provider_id,
             session_id,
         } => {
-            antikythera_core::StreamingLogger::new(session_id.as_deref().unwrap_or("tui")).info(format!(
-                "Stream started | provider={} session={}",
-                provider_id.as_str(),
-                session_id.as_deref().unwrap_or("-")
-            ));
+            antikythera_core::StreamingLogger::new(session_id.as_deref().unwrap_or("tui")).info(
+                format!(
+                    "Stream started | provider={} session={}",
+                    provider_id.as_str(),
+                    session_id.as_deref().unwrap_or("-")
+                ),
+            );
         }
         StreamEvent::Completed {
             provider_id,
             session_id,
         } => {
-            antikythera_core::StreamingLogger::new(session_id.as_deref().unwrap_or("tui")).info(format!(
-                "Stream completed | provider={} session={}",
-                provider_id.as_str(),
-                session_id.as_deref().unwrap_or("-")
-            ));
+            antikythera_core::StreamingLogger::new(session_id.as_deref().unwrap_or("tui")).info(
+                format!(
+                    "Stream completed | provider={} session={}",
+                    provider_id.as_str(),
+                    session_id.as_deref().unwrap_or("-")
+                ),
+            );
         }
         StreamEvent::Chunk { .. } => {}
     }

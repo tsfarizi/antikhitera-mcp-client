@@ -76,6 +76,14 @@ impl SdkSessionManager {
     pub fn clear_session(&self, session_id: &str) -> Result<(), String> {
         self.inner.clear_session(session_id)
     }
+
+    pub fn import_session(&self, session: Session) -> Result<(), String> {
+        self.inner.import_session(session)
+    }
+
+    pub fn import_sessions(&self, sessions: Vec<Session>) -> Result<usize, String> {
+        self.inner.import_sessions(sessions)
+    }
 }
 
 impl Default for SdkSessionManager {

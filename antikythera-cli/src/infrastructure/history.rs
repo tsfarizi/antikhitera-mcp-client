@@ -20,6 +20,7 @@
 //! | Update    | `rename_session(id, new_title)`                 |
 //! | Delete    | `delete_session(id)`                            |
 
+use antikythera_session::{Message, MessageRole, Session};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -89,6 +90,92 @@ impl ChatHistorySession {
             turns: Vec::new(),
         }
     }
+
+    fn to_session(&self) -> Session {
+        let metadata = SessionMetadata {
+            agent_mode: self.agent_mode,
+            core_session_id: self.core_session_id.clone(),
+        };
+
+        let mut session = Session::new("cli-debug", self.model.clone());
+        session.id = self.id.clone();
+        session.model = self.model.clone();
+        session.title = (!self.title.is_empty()).then_some(self.title.clone());
+        session.created_at = self.created_at.clone();
+        session.updated_at = self.updated_at.clone();
+        session.metadata = serde_json::to_string(&metadata).ok();
+        session.messages = self.turns.iter().map(turn_to_message).collect();
+        session.total_steps = self.turns.iter().map(|turn| turn.tool_steps as u32).sum();
+        session
+    }
+
+    fn from_session(session: Session) -> Self {
+        let metadata = session
+            .metadata
+            .as_deref()
+            .and_then(|raw| serde_json::from_str::<SessionMetadata>(raw).ok())
+            .unwrap_or_default();
+
+        Self {
+            id: session.id,
+            created_at: session.created_at,
+            updated_at: session.updated_at,
+            title: session.title.unwrap_or_default(),
+            provider: session.user_id,
+            model: session.model,
+            agent_mode: metadata.agent_mode,
+            core_session_id: metadata.core_session_id,
+            turns: session
+                .messages
+                .into_iter()
+                .filter_map(message_to_turn)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct SessionMetadata {
+    #[serde(default)]
+    agent_mode: bool,
+    #[serde(default)]
+    core_session_id: Option<String>,
+}
+
+fn turn_to_message(turn: &ChatTurn) -> Message {
+    let base = match turn.role {
+        TurnRole::User => Message::user(turn.content.clone()),
+        TurnRole::Assistant => Message::assistant(turn.content.clone()),
+    };
+
+    let metadata = serde_json::json!({ "tool_steps": turn.tool_steps }).to_string();
+    Message {
+        timestamp: turn.timestamp.clone(),
+        metadata: Some(metadata),
+        ..base
+    }
+}
+
+fn message_to_turn(message: Message) -> Option<ChatTurn> {
+    let role = match message.role {
+        MessageRole::User => TurnRole::User,
+        MessageRole::Assistant => TurnRole::Assistant,
+        MessageRole::System | MessageRole::ToolResult => return None,
+    };
+
+    let tool_steps = message
+        .metadata
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .and_then(|value| value.get("tool_steps").and_then(|v| v.as_u64()))
+        .unwrap_or(0) as usize;
+
+    Some(ChatTurn {
+        timestamp: message.timestamp,
+        role,
+        content: message.content,
+        tool_steps,
+    })
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -134,7 +221,8 @@ impl ChatHistoryStore {
     /// Persist (create or overwrite) a session to disk.
     pub fn save_session(&self, session: &ChatHistorySession) -> Result<(), String> {
         self.ensure_dir().map_err(|e| e.to_string())?;
-        let json = serde_json::to_string_pretty(session).map_err(|e| e.to_string())?;
+        let json =
+            serde_json::to_string_pretty(&session.to_session()).map_err(|e| e.to_string())?;
         fs::write(self.session_path(&session.id), json).map_err(|e| e.to_string())
     }
 
@@ -151,7 +239,23 @@ impl ChatHistoryStore {
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("json"))
             .filter_map(|e| {
                 let content = fs::read_to_string(e.path()).ok()?;
-                serde_json::from_str(&content).ok()
+
+                // Try parsing as the new Session format
+                if let Ok(session) = serde_json::from_str::<Session>(&content) {
+                    return Some(ChatHistorySession::from_session(session));
+                }
+
+                // Fallback: Try parsing as the legacy ChatHistorySession format
+                if let Ok(legacy_session) = serde_json::from_str::<ChatHistorySession>(&content) {
+                    // Attempt to auto-migrate the file to the new format
+                    let new_session = legacy_session.to_session();
+                    if let Ok(json) = serde_json::to_string_pretty(&new_session) {
+                        let _ = fs::write(e.path(), json); // Ignore migration write errors
+                    }
+                    return Some(legacy_session);
+                }
+
+                None
             })
             .collect();
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
@@ -162,7 +266,18 @@ impl ChatHistoryStore {
     /// does not exist or cannot be parsed.
     pub fn load_session(&self, id: &str) -> Option<ChatHistorySession> {
         let content = fs::read_to_string(self.session_path(id)).ok()?;
-        serde_json::from_str(&content).ok()
+
+        // Try parsing as the new Session format
+        if let Ok(session) = serde_json::from_str::<Session>(&content) {
+            return Some(ChatHistorySession::from_session(session));
+        }
+
+        // Fallback: Try parsing as legacy
+        if let Ok(legacy_session) = serde_json::from_str::<ChatHistorySession>(&content) {
+            return Some(legacy_session);
+        }
+
+        None
     }
 
     /// Permanently remove a session file.

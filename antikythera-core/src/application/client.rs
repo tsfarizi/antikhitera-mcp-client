@@ -29,11 +29,11 @@ use crate::domain::types::{ChatMessage, MessageRole};
 use crate::infrastructure::model::{
     HostModelResponse, ModelError, ModelProvider, ModelRequest, ModelResponse,
 };
+use crate::logging::ChatLogger;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use crate::logging::ChatLogger;
 use uuid::Uuid;
 
 /// Client configuration for the MCP client.
@@ -344,11 +344,11 @@ impl<P: ModelProvider> McpClient<P> {
                 let start_wait = std::time::Instant::now();
                 let sessions = self.sessions.lock().await;
                 let elapsed = start_wait.elapsed();
-                ChatLogger::new(&session_id).debug(format!("Acquired session lock for reading history | lock_wait_us={:?}", elapsed.as_micros()));
-                sessions
-                    .get(session_id.as_str())
-                    .cloned()
-                    .unwrap_or_default()
+                ChatLogger::new(&session_id).debug(format!(
+                    "Acquired session lock for reading history | lock_wait_us={:?}",
+                    elapsed.as_micros()
+                ));
+                sessions.get(session_id.as_str()).unwrap_or_default()
             };
             ChatLogger::new(&session_id).debug(format!(
                 "Preparing chat request with prior history | session_id={} history_count={}",
@@ -447,11 +447,23 @@ impl<P: ModelProvider> McpClient<P> {
             prepared.model.as_str()
         ));
         for entry in &logs {
-            log.info(format!("Interaction log | session_id={} entry={}", final_session.as_str(), entry));
+            log.info(format!(
+                "Interaction log | session_id={} entry={}",
+                final_session.as_str(),
+                entry
+            ));
         }
 
         self.persist_exchange(&final_session, prepared.user_message, assistant_message)
             .await;
+
+        // Sync usage stats to session manager
+        if response.tokens > 0 {
+            let sessions = self.sessions.lock().await;
+            let _ = sessions
+                .manager()
+                .record_tokens(&final_session, response.tokens);
+        }
 
         Ok(ChatResult {
             content: response.message.content(),
@@ -563,15 +575,19 @@ impl<P: ModelProvider> McpClient<P> {
         let start_wait = std::time::Instant::now();
         let mut sessions = self.sessions.lock().await;
         let elapsed = start_wait.elapsed();
-        ChatLogger::new(session_id).debug(format!("Acquired session lock to persist exchange | lock_wait_us={:?}", elapsed.as_micros()));
+        ChatLogger::new(session_id).debug(format!(
+            "Acquired session lock to persist exchange | lock_wait_us={:?}",
+            elapsed.as_micros()
+        ));
 
-        let history = sessions.get_or_create(session_id);
-        history.push(user_message);
-        history.push(assistant);
+        sessions.push_messages(session_id, [user_message, assistant]);
+        let total_messages = sessions
+            .get(session_id)
+            .map(|history| history.len())
+            .unwrap_or(0);
         ChatLogger::new(session_id).debug(format!(
             "Persisted chat exchange to session history | session_id={} total_messages={}",
-            session_id,
-            history.len()
+            session_id, total_messages
         ));
     }
 
@@ -585,18 +601,23 @@ impl<P: ModelProvider> McpClient<P> {
         policy: &crate::application::resilience::ContextWindowPolicy,
     ) -> usize {
         use crate::application::resilience::prune_messages;
-        let mut sessions = self.sessions.lock().await;
-        if let Some(history) = sessions.get_mut(session_id) {
+        let sessions = self.sessions.lock().await;
+        if let Some(history) = sessions.get(session_id) {
             let before = history.len();
-            let pruned = prune_messages(history, policy);
-            *history = pruned;
-            let removed = before - history.len();
+            let pruned = prune_messages(&history, policy);
+            let removed = before - pruned.len();
+            if removed > 0 {
+                // We need mut access to update history, so we drop the read lock and re-acquire
+                drop(sessions);
+                let mut sessions_mut = self.sessions.lock().await;
+                sessions_mut.replace_history(session_id, pruned.clone());
+            }
             if removed > 0 {
                 ChatLogger::new(session_id).info(format!(
                     "Context window pruned | session_id={} removed={} remaining={}",
                     session_id,
                     removed,
-                    history.len()
+                    pruned.len()
                 ));
             }
             removed
@@ -625,6 +646,25 @@ impl<P: ModelProvider> McpClient<P> {
             result.push('…');
         }
         result
+    }
+
+    /// Access the underlying session manager.
+    pub async fn session_manager(&self) -> antikythera_session::SessionManager {
+        self.sessions.lock().await.manager().clone()
+    }
+
+    /// Update session stats based on agent execution outcome.
+    pub async fn record_agent_outcome(
+        &self,
+        session_id: &str,
+        steps: &[crate::application::agent::AgentStep],
+    ) {
+        let sessions = self.sessions.lock().await;
+        let manager = sessions.manager();
+
+        for (i, step) in steps.iter().enumerate() {
+            let _ = manager.record_tool(session_id, &step.tool, (i + 1) as u32);
+        }
     }
 }
 

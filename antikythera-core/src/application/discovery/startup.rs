@@ -13,8 +13,8 @@
 
 use super::types::{DiscoveredServer, DiscoverySummary, LoadStatus};
 use super::{DEFAULT_SERVERS_FOLDER, load_all, scan_folder};
-use std::path::Path;
 use crate::logging::DiscoveryLogger;
+use std::path::Path;
 
 /// Result of the startup discovery process.
 #[derive(Debug, Clone)]
@@ -90,11 +90,17 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     log.info("🔍 MCP Server Discovery");
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    log.info(format!("Scanning servers folder | path={}", folder.display()));
+    log.info(format!(
+        "Scanning servers folder | path={}",
+        folder.display()
+    ));
 
     // Check if folder exists
     if !folder.exists() {
-        log.warn(format!("Servers folder not found - skipping discovery | path={}", folder.display()));
+        log.warn(format!(
+            "Servers folder not found - skipping discovery | path={}",
+            folder.display()
+        ));
         return StartupDiscoveryResult {
             servers: Vec::new(),
             summary: DiscoverySummary::default(),
@@ -175,7 +181,10 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
                 ));
             }
             LoadStatus::Pending => {
-                log.warn(format!("⏳ Server not loaded (pending) | name={}", server.name));
+                log.warn(format!(
+                    "⏳ Server not loaded (pending) | name={}",
+                    server.name
+                ));
             }
         }
     }
@@ -184,11 +193,7 @@ pub async fn run_startup_discovery(servers_folder: Option<&Path>) -> StartupDisc
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     log.info(format!(
         "📊 Discovery Summary | total={} loaded={} failed={} no_tools={} total_tools={}",
-        summary.total_found,
-        summary.loaded,
-        summary.failed,
-        summary.no_tools,
-        summary.total_tools
+        summary.total_found, summary.loaded, summary.failed, summary.no_tools, summary.total_tools
     ));
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 

@@ -25,6 +25,9 @@ pub struct ModelRequest {
 pub struct ModelResponse {
     pub message: ChatMessage,
     pub session_id: Option<String>,
+    /// Token usage for this specific response (if provided by the model)
+    #[serde(default)]
+    pub tokens: u64,
 }
 
 impl ModelResponse {
@@ -32,7 +35,13 @@ impl ModelResponse {
         Self {
             message: ChatMessage::new(MessageRole::Assistant, content),
             session_id,
+            tokens: 0,
         }
+    }
+
+    pub fn with_tokens(mut self, tokens: u64) -> Self {
+        self.tokens = tokens;
+        self
     }
 }
 

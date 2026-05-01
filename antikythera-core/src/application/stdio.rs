@@ -2,6 +2,7 @@ use crate::application::agent::{Agent, AgentOptions, AgentOutcome, AgentStep};
 use crate::application::client::{ChatRequest, ChatResult, McpClient};
 use crate::application::model_provider::ModelProvider;
 use crate::config::{AppConfig, CONFIG_PATH};
+use crate::logging::StdioLogger;
 use serde_json::{Value, to_string_pretty};
 use std::fs;
 use std::io::ErrorKind;
@@ -9,7 +10,6 @@ use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
-use crate::logging::StdioLogger;
 
 #[derive(Debug, Error)]
 pub enum StdioError {
@@ -535,7 +535,10 @@ async fn show_config<P: ModelProvider>(
             }
         }
         Err(error) => {
-            StdioLogger::new("stdio").warn(format!("Gagal membaca berkas konfigurasi | error={}", error));
+            StdioLogger::new("stdio").warn(format!(
+                "Gagal membaca berkas konfigurasi | error={}",
+                error
+            ));
             write_line(
                 stdout,
                 &format!("Gagal membaca berkas konfigurasi: {error}"),

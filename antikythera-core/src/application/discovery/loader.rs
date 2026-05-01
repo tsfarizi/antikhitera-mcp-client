@@ -33,9 +33,9 @@
 use super::types::{DiscoveredServer, DiscoverySummary, LoadStatus};
 use crate::application::tooling::spawn_and_list_tools;
 use crate::config::ServerConfig;
+use crate::logging::DiscoveryLogger;
 use std::collections::HashMap;
 use std::path::Path;
-use crate::logging::DiscoveryLogger;
 
 /// Load all discovered servers and fetch their tools.
 ///
@@ -64,7 +64,10 @@ use crate::logging::DiscoveryLogger;
 /// ```
 pub async fn load_all(servers: &mut [DiscoveredServer]) -> DiscoverySummary {
     let log = DiscoveryLogger::new("discovery");
-    log.info(format!("Loading discovered servers | count={}", servers.len()));
+    log.info(format!(
+        "Loading discovered servers | count={}",
+        servers.len()
+    ));
 
     for server in servers.iter_mut() {
         load_server(server).await;
@@ -119,7 +122,10 @@ pub async fn load_server(server: &mut DiscoveredServer) {
     match spawn_and_list_tools(&config).await {
         Ok(tools) => {
             if tools.is_empty() {
-                log.info(format!("Server loaded but has no tools | name={}", server.name));
+                log.info(format!(
+                    "Server loaded but has no tools | name={}",
+                    server.name
+                ));
                 server.load_status = LoadStatus::NoTools;
             } else {
                 log.info(format!(

@@ -84,7 +84,9 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
             for provider in &config.providers {
                 cli_print!(
                     "  - {} [{}] -> {}",
-                    provider.id, provider.provider_type, provider.endpoint
+                    provider.id,
+                    provider.provider_type,
+                    provider.endpoint
                 );
             }
             Ok(())
@@ -219,7 +221,8 @@ pub fn execute_config_cli(command: ConfigCommand) -> CliResult<()> {
                 cli_print!("  Providers: {}", config.providers.len());
                 cli_print!(
                     "  Default: {}/{}",
-                    config.model.default_provider, config.model.model
+                    config.model.default_provider,
+                    config.model.model
                 );
                 cli_print!("  Server: {}", config.server.bind);
             } else {

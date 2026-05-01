@@ -104,6 +104,7 @@ dependencies = [
  "antikythera-core",
  "antikythera-log",
  "antikythera-sdk",
+ "antikythera-session",
  "async-trait",
  "base64 0.22.1",
  "chrono",
@@ -132,6 +133,7 @@ name = "antikythera-core"
 version = "1.0.4"
 dependencies = [
  "antikythera-log",
+ "antikythera-session",
  "anyhow",
  "async-trait",
  "base64 0.22.1",

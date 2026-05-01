@@ -52,7 +52,13 @@ fn scan_file(path: &Path, violations: &mut Vec<String>) {
             continue;
         }
 
-        let banned = ["println!(", "eprintln!(", "dbg!(", "tracing::", "use tracing::"];
+        let banned = [
+            "println!(",
+            "eprintln!(",
+            "dbg!(",
+            "tracing::",
+            "use tracing::",
+        ];
 
         if banned.iter().any(|pattern| line.contains(pattern)) {
             violations.push(format!("{}:{}: {}", path.display(), index + 1, line.trim()));

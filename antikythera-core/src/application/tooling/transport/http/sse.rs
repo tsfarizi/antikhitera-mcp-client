@@ -2,6 +2,8 @@
 //!
 //! Handles SSE connection establishment and session endpoint resolution.
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::logging::TransportLogger;
 use reqwest::Client;
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest_eventsource::{Event, RequestBuilderExt};
@@ -10,8 +12,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_stream::StreamExt;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::logging::TransportLogger;
 
 use crate::application::tooling::error::ToolInvokeError;
 
@@ -33,7 +33,10 @@ pub fn start_sse_listener(
 ) {
     tokio::spawn(async move {
         let log = TransportLogger::new(&name);
-        log.debug(format!("Starting SSE listener | server={} url={}", name, url));
+        log.debug(format!(
+            "Starting SSE listener | server={} url={}",
+            name, url
+        ));
 
         let mut request = client.get(&url);
 
@@ -55,15 +58,24 @@ pub fn start_sse_listener(
                     log.info(format!("SSE connection opened | server={}", name));
                 }
                 Ok(Event::Message(message)) => {
-                    log.debug(format!("Received SSE event | server={} event={}", name, message.event));
+                    log.debug(format!(
+                        "Received SSE event | server={} event={}",
+                        name, message.event
+                    ));
                     if message.event == "endpoint" {
                         let endpoint = message.data.trim().to_string();
-                        log.info(format!("Received session endpoint | server={} endpoint={}", name, endpoint));
+                        log.info(format!(
+                            "Received session endpoint | server={} endpoint={}",
+                            name, endpoint
+                        ));
                         *session_endpoint.lock().await = Some(endpoint);
                     }
                 }
                 Err(err) => {
-                    log.warn(format!("Error in SSE stream | server={} error={}", name, err));
+                    log.warn(format!(
+                        "Error in SSE stream | server={} error={}",
+                        name, err
+                    ));
                 }
             }
         }

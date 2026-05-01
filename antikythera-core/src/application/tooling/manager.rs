@@ -12,11 +12,11 @@ use super::interface::{ServerToolInfo, ToolServerInterface};
 use super::process::McpProcess;
 use super::transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};
 use crate::config::{ServerConfig, TransportType};
+use crate::logging::TransportLogger;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use crate::logging::TransportLogger;
 
 /// Unified server instance that wraps either STDIO or HTTP transport.
 enum ServerInstance {

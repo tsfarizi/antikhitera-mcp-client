@@ -7,10 +7,10 @@
 use antikythera_core::infrastructure::model::traits::ModelClient;
 
 use super::super::types::ModelProviderConfig;
+use antikythera_core::ProviderLogger;
 use antikythera_core::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use antikythera_core::ProviderLogger;
 
 use super::super::adapter::MessageAdapter;
 use super::super::factory::resolve_api_key;
@@ -53,7 +53,12 @@ impl ModelClient for OpenAIClient {
             stream: true,
         };
 
-        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&antikythera_core::get_active_session()));
+        let log = ProviderLogger::new(
+            request
+                .session_id
+                .as_deref()
+                .unwrap_or(&antikythera_core::get_active_session()),
+        );
         log.info(format!(
             "Sending request to OpenAI-compatible provider | provider={} model={} messages={}",
             self.base.id.as_str(),

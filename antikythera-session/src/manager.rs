@@ -239,6 +239,23 @@ impl SessionManager {
         let mut sessions = self.sessions.write().unwrap();
         sessions.clear();
     }
+
+    /// Import a session into the manager, replacing any existing one.
+    pub fn import_session(&self, session: Session) -> Result<(), String> {
+        let mut sessions = self.sessions.write().unwrap();
+        sessions.insert(session.id.clone(), session);
+        Ok(())
+    }
+
+    /// Import many sessions into the manager.
+    pub fn import_sessions(&self, imported_sessions: Vec<Session>) -> Result<usize, String> {
+        let count = imported_sessions.len();
+        let mut sessions = self.sessions.write().unwrap();
+        for session in imported_sessions {
+            sessions.insert(session.id.clone(), session);
+        }
+        Ok(count)
+    }
 }
 
 impl Default for SessionManager {

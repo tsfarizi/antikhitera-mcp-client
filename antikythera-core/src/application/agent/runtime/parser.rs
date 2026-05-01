@@ -1,6 +1,6 @@
 use super::{AgentDirective, AgentError, ToolRuntime, Value};
-use std::time::Instant;
 use crate::logging::AgentLogger;
+use std::time::Instant;
 
 impl ToolRuntime {
     pub fn parse_agent_action(&self, content: &str) -> Result<AgentDirective, AgentError> {
@@ -14,7 +14,10 @@ impl ToolRuntime {
             ))
         };
         let elapsed = start_time.elapsed();
-        log.debug(format!("Action parsing completed | latency_us={:?}", elapsed.as_micros()));
+        log.debug(format!(
+            "Action parsing completed | latency_us={:?}",
+            elapsed.as_micros()
+        ));
         result
     }
 

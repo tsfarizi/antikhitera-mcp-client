@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use tokio::time::sleep;
 use crate::logging::OrchestratorLogger;
+use tokio::time::sleep;
 
 use super::super::budget::OrchestratorBudget;
 use super::super::cancellation::CancellationToken;
@@ -175,7 +175,9 @@ pub(super) async fn execute_task<P: ModelProvider>(
 
         attempt = attempt.saturating_add(1);
         let log = OrchestratorLogger::new(
-            task.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()),
+            task.session_id
+                .as_deref()
+                .unwrap_or(&crate::logging::get_active_session()),
         );
         let agent = Agent::new(client.clone());
         let options = AgentOptions {

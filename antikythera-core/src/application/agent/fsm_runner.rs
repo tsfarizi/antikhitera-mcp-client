@@ -19,11 +19,11 @@ use super::runtime::json_retry::MAX_JSON_RETRIES;
 use super::state::{AgentState, Event, TerminationReason};
 use crate::application::client::{ChatRequest, McpClient};
 use crate::application::model_provider::ModelProvider;
+use crate::logging::AgentLogger;
 use serde_json::{Value, json};
 use std::sync::Arc;
 #[cfg(feature = "native-transport")]
 use sysinfo::System;
-use crate::logging::AgentLogger;
 
 /// Maximum retry attempts for transient errors
 const MAX_TRANSIENT_RETRIES: u32 = 3;
@@ -59,15 +59,24 @@ impl<P: ModelProvider> FsmAgent<P> {
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
         let log = AgentLogger::new(&context_id);
-        log.info(format!("Starting FSM-driven agent execution | context_id={}", context_id));
+        log.info(format!(
+            "Starting FSM-driven agent execution | context_id={}",
+            context_id
+        ));
 
         // Try to resume from existing state
         let state = if let Some(snapshot) = self.memory.load_state(&context_id).await? {
-            log.info(format!("Resuming agent from saved state | context_id={}", context_id));
+            log.info(format!(
+                "Resuming agent from saved state | context_id={}",
+                context_id
+            ));
             self.rehydrate_from_snapshot(snapshot)?
         } else {
             // Start fresh
-            log.info(format!("Starting new agent execution | context_id={}", context_id));
+            log.info(format!(
+                "Starting new agent execution | context_id={}",
+                context_id
+            ));
             // Extract system_prompt before moving options
             let system_prompt = options.system_prompt.take();
             let init_options = AgentOptions {
@@ -104,7 +113,10 @@ impl<P: ModelProvider> FsmAgent<P> {
         options: AgentOptions,
     ) -> Result<AgentOutcome, AgentError> {
         let log = AgentLogger::new(context_id);
-        log.info(format!("Resuming agent execution | context_id={}", context_id));
+        log.info(format!(
+            "Resuming agent execution | context_id={}",
+            context_id
+        ));
 
         let snapshot = self
             .memory
@@ -215,7 +227,9 @@ impl<P: ModelProvider> FsmAgent<P> {
         let mut state = initial_state;
         let mut session_id = options.session_id.clone();
         let log = AgentLogger::new(
-            session_id.as_deref().unwrap_or(&crate::logging::get_active_session()),
+            session_id
+                .as_deref()
+                .unwrap_or(&crate::logging::get_active_session()),
         );
         let mut steps = Vec::new();
         let mut logs = Vec::new();
@@ -596,7 +610,9 @@ impl<P: ModelProvider> FsmAgent<P> {
         steps: Vec<AgentStep>,
     ) -> Result<AgentOutcome, AgentError> {
         let log = AgentLogger::new(
-            session_id.as_deref().unwrap_or(&crate::logging::get_active_session()),
+            session_id
+                .as_deref()
+                .unwrap_or(&crate::logging::get_active_session()),
         );
         match state {
             // ⭐ NEW: Handle FinalMessage state with JSON response formatting

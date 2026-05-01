@@ -2,9 +2,9 @@ use crate::application::agent::{Agent, AgentOptions, AgentStep};
 use crate::application::client::{ChatRequest, McpClient};
 use crate::application::model_provider::ModelProvider;
 use crate::domain::types::MessagePart;
+use crate::logging::ChatLogger;
 use serde_json::{Value, json};
 use std::sync::Arc;
-use crate::logging::ChatLogger;
 
 pub struct ChatService<P: ModelProvider> {
     client: Arc<McpClient<P>>,
@@ -84,6 +84,11 @@ impl<P: ModelProvider> ChatService<P> {
             Ok((outcome, content_json)) => {
                 ChatLogger::new(&outcome.session_id).info("Agent run completed successfully");
 
+                // Sync agent steps to session manager
+                self.client
+                    .record_agent_outcome(&outcome.session_id, &outcome.steps)
+                    .await;
+
                 Ok(self.construct_outcome(
                     debug_mode,
                     outcome.session_id,
@@ -147,7 +152,10 @@ impl<P: ModelProvider> ChatService<P> {
                 ))
             }
             Err(error) => {
-                log.error(format!("Model provider returned an error | error={}", error));
+                log.error(format!(
+                    "Model provider returned an error | error={}",
+                    error
+                ));
                 Err(error.to_string())
             }
         }
@@ -208,6 +216,7 @@ mod tests {
                     self.response_content.clone(),
                 ),
                 session_id: None,
+                tokens: 0,
             })
         }
     }

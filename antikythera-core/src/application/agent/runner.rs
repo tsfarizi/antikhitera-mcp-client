@@ -4,11 +4,11 @@ use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use crate::application::client::{ChatRequest, McpClient};
 use crate::application::model_provider::ModelProvider;
+use crate::logging::AgentLogger;
 use serde_json::{Value, json};
 use std::sync::Arc;
 #[cfg(feature = "native-transport")]
 use sysinfo::System;
-use crate::logging::AgentLogger;
 
 pub struct Agent<P: ModelProvider> {
     client: Arc<McpClient<P>>,
@@ -37,7 +37,10 @@ impl<P: ModelProvider> Agent<P> {
         mut options: AgentOptions,
     ) -> Result<AgentOutcome, AgentError> {
         let log = AgentLogger::new(
-            options.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()),
+            options
+                .session_id
+                .as_deref()
+                .unwrap_or(&crate::logging::get_active_session()),
         );
         log.info("Agent run started");
         let mut session_id = options.session_id.clone();

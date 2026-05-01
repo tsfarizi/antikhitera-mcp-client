@@ -35,6 +35,7 @@ impl HostModelResponse {
             return Ok(ModelResponse {
                 message,
                 session_id: self.session_id,
+                tokens: 0,
             });
         }
 
@@ -42,6 +43,7 @@ impl HostModelResponse {
             return Ok(ModelResponse {
                 message: ChatMessage::new(MessageRole::Assistant, text),
                 session_id: self.session_id,
+                tokens: 0,
             });
         }
 

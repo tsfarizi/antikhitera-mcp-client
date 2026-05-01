@@ -6,6 +6,7 @@ mod rpc;
 mod sse;
 mod tools;
 
+use crate::logging::TransportLogger;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::{Value, json};
@@ -13,7 +14,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::Mutex as AsyncMutex;
-use crate::logging::TransportLogger;
 
 use super::McpTransport;
 use super::config::{HttpTransportConfig, TransportMode};
@@ -131,9 +131,7 @@ impl McpTransport for HttpTransport {
 
         log.info(format!(
             "Connecting to HTTP MCP server | server={} url={} mode={:?}",
-            self.inner.config.name,
-            self.inner.config.url,
-            configured_mode
+            self.inner.config.name, self.inner.config.url, configured_mode
         ));
 
         // Determine transport mode
@@ -152,36 +150,54 @@ impl McpTransport for HttpTransport {
                     match self.resolve_endpoint().await {
                         Ok(_) => TransportMode::Stateful,
                         Err(e) => {
-                            log.warn(format!("SSE connection failed | server={} error={}", self.inner.config.name, e));
+                            log.warn(format!(
+                                "SSE connection failed | server={} error={}",
+                                self.inner.config.name, e
+                            ));
                             return Err(e);
                         }
                     }
                 }
             }
             TransportMode::Stateless => {
-                log.info(format!("Using stateless mode (direct HTTP POST) | server={}", self.inner.config.name));
+                log.info(format!(
+                    "Using stateless mode (direct HTTP POST) | server={}",
+                    self.inner.config.name
+                ));
                 *self.inner.session_endpoint.lock().await = Some(self.inner.config.url.clone());
                 TransportMode::Stateless
             }
             TransportMode::Auto => {
                 #[cfg(target_arch = "wasm32")]
                 {
-                    log.info(format!("Using stateless mode on wasm32 target | server={}", self.inner.config.name));
+                    log.info(format!(
+                        "Using stateless mode on wasm32 target | server={}",
+                        self.inner.config.name
+                    ));
                     *self.inner.session_endpoint.lock().await = Some(self.inner.config.url.clone());
                     TransportMode::Stateless
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    log.info(format!("Auto-detecting transport mode... | server={}", self.inner.config.name));
+                    log.info(format!(
+                        "Auto-detecting transport mode... | server={}",
+                        self.inner.config.name
+                    ));
                     self.start_sse_listener();
 
                     match self.resolve_endpoint().await {
                         Ok(_) => {
-                            log.info(format!("Detected stateful mode (SSE endpoint received) | server={}", self.inner.config.name));
+                            log.info(format!(
+                                "Detected stateful mode (SSE endpoint received) | server={}",
+                                self.inner.config.name
+                            ));
                             TransportMode::Stateful
                         }
                         Err(_) => {
-                            log.info(format!("SSE timeout - falling back to stateless mode | server={}", self.inner.config.name));
+                            log.info(format!(
+                                "SSE timeout - falling back to stateless mode | server={}",
+                                self.inner.config.name
+                            ));
                             *self.inner.session_endpoint.lock().await =
                                 Some(self.inner.config.url.clone());
                             TransportMode::Stateless
@@ -219,9 +235,7 @@ impl McpTransport for HttpTransport {
         let tool_count = self.inner.tool_cache.lock().await.len();
         log.info(format!(
             "Successfully connected to HTTP MCP server | server={} tool_count={} mode={:?}",
-            self.inner.config.name,
-            tool_count,
-            detected_mode
+            self.inner.config.name, tool_count, detected_mode
         ));
 
         Ok(())

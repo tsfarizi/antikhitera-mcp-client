@@ -18,9 +18,11 @@ fn basic_logging_records_levels_and_session() {
     assert_eq!(entries[1].level, LogLevel::Info);
     assert_eq!(entries[2].level, LogLevel::Warn);
     assert_eq!(entries[3].level, LogLevel::Error);
-    assert!(entries
-        .iter()
-        .all(|entry| entry.session_id.as_deref() == Some("session-a")));
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.session_id.as_deref() == Some("session-a"))
+    );
 }
 
 #[test]
