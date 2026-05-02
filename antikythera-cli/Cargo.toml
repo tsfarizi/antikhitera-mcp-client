@@ -59,3 +59,4 @@ shellexpand.workspace = true
 tempfile = "3.10"
 tokio = { version = "1.39", features = ["test-util"] }
 serial_test = "3.0"
+antikythera-sdk = { path = "../antikythera-sdk", version = "1.0.0", features = ["component"] }
