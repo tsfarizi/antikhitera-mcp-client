@@ -29,9 +29,14 @@ impl ToolRuntime {
 
             let mut descriptor = ToolDescriptor {
                 name: tool.name.clone(),
+                title: None,
                 description: tool.description.clone(),
                 server: tool.server.clone(),
+                icons: None,
                 input_schema: None,
+                output_schema: None,
+                annotations: None,
+                execution: None,
             };
 
             if let Some(server_name) = tool.server.as_deref()
@@ -40,6 +45,11 @@ impl ToolRuntime {
                 if !metadata.name.is_empty() {
                     descriptor.name = metadata.name;
                 }
+                descriptor.title = metadata.title;
+                descriptor.icons = metadata.icons;
+                descriptor.output_schema = metadata.output_schema;
+                descriptor.annotations = metadata.annotations;
+                descriptor.execution = metadata.execution;
                 if let Some(remote_desc) = metadata.description {
                     // Sanitize remote description to ensure TOML compatibility
                     let sanitized_desc = sanitize_for_toml(&remote_desc);

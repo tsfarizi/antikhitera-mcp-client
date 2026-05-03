@@ -18,7 +18,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use super::McpTransport;
 use super::config::{HttpTransportConfig, TransportMode};
 use crate::application::tooling::error::ToolInvokeError;
-use crate::application::tooling::interface::ServerToolInfo;
+use crate::application::tooling::interface::{PROTOCOL_VERSION, ServerToolInfo};
 
 /// HTTP Transport for MCP communication.
 #[derive(Clone)]
@@ -110,10 +110,31 @@ impl HttpTransport {
         .await
     }
 
-    /// Refresh tools from server.
+    /// Refresh tools from server with pagination support.
     async fn refresh_tools(&self) -> Result<(), ToolInvokeError> {
-        let result = self.send_request("tools/list", json!({})).await?;
-        tools::populate_tool_cache(&self.inner.config.name, &self.inner.tool_cache, result).await;
+        let mut cursor: Option<String> = None;
+        loop {
+            let params = if let Some(ref c) = cursor {
+                json!({ "cursor": c })
+            } else {
+                json!({})
+            };
+            let result = self.send_request("tools/list", params).await?;
+            cursor = result
+                .get("nextCursor")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            tools::populate_tool_cache(
+                &self.inner.config.name,
+                &self.inner.tool_cache,
+                result,
+                cursor.is_none(),
+            )
+            .await;
+            if cursor.is_none() {
+                break;
+            }
+        }
         Ok(())
     }
 }
@@ -211,13 +232,17 @@ impl McpTransport for HttpTransport {
 
         // Initialize connection
         let params = json!({
-            "protocolVersion": rpc::PROTOCOL_VERSION,
+            "protocolVersion": PROTOCOL_VERSION,
             "clientInfo": {
                 "name": env!("CARGO_PKG_NAME"),
                 "version": env!("CARGO_PKG_VERSION"),
                 "title": "CBT MCP Client"
             },
-            "capabilities": {}
+            "capabilities": {
+                "tools": {
+                    "listChanged": true
+                }
+            }
         });
 
         let result = self.send_request("initialize", params).await?;
@@ -338,8 +363,13 @@ mod tests {
                 "test_tool".to_string(),
                 ServerToolInfo {
                     name: "test_tool".to_string(),
+                    title: Some("Test Tool".to_string()),
                     description: Some("test description".to_string()),
+                    icons: None,
                     input_schema: None,
+                    output_schema: None,
+                    annotations: None,
+                    execution: None,
                 },
             );
         }
@@ -347,6 +377,7 @@ mod tests {
         let tools = transport.list_tools().await;
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "test_tool");
+        assert_eq!(tools[0].title, Some("Test Tool".to_string()));
         assert_eq!(tools[0].description, Some("test description".to_string()));
     }
 
@@ -369,8 +400,13 @@ mod tests {
                 "test_tool".to_string(),
                 ServerToolInfo {
                     name: "test_tool".to_string(),
+                    title: None,
                     description: None,
+                    icons: None,
                     input_schema: None,
+                    output_schema: None,
+                    annotations: None,
+                    execution: None,
                 },
             );
         }

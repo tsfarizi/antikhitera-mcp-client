@@ -116,10 +116,7 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     // Long lines wrap to the next row(s) instead of being truncated.
     let log_panel_area = right_panel[1];
 
-    let all_log_lines: Vec<&String> = app
-        .log_lines
-        .iter()
-        .collect();
+    let all_log_lines: Vec<&String> = app.log_lines.iter().collect();
     // Build styled text lines — each log line becomes one or more wrapped
     // display lines via the Paragraph widget's Wrap behaviour.
     let log_styled_lines: Vec<Line<'_>> = all_log_lines
@@ -417,10 +414,15 @@ fn resolve_log_line_style(line: &str) -> Style {
             Style::default().fg(Color::LightBlue)
         };
     }
-    if line.contains("][config]") || line.contains("][session]") || line.contains("][chat]")
-        || line.contains("][discovery]") || line.contains("][resilience]")
-        || line.contains("][streaming]") || line.contains("][orchestrator]")
-        || line.contains("][stdio]") || line.contains("][wasm]")
+    if line.contains("][config]")
+        || line.contains("][session]")
+        || line.contains("][chat]")
+        || line.contains("][discovery]")
+        || line.contains("][resilience]")
+        || line.contains("][streaming]")
+        || line.contains("][orchestrator]")
+        || line.contains("][stdio]")
+        || line.contains("][wasm]")
     {
         return Style::default().fg(Color::Gray);
     }

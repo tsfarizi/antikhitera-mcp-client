@@ -10,9 +10,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::application::tooling::error::ToolInvokeError;
 
-/// MCP Protocol version
-pub const PROTOCOL_VERSION: &str = "2024-11-05";
-
 /// Build headers for HTTP request, filtering empty Authorization headers.
 pub fn build_headers(headers: &HashMap<String, String>) -> Vec<(String, String)> {
     headers

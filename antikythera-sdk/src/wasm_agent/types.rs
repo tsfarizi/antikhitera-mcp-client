@@ -226,6 +226,43 @@ pub struct ToolResult {
 // Tool Registry (MCP tool definitions for WASM-side validation)
 // ============================================================================
 
+/// Icon metadata for a tool, as defined by MCP spec.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolIcon {
+    pub src: String,
+    #[serde(default)]
+    pub mime_type: Option<String>,
+    #[serde(default)]
+    pub sizes: Option<Vec<String>>,
+}
+
+/// Annotations providing metadata about tool audience, priority, and modification.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ToolAnnotations {
+    #[serde(default)]
+    pub audience: Option<Vec<String>>,
+    #[serde(default)]
+    pub priority: Option<f64>,
+    #[serde(default)]
+    pub last_modified: Option<String>,
+}
+
+/// Task execution support level as defined by MCP spec.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TaskSupport {
+    Forbidden,
+    Optional,
+    Required,
+}
+
+/// Execution-related properties for a tool.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ToolExecution {
+    #[serde(default)]
+    pub task_support: Option<TaskSupport>,
+}
+
 /// A single parameter definition within a tool's input schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolParameterSchema {
@@ -244,6 +281,9 @@ pub struct ToolParameterSchema {
 pub struct ToolDefinition {
     /// Tool name as exposed by MCP server
     pub name: String,
+    /// Human-readable title for display
+    #[serde(default)]
+    pub title: Option<String>,
     /// Human-readable description shown to the LLM
     pub description: String,
     /// Individual parameter schemas (may be empty if raw input_schema is used)
@@ -252,6 +292,15 @@ pub struct ToolDefinition {
     /// Full JSON Schema for the input object (optional; takes precedence for validation)
     #[serde(default)]
     pub input_schema: Option<serde_json::Value>,
+    /// Optional JSON Schema for the output structure
+    #[serde(default)]
+    pub output_schema: Option<serde_json::Value>,
+    /// Optional annotations for audience, priority, etc.
+    #[serde(default)]
+    pub annotations: Option<ToolAnnotations>,
+    /// Optional execution properties (task support)
+    #[serde(default)]
+    pub execution: Option<ToolExecution>,
 }
 
 impl ToolDefinition {

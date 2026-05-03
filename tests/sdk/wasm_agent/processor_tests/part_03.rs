@@ -52,6 +52,7 @@ fn make_weather_registry() -> ToolRegistry {
     let mut reg = ToolRegistry::default();
     reg.register(ToolDefinition {
         name: "weather.get".to_string(),
+        title: None,
         description: "Get weather".to_string(),
         parameters: vec![ToolParameterSchema {
             name: "city".to_string(),
@@ -60,6 +61,9 @@ fn make_weather_registry() -> ToolRegistry {
             required: true,
         }],
         input_schema: None,
+        output_schema: None,
+        annotations: None,
+        execution: None,
     });
     reg
 }

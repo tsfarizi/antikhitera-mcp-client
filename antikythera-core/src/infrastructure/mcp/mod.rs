@@ -4,4 +4,6 @@
 /// envelope types for requests and responses, error mapping, and validation.
 pub mod contract;
 
-pub use contract::{ContractValidator, ToolCallEnvelope, ToolExecutionError, ToolResultEnvelope};
+pub use contract::{
+    ContractValidator, ToolCallEnvelope, ToolExecutionError, ToolResultEnvelope, validate_tool_name,
+};

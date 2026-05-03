@@ -1,7 +1,10 @@
 use super::error::ToolInvokeError;
-use super::interface::ServerToolInfo;
+use super::interface::{
+    PROTOCOL_VERSION, ServerToolInfo, TaskSupport, ToolAnnotations, ToolExecution, ToolIcon,
+};
 use super::transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};
 use crate::config::ServerConfig;
+use crate::infrastructure::mcp::validate_tool_name;
 use crate::logging::TransportLogger;
 use serde::Deserialize;
 use serde_json::{Map as JsonMap, Value, json};
@@ -12,8 +15,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::{Mutex as AsyncMutex, oneshot};
-
-const PROTOCOL_VERSION: &str = "2025-06-18";
 
 #[derive(Clone)]
 pub struct McpProcess {
@@ -149,7 +150,11 @@ impl McpProcessInner {
                 "version": env!("CARGO_PKG_VERSION"),
                 "title": "CBT MCP Client"
             },
-            "capabilities": {}
+            "capabilities": {
+                "tools": {
+                    "listChanged": true
+                }
+            }
         });
         let init_result = self.send_request("initialize", params).await?;
         if let Some(text) = init_result.get("instructions").and_then(Value::as_str) {
@@ -180,8 +185,23 @@ impl McpProcessInner {
     }
 
     async fn refresh_tools(&self) -> Result<(), ToolInvokeError> {
-        let result = self.send_request("tools/list", json!({})).await?;
-        self.populate_tool_cache(result).await;
+        let mut cursor: Option<String> = None;
+        loop {
+            let params = if let Some(ref c) = cursor {
+                json!({ "cursor": c })
+            } else {
+                json!({})
+            };
+            let result = self.send_request("tools/list", params).await?;
+            cursor = result
+                .get("nextCursor")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            self.populate_tool_cache(result, cursor.is_none()).await;
+            if cursor.is_none() {
+                break;
+            }
+        }
         Ok(())
     }
 
@@ -472,23 +492,90 @@ impl McpProcessInner {
         }
     }
 
-    async fn populate_tool_cache(&self, result: Value) {
+    async fn populate_tool_cache(&self, result: Value, clear_first: bool) {
         if let Some(array) = result.get("tools").and_then(Value::as_array) {
             let mut cache = self.tool_cache.lock().await;
-            cache.clear();
+            if clear_first {
+                cache.clear();
+            }
             for tool in array {
                 if let Some(name) = tool.get("name").and_then(Value::as_str) {
+                    let name = name.to_string();
+                    if validate_tool_name(&name).is_err() {
+                        TransportLogger::new(&self.server.name).warn(format!(
+                            "Skipping tool with invalid name | server={} tool={}",
+                            self.server.name, name
+                        ));
+                        continue;
+                    }
+                    let title = tool
+                        .get("title")
+                        .and_then(Value::as_str)
+                        .map(|s| s.to_string());
                     let description = tool
                         .get("description")
                         .and_then(Value::as_str)
                         .map(|text| text.to_string());
-                    let schema = tool.get("inputSchema").cloned();
+                    let icons = tool.get("icons").and_then(Value::as_array).map(|arr| {
+                        arr.iter()
+                            .filter_map(|icon| {
+                                Some(ToolIcon {
+                                    src: icon.get("src")?.as_str()?.to_string(),
+                                    mime_type: icon
+                                        .get("mimeType")
+                                        .and_then(Value::as_str)
+                                        .map(|s| s.to_string()),
+                                    sizes: icon.get("sizes").and_then(Value::as_array).map(|sz| {
+                                        sz.iter()
+                                            .filter_map(|s| s.as_str().map(|v| v.to_string()))
+                                            .collect()
+                                    }),
+                                })
+                            })
+                            .collect()
+                    });
+                    let input_schema = tool.get("inputSchema").cloned();
+                    let output_schema = tool.get("outputSchema").cloned();
+                    let annotations =
+                        tool.get("annotations")
+                            .and_then(Value::as_object)
+                            .map(|ann| ToolAnnotations {
+                                audience: ann.get("audience").and_then(Value::as_array).map(|a| {
+                                    a.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect()
+                                }),
+                                priority: ann.get("priority").and_then(Value::as_f64),
+                                last_modified: ann
+                                    .get("lastModified")
+                                    .and_then(Value::as_str)
+                                    .map(|s| s.to_string()),
+                            });
+                    let execution =
+                        tool.get("execution")
+                            .and_then(Value::as_object)
+                            .map(|exe| ToolExecution {
+                                task_support: exe
+                                    .get("taskSupport")
+                                    .and_then(Value::as_str)
+                                    .and_then(|v| match v {
+                                        "forbidden" => Some(TaskSupport::Forbidden),
+                                        "optional" => Some(TaskSupport::Optional),
+                                        "required" => Some(TaskSupport::Required),
+                                        _ => None,
+                                    }),
+                            });
                     cache.insert(
-                        name.to_string(),
+                        name.clone(),
                         ServerToolInfo {
-                            name: name.to_string(),
+                            name,
+                            title,
                             description,
-                            input_schema: schema,
+                            icons,
+                            input_schema,
+                            output_schema,
+                            annotations,
+                            execution,
                         },
                     );
                 }

@@ -15,7 +15,7 @@ use antikythera_core::application::resilience::{ContextWindowPolicy, RetryPolicy
 use antikythera_core::config::AppConfig;
 use antikythera_core::get_latest_logs;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
-use antikythera_core::{ProviderLogger, ConfigLogger};
+use antikythera_core::{ConfigLogger, ProviderLogger};
 use antikythera_sdk::sdk_logging::get_latest_sdk_logs;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;

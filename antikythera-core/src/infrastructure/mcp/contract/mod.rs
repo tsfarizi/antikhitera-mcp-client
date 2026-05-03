@@ -179,6 +179,31 @@ impl ToolExecutionError {
     }
 }
 
+/// Validates a tool name against the MCP spec naming rules:
+/// - Length 1-128 characters
+/// - Allowed characters: A-Z, a-z, 0-9, underscore (_), hyphen (-), dot (.)
+/// - No spaces, commas, or other special characters
+pub fn validate_tool_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("tool name must not be empty".to_string());
+    }
+    if name.len() > 128 {
+        return Err(format!(
+            "tool name exceeds 128 characters (length: {})",
+            name.len()
+        ));
+    }
+    for ch in name.chars() {
+        if !ch.is_ascii_alphanumeric() && ch != '_' && ch != '-' && ch != '.' {
+            return Err(format!(
+                "tool name contains invalid character '{}'. Allowed: A-Z, a-z, 0-9, underscore, hyphen, dot",
+                ch
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Validator for tool call and result contracts.
 pub struct ContractValidator;
 
@@ -415,5 +440,39 @@ mod tests {
         let deserialized: ToolExecutionError =
             serde_json::from_str(&json).expect("deserialize failed");
         assert_eq!(deserialized, err);
+    }
+
+    #[test]
+    fn validate_tool_name_valid() {
+        assert!(validate_tool_name("get_weather").is_ok());
+        assert!(validate_tool_name("DATA_EXPORT_v2").is_ok());
+        assert!(validate_tool_name("admin.tools.list").is_ok());
+        assert!(validate_tool_name("getUser").is_ok());
+        assert!(validate_tool_name("a").is_ok());
+    }
+
+    #[test]
+    fn validate_tool_name_empty() {
+        assert!(validate_tool_name("").is_err());
+    }
+
+    #[test]
+    fn validate_tool_name_too_long() {
+        let long_name = "a".repeat(129);
+        assert!(validate_tool_name(&long_name).is_err());
+    }
+
+    #[test]
+    fn validate_tool_name_max_length() {
+        let max_name = "a".repeat(128);
+        assert!(validate_tool_name(&max_name).is_ok());
+    }
+
+    #[test]
+    fn validate_tool_name_invalid_characters() {
+        assert!(validate_tool_name("get weather").is_err());
+        assert!(validate_tool_name("tool,name").is_err());
+        assert!(validate_tool_name("tool!").is_err());
+        assert!(validate_tool_name("tool@name").is_err());
     }
 }

@@ -8,9 +8,9 @@
 //! [`ProviderFactory::create`] is the primary entry point, dispatching on
 //! `provider_type` to instantiate the appropriate concrete client.
 
+use std::env;
 use std::path::Path;
 use std::sync::Once;
-use std::env;
 
 use antikythera_core::infrastructure::model::traits::ModelClient;
 
@@ -51,10 +51,10 @@ pub fn resolve_api_key(provider: &str, spec: Option<&str>) -> Option<String> {
     ensure_cli_env_loaded();
 
     // Try resolving as an environment-variable name.
-    if let Ok(value) = env::var(raw) {
-        if !value.trim().is_empty() {
-            return Some(value);
-        }
+    if let Ok(value) = env::var(raw)
+        && !value.trim().is_empty()
+    {
+        return Some(value);
     }
     // If `raw` doesn't look like an env-var name (all-uppercase with
     // underscores), it is likely a literal API key — return it directly.

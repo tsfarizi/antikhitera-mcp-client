@@ -11,7 +11,10 @@ pub use envelope::{
     validate_tool_result_envelope,
 };
 pub use error::ToolInvokeError;
-pub use interface::{ServerToolInfo, ToolServerInterface};
+pub use interface::{
+    PROTOCOL_VERSION, ServerToolInfo, TaskSupport, ToolAnnotations, ToolExecution, ToolIcon,
+    ToolServerInterface,
+};
 pub use manager::ServerManager;
 #[cfg(feature = "native-transport")]
 pub use process::spawn_and_list_tools;
