@@ -21,9 +21,6 @@ mod entities;
 #[path = "infrastructure_config.rs"]
 mod infrastructure_config;
 
-#[path = "mcp_time_tool.rs"]
-mod mcp_time_tool;
-
 #[path = "chat_use_case.rs"]
 mod chat_use_case;
 

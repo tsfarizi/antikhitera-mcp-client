@@ -23,7 +23,8 @@ pub struct ModelProviderConfig {
     pub provider_type: String,
     /// Base API endpoint URL.
     pub endpoint: String,
-    /// Resolved API key value (not an env-var name — already looked up).
+    /// Environment-variable *name* that holds the API key (e.g. `"GEMINI_API_KEY"`).
+    /// `resolve_api_key` will look it up at client construction time.
     pub api_key: Option<String>,
     /// Optional provider-specific API path override (used by Gemini).
     pub api_path: Option<String>,

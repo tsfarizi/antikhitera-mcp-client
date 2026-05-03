@@ -19,6 +19,20 @@ use std::sync::Arc;
 
 use antikythera_cli::cli::{Cli, RunMode};
 use antikythera_cli::config::load_app_config;
+
+/// Load the `.env` file from the CLI module directory so that
+/// environment variables (e.g. `GEMINI_API_KEY`) are available
+/// before the core config loader reads them.
+fn load_cli_env() {
+    // Primary path: the CLI crate's own directory (works for `cargo run`)
+    let manifest_env = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
+    if manifest_env.exists() {
+        let _ = dotenvy::from_filename(&manifest_env);
+        return;
+    }
+    // Fallback: current working directory
+    let _ = dotenvy::dotenv();
+}
 use antikythera_cli::domain::use_cases::{render_wasm_stream_report, run_wasm_stream_probe};
 use antikythera_cli::infrastructure::llm::install_terminal_stream_sink;
 use antikythera_cli::infrastructure::llm::providers_from_postcard;
@@ -45,6 +59,8 @@ use antikythera_core::application::agent::multi_agent::guardrails::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    load_cli_env();
+
     let cli = Cli::parse();
 
     let config_path = cli.config.as_deref().map(Path::new);

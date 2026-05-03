@@ -200,11 +200,8 @@ pub fn default_provider_template(provider_id: &str) -> Option<ModelProviderConfi
             id: "gemini".to_string(),
             provider_type: "gemini".to_string(),
             endpoint: "https://generativelanguage.googleapis.com".to_string(),
-            // Resolve the actual key value from the environment so the runtime
-            // uses the real token, not the variable name as a literal string.
-            api_key: std::env::var("GEMINI_API_KEY")
-                .ok()
-                .filter(|value| !value.trim().is_empty()),
+            // Store the env-var *name* — resolve_api_key will look it up.
+            api_key: Some("GEMINI_API_KEY".to_string()),
             api_path: None,
             models: vec![],
         }),
@@ -212,9 +209,7 @@ pub fn default_provider_template(provider_id: &str) -> Option<ModelProviderConfi
             id: "openai".to_string(),
             provider_type: "openai".to_string(),
             endpoint: "https://api.openai.com".to_string(),
-            api_key: std::env::var("OPENAI_API_KEY")
-                .ok()
-                .filter(|value| !value.trim().is_empty()),
+            api_key: Some("OPENAI_API_KEY".to_string()),
             api_path: None,
             models: vec![],
         }),
