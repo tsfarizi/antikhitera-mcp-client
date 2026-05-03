@@ -107,79 +107,57 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     frame.render_widget(sidebar, right_panel[0]);
 
     // ── WASM / FFI log panel ────────────────────────────────────────────────
-    // Source prefixes (set by the tracing bridge + SDK logging):
-    //   cli:*    — CLI crate (streaming, HTTP clients)  → LightYellow
-    //   sdk:*    — SDK / FFI layer (ConfigFfiLogger, WasmAgentLogger) → Magenta
-    //   ffi:*    — WASM host runner events              → Magenta
-    //   stream:* — Model HTTP client send/recv          → Cyan
-    //   agent:*  — Agent FSM, runner, context, parser   → Green
-    //   tool:*   — MCP tool transports (SSE/RPC/proc)  → Blue
-    //   core:*   — antikythera-core misc (client, svc)  → Gray
-    // ERROR entries are already shown in the chat area — suppress here.
-    // Only the most recent lines that fit the visible panel area are shown so
-    // the latest activity is always visible without scrolling.
-    let log_panel_height = right_panel[1].height.saturating_sub(2) as usize;
+    // Source prefixes (set by module loggers + SDK logging):
+    //   cli:*     — CLI crate (streaming, HTTP clients)  → LightYellow
+    //   sdk:*     — SDK / FFI layer (ConfigFfiLogger, WasmAgentLogger) → Magenta
+    //   ffi:*     — WASM host runner events              → Magenta
+    //   stream:*  — Model HTTP client send/recv          → Cyan
+    //   agent:*   — Agent FSM, runner, context, parser   → Green
+    //   tool:*    — MCP tool transports (SSE/RPC/proc)  → Blue
+    //   provider  — Model provider API calls/replies     → Yellow
+    //   transport — MCP transport (connect/disconnect)   → Blue
+    //   config    — Configuration changes                → Gray
+    //   session   — Session lifecycle                    → Gray
+    //   core:*    — antikythera-core misc (client, svc)  → Gray
+    // ERROR entries are shown in the chat area — still show in log.
+    // Long lines wrap to the next row(s) instead of being truncated.
+    let log_panel_area = right_panel[1];
+    let log_inner = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1)])
+        .split(log_panel_area)[0];
+
     let all_log_lines: Vec<&String> = app
         .log_lines
         .iter()
-        .filter(|line| !line.contains("[ERROR]"))
         .collect();
-    let log_start = all_log_lines.len().saturating_sub(log_panel_height);
-    let log_items: Vec<ListItem<'_>> = all_log_lines[log_start..]
+    // Build styled text lines — each log line becomes one or more wrapped
+    // display lines via the Paragraph widget's Wrap behaviour.
+    let log_styled_lines: Vec<Line<'_>> = all_log_lines
         .iter()
-        .copied()
         .map(|line| {
-            let style = if line.contains("[WARN]") {
-                // Warnings always in yellow regardless of source.
-                Style::default().fg(Color::Yellow)
-            } else if line.contains("][cli:") {
-                if line.contains("[DEBUG]") {
-                    Style::default().fg(Color::Yellow)
-                } else {
-                    Style::default().fg(Color::LightYellow)
-                }
-            } else if line.contains("][sdk:") || line.contains("][ffi:") {
-                if line.contains("[DEBUG]") {
-                    Style::default().fg(Color::Magenta)
-                } else {
-                    Style::default().fg(Color::LightMagenta)
-                }
-            } else if line.contains("][stream:") {
-                if line.contains("[DEBUG]") {
-                    Style::default().fg(Color::Cyan)
-                } else {
-                    Style::default().fg(Color::LightCyan)
-                }
-            } else if line.contains("][agent:") {
-                if line.contains("[DEBUG]") {
-                    Style::default().fg(Color::Green)
-                } else {
-                    Style::default().fg(Color::LightGreen)
-                }
-            } else if line.contains("][tool:") {
-                if line.contains("[DEBUG]") {
-                    Style::default().fg(Color::Blue)
-                } else {
-                    Style::default().fg(Color::LightBlue)
-                }
-            } else {
-                // core:* or unknown
-                Style::default().fg(Color::Gray)
-            };
-            ListItem::new(Span::styled(line.clone(), style))
+            let style = resolve_log_line_style(line);
+            Line::from(Span::styled(line.as_str(), style))
         })
         .collect();
-    let log_panel = List::new(log_items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Logs [yellow=CLI | magenta=FFI/SDK | cyan=stream | green=agent | blue=tool]")
-            .title_style(
-                Style::default()
-                    .fg(Color::Magenta)
-                    .add_modifier(Modifier::BOLD),
-            ),
-    );
-    frame.render_widget(log_panel, right_panel[1]);
+    let log_text = Text::from(log_styled_lines);
+    let log_panel = Paragraph::new(log_text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Logs [yellow=CLI/prov | magenta=SDK/FFI | cyan=stream | green=agent | blue=tool/transport]")
+                .title_style(
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
+        )
+        .wrap(Wrap { trim: true })
+        .scroll((
+            all_log_lines.len().saturating_sub(log_inner.height.saturating_sub(2) as usize) as u16,
+            0,
+        ));
+    frame.render_widget(log_panel, log_panel_area);
 
     // ── Prompt bar ───────────────────────────────────────────────────────────
     {
@@ -385,6 +363,69 @@ fn build_sidebar_items(app: &ChatApp) -> Vec<String> {
         "Providers".to_string(),
         provider_lines.join("\n"),
     ]
+}
+
+fn resolve_log_line_style(line: &str) -> Style {
+    if line.contains("[WARN]") {
+        return Style::default().fg(Color::Yellow);
+    }
+    if line.contains("[ERROR]") {
+        return Style::default().fg(Color::Red);
+    }
+    let is_debug = line.contains("[DEBUG]");
+    // SDK/FFI entries have a colon-prefixed source (e.g. "sdk:ConfigFfiLogger")
+    if line.contains("][sdk:") || line.contains("][ffi:") {
+        return if is_debug {
+            Style::default().fg(Color::Magenta)
+        } else {
+            Style::default().fg(Color::LightMagenta)
+        };
+    }
+    if line.contains("][cli:") {
+        return if is_debug {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::LightYellow)
+        };
+    }
+    if line.contains("][stream:") {
+        return if is_debug {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::LightCyan)
+        };
+    }
+    // Module loggers from core — bare source names (no colon).
+    if line.contains("][agent]") {
+        return if is_debug {
+            Style::default().fg(Color::Green)
+        } else {
+            Style::default().fg(Color::LightGreen)
+        };
+    }
+    if line.contains("][provider]") {
+        return if is_debug {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::LightYellow)
+        };
+    }
+    if line.contains("][transport]") || line.contains("][tool]") {
+        return if is_debug {
+            Style::default().fg(Color::Blue)
+        } else {
+            Style::default().fg(Color::LightBlue)
+        };
+    }
+    if line.contains("][config]") || line.contains("][session]") || line.contains("][chat]")
+        || line.contains("][discovery]") || line.contains("][resilience]")
+        || line.contains("][streaming]") || line.contains("][orchestrator]")
+        || line.contains("][stdio]") || line.contains("][wasm]")
+    {
+        return Style::default().fg(Color::Gray);
+    }
+    // core:* or unknown
+    Style::default().fg(Color::Gray)
 }
 
 fn centered_rect(

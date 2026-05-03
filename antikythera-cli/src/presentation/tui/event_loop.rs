@@ -15,6 +15,7 @@ use antikythera_core::application::resilience::{ContextWindowPolicy, RetryPolicy
 use antikythera_core::config::AppConfig;
 use antikythera_core::get_latest_logs;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
+use antikythera_core::{ProviderLogger, ConfigLogger};
 use antikythera_sdk::sdk_logging::get_latest_sdk_logs;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::execute;
@@ -83,6 +84,13 @@ pub async fn run_chat_app(
             None // servers/ folder not found — discovery is optional; omit to avoid noise at startup.
         }
     };
+
+    ConfigLogger::new(&antikythera_core::get_active_session()).info(format!(
+        "Building runtime client | provider={} model={} providers_count={}",
+        config.default_provider,
+        config.model,
+        providers.len(),
+    ));
 
     let client = build_runtime_client(&config, &providers)?;
     let snapshot = client.config_snapshot();
@@ -706,6 +714,14 @@ fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut Cha
 
     let health_ref = Arc::clone(&app.health);
     let provider_id = app.provider.clone();
+    let model_id = app.model.clone();
+    ProviderLogger::new(&antikythera_core::get_active_session()).info(format!(
+        "CLI → CORE: dispatching request | provider={} model={} mode={} session={}",
+        provider_id,
+        model_id,
+        if app.agent_mode { "agent" } else { "chat" },
+        app.session_id.as_deref().unwrap_or("<baru>"),
+    ));
 
     if app.agent_mode {
         let options = AgentOptions {
@@ -783,6 +799,13 @@ fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut Cha
 }
 
 fn apply_chat_result(app: &mut ChatApp, result: ChatResult) {
+    ProviderLogger::new(&antikythera_core::get_active_session()).info(format!(
+        "CORE → CLI: chat response received | provider={} model={} session={} chars={}",
+        result.provider,
+        result.model,
+        result.session_id,
+        result.content.len(),
+    ));
     app.session_id = Some(result.session_id.clone());
     app.status = format!(
         "Respons diterima dari {}/{}.",
@@ -814,6 +837,12 @@ fn apply_chat_result(app: &mut ChatApp, result: ChatResult) {
 }
 
 fn apply_agent_outcome(app: &mut ChatApp, outcome: AgentOutcome) {
+    ProviderLogger::new(&antikythera_core::get_active_session()).info(format!(
+        "CORE → CLI: agent outcome received | session={} steps={} chars={}",
+        outcome.session_id,
+        outcome.steps.len(),
+        outcome.response.to_string().len(),
+    ));
     app.session_id = Some(outcome.session_id.clone());
     app.status = format!("Agent selesai dengan {} langkah tool.", outcome.steps.len());
     let response_text = format_agent_response(&outcome.response);
@@ -1195,6 +1224,11 @@ fn reconfigure_runtime(
     app: &mut ChatApp,
     client: &mut Arc<McpClient<DynamicModelProvider>>,
 ) -> Result<(), String> {
+    ConfigLogger::new(&antikythera_core::get_active_session()).info(format!(
+        "CLI reconfiguring runtime | new_provider={} new_model={}",
+        app.provider, app.model
+    ));
+
     // Build a PostcardAppConfig to persist — merge core routing fields with CLI providers.
     // Convert runtime PromptsConfig (Option<String> fields) to the postcard form (String fields).
     let postcard_prompts = {
