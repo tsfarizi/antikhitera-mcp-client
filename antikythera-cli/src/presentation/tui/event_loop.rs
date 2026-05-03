@@ -194,11 +194,13 @@ async fn run_loop(
             .map(|entry| {
                 let level = entry.level.as_str();
                 let source = entry.source.as_deref().unwrap_or("core");
+                // Extract HH:MM:SS from ISO 8601 timestamp.
+                let time = entry.timestamp.get(11..19).unwrap_or("--:--:--");
                 // Include context payload (FFI args, tool names, etc.) when present.
                 if let Some(ctx) = &entry.context {
-                    format!("[{level:<5}][{source}] {} | {ctx}", entry.message)
+                    format!("{time} [{level:<5}][{source}] {} | {ctx}", entry.message)
                 } else {
-                    format!("[{level:<5}][{source}] {}", entry.message)
+                    format!("{time} [{level:<5}][{source}] {}", entry.message)
                 }
             })
             .collect();
@@ -329,6 +331,57 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             if let Some((command, _)) = app.suggestions().first() {
                 app.input = format!("/{command}");
             }
+            KeyAction::None
+        }
+        // ── LOG scroll (Ctrl + arrows) ───────────────────────────────────
+        // Guarded arms must come BEFORE the unguarded arrow-key arms.
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.log_scroll = app.log_scroll.saturating_sub(3);
+            KeyAction::None
+        }
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.log_scroll = app.log_scroll.saturating_add(3);
+            KeyAction::None
+        }
+        KeyCode::PageUp if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.log_scroll = app.log_scroll.saturating_sub(20);
+            KeyAction::None
+        }
+        KeyCode::PageDown if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.log_scroll = app.log_scroll.saturating_add(20);
+            KeyAction::None
+        }
+        KeyCode::Home if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.log_scroll = 0;
+            KeyAction::None
+        }
+        KeyCode::End if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.log_scroll = u16::MAX;
+            KeyAction::None
+        }
+        // ── Conversation scroll ──────────────────────────────────────────
+        KeyCode::Up => {
+            app.conversation_scroll = app.conversation_scroll.saturating_sub(3);
+            KeyAction::None
+        }
+        KeyCode::Down => {
+            app.conversation_scroll = app.conversation_scroll.saturating_add(3);
+            KeyAction::None
+        }
+        KeyCode::PageUp => {
+            app.conversation_scroll = app.conversation_scroll.saturating_sub(20);
+            KeyAction::None
+        }
+        KeyCode::PageDown => {
+            app.conversation_scroll = app.conversation_scroll.saturating_add(20);
+            KeyAction::None
+        }
+        KeyCode::Home => {
+            app.conversation_scroll = 0;
+            KeyAction::None
+        }
+        KeyCode::End => {
+            app.conversation_scroll = u16::MAX;
             KeyAction::None
         }
         KeyCode::Char(character) => {
@@ -676,6 +729,8 @@ fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut Cha
     app.push_message(UiMessage::new("You", &input, UiTone::User));
     app.status = format!("Mengirim ke {}/{}...", app.provider, app.model);
     app.loading = true;
+    // Auto-scroll conversation to latest on new message.
+    app.conversation_scroll = u16::MAX;
 
     // Capture user turn into the in-flight debug history session.
     if app.current_history_session.is_none() {

@@ -47,6 +47,11 @@ pub(super) struct ChatApp {
     // ── Provider health ──────────────────────────────────────────────────────
     /// Aggregated health metrics for the active LLM provider.
     pub(super) health: Arc<Mutex<HealthTracker>>,
+    // ── Scroll state ─────────────────────────────────────────────────────────
+    /// Scroll offset for the conversation panel (in lines).
+    pub(super) conversation_scroll: u16,
+    /// Scroll offset for the LOG panel (in lines).
+    pub(super) log_scroll: u16,
 }
 
 impl ChatApp {
@@ -79,6 +84,8 @@ impl ChatApp {
             streaming_content: String::new(),
             stream_rx: None,
             health: Arc::new(Mutex::new(HealthTracker::new())),
+            conversation_scroll: u16::MAX,
+            log_scroll: u16::MAX,
         };
         app.messages.push(UiMessage::new(
             "Welcome",

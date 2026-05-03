@@ -67,17 +67,9 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     frame.render_widget(header, layout[0]);
 
     // ── Conversation ────────────────────────────────────────────────────────
-    // Derive how many messages to show from the actual panel height so the
-    // conversation area fills the terminal regardless of window size.
-    // Each message occupies at least 2 rows (header + blank line), so dividing
-    // by 2 gives a conservative upper bound; the Paragraph wraps the rest.
-    let max_visible = ((content[0].height.saturating_sub(2)) / 2).max(4) as usize;
-    let messages = app
-        .messages
-        .iter()
-        .rev()
-        .take(max_visible)
-        .collect::<Vec<_>>();
+    // Render all messages; the Paragraph wraps and scrolls to show the
+    // viewport the user selected. When scroll = u16::MAX the viewport stays
+    // pinned to the latest messages.
     let conv_title = if app.loading {
         if app.streaming_content.is_empty() {
             "Conversation  [mengirim...]"
@@ -85,16 +77,17 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
             "Conversation  [menerima...]"
         }
     } else {
-        "Conversation"
+        "Conversation  [↑↓/PgUp/PgDn/Home/End = scroll]"
     };
-    let mut conv_text = render_messages(messages.into_iter().rev());
+    let mut conv_text = render_messages(app.messages.iter());
     // Append live streaming tokens as an in-progress assistant message.
     if app.loading && !app.streaming_content.is_empty() {
         conv_text.extend(render_streaming_preview(&app.streaming_content));
     }
     let conversation = Paragraph::new(conv_text)
         .block(Block::default().borders(Borders::ALL).title(conv_title))
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((app.conversation_scroll, 0));
     frame.render_widget(conversation, content[0]);
 
     // ── Context sidebar ─────────────────────────────────────────────────────
@@ -122,10 +115,6 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     // ERROR entries are shown in the chat area — still show in log.
     // Long lines wrap to the next row(s) instead of being truncated.
     let log_panel_area = right_panel[1];
-    let log_inner = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1)])
-        .split(log_panel_area)[0];
 
     let all_log_lines: Vec<&String> = app
         .log_lines
@@ -145,7 +134,7 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Logs [yellow=CLI/prov | magenta=SDK/FFI | cyan=stream | green=agent | blue=tool/transport]")
+                .title("Logs [yellow=CLI/prov | magenta=SDK/FFI | cyan=stream | green=agent | blue=tool/transport] [Ctrl+↑↓/PgUp/PgDn/Home/End = scroll]")
                 .title_style(
                     Style::default()
                         .fg(Color::Magenta)
@@ -153,10 +142,7 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
                 ),
         )
         .wrap(Wrap { trim: true })
-        .scroll((
-            all_log_lines.len().saturating_sub(log_inner.height.saturating_sub(2) as usize) as u16,
-            0,
-        ));
+        .scroll((app.log_scroll, 0));
     frame.render_widget(log_panel, log_panel_area);
 
     // ── Prompt bar ───────────────────────────────────────────────────────────
@@ -247,6 +233,20 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" quit  "),
+        Span::styled(
+            "↑↓",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" scroll chat  "),
+        Span::styled(
+            "Ctrl+↑↓",
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" scroll log  "),
         Span::styled(app.status.as_str(), Style::default().fg(Color::Gray)),
     ]))
     .block(Block::default().borders(Borders::ALL).title("Status"));
