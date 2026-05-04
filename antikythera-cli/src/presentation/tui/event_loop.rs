@@ -214,10 +214,10 @@ pub async fn run_chat_app(
         providers.len(),
     ));
 
-    let client = build_runtime_client(&config, &providers, builtin_transports)?;
+    let client = build_runtime_client(&config, &providers, builtin_transports.clone())?;
     let snapshot = client.config_snapshot();
     let tools = client.tools().len();
-    let mut app = ChatApp::new(config, providers, snapshot, tools);
+    let mut app = ChatApp::new(config, providers, snapshot, tools, builtin_transports);
     if let Some(msg) = discovery_msg {
         app.push_message(UiMessage::new("Server Discovery", msg, UiTone::System));
     }
@@ -1487,7 +1487,7 @@ fn reconfigure_runtime(
     let new_client = build_runtime_client(
         &app.runtime_config,
         &app.providers,
-        std::collections::HashMap::new(),
+        app.builtin_transports.clone(),
     )
     .map_err(|error| error.to_string())?;
     app.snapshot = new_client.config_snapshot();

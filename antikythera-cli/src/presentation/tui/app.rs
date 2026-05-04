@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use antikythera_core::application::client::ClientConfigSnapshot;
 use antikythera_core::application::resilience::HealthTracker;
+use antikythera_core::application::tooling::BuiltinTransport;
 use antikythera_core::config::AppConfig;
 use tokio::sync::{mpsc, oneshot};
 
@@ -52,6 +54,10 @@ pub(super) struct ChatApp {
     pub(super) conversation_scroll: u16,
     /// Scroll offset for the LOG panel (in lines).
     pub(super) log_scroll: u16,
+    // ── Builtin transports ────────────────────────────────────────────────────
+    /// Pre-built in-process tool transports (e.g. builtin_time).
+    /// Persisted so `reconfigure_runtime` can re-register them on the new client.
+    pub(super) builtin_transports: HashMap<String, Arc<BuiltinTransport>>,
 }
 
 impl ChatApp {
@@ -60,6 +66,7 @@ impl ChatApp {
         providers: Vec<ModelProviderConfig>,
         snapshot: ClientConfigSnapshot,
         tools: usize,
+        builtin_transports: HashMap<String, Arc<BuiltinTransport>>,
     ) -> Self {
         let mut app = Self {
             provider: runtime_config.default_provider.clone(),
@@ -86,6 +93,7 @@ impl ChatApp {
             health: Arc::new(Mutex::new(HealthTracker::new())),
             conversation_scroll: 0,
             log_scroll: 0,
+            builtin_transports,
         };
         app.messages.push(UiMessage::new(
             "Welcome",

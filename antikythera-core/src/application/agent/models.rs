@@ -21,13 +21,24 @@ pub struct AgentOutcome {
     pub steps: Vec<AgentStep>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AgentOptions {
     pub system_prompt: Option<String>,
     pub session_id: Option<String>,
     #[serde(default = "default_max_steps")]
     pub max_steps: usize,
     pub attachments: Vec<MessagePart>,
+}
+
+impl Default for AgentOptions {
+    fn default() -> Self {
+        Self {
+            system_prompt: None,
+            session_id: None,
+            max_steps: default_max_steps(),
+            attachments: Vec::new(),
+        }
+    }
 }
 
 fn default_max_steps() -> usize {
