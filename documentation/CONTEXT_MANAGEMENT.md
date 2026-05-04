@@ -6,7 +6,7 @@ This document describes the active context management and session lifecycle beha
 
 All conversational state, message history, metadata, and token tracking are strictly managed by `antikythera-session`. 
 
-- The `McpClient` in `antikythera-core` utilizes an LRU-based adapter (`SessionStore`) to access the `SessionManager`.
+- The `McpClient` in `antikythera-core` utilizes an LRU-based adapter (`SessionStore`, an internal `pub(super)` type) to access the `SessionManager`.
 - This unifies session structures across the CLI, the Core runtime, and the external SDK FFI boundaries.
 
 ## Runtime Flow
@@ -32,6 +32,6 @@ flowchart TD
 
 ## Operational Notes
 
-- Configure resilience policy (e.g., `ContextWindowPolicy`) before high-volume conversational loops.
+- Configure resilience policy (e.g., `ContextPolicy`) before high-volume conversational loops.
 - Avoid building custom history maps in higher-level SDK integrations. Rely on `antikythera_session::SessionManager` functions.
 - Host-side persistence and restoration should securely leverage `mcp_session_export` and `mcp_session_import` bindings.

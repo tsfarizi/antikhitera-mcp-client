@@ -4,7 +4,7 @@
 
 mod http_transport_tests {
     use antikythera_core::config::{ServerConfig, TransportType};
-    use antikythera_core::tooling::transport::{
+    use antikythera_core::application::tooling::transport::{
         HttpTransport, HttpTransportConfig, TransportMode,
     };
     use std::collections::HashMap;

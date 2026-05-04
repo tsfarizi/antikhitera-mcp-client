@@ -6,89 +6,9 @@ pub mod generators;
 pub mod prompts;
 pub mod ui;
 
-use crate::config::postcard_config::{self, ModelConfig, PostcardAppConfig, PromptsConfig};
+use crate::config::postcard_config;
 use generators::client;
 use std::error::Error;
-
-/// Run the initial setup wizard when no config exists
-pub async fn run_wizard() -> Result<(), Box<dyn Error>> {
-    ui::print_header("MCP Client - Configuration Wizard");
-    ui::print_info("Welcome! No configuration found.");
-    ui::print_info("Let's set up your MCP client.\n");
-    ui::print_section("PROVIDER SETUP");
-
-    let provider_type = prompts::prompt_select(
-        "Provider Type",
-        &["gemini", "ollama", "openai", "anthropic"],
-    )?;
-    let provider_type_display = to_title_case(&provider_type);
-    ui::print_hint(&format!("Saved as: {}", provider_type_display));
-
-    let provider_id = prompts::prompt_text(
-        &format!("Provider ID [Enter = {}]", provider_type.to_lowercase()),
-        Some(&provider_type.to_lowercase()),
-    )?;
-    ui::print_hint(&format!("Using: {}", provider_id));
-
-    let default_endpoint = get_default_endpoint(&provider_type);
-    let endpoint = prompts::prompt_text("API Endpoint", Some(&default_endpoint))?;
-
-    let api_key_env = format!("{}_API_KEY", provider_type.to_uppercase());
-    let api_key = prompts::prompt_password(
-        &format!("API Key (saved to .env as {})", api_key_env),
-        Some(&api_key_env),
-    )?;
-
-    ui::print_section("MODELS");
-    let models = prompts::prompt_models()?;
-
-    if models.is_empty() {
-        return Err("At least one model is required".into());
-    }
-
-    ui::print_section("DEFAULT MODEL");
-    let model_names: Vec<&str> = models.iter().map(|(name, _)| name.as_str()).collect();
-    ui::print_info(&format!("Available: {}", model_names.join(", ")));
-    let default_model = prompts::prompt_text("Default model", Some(&models[0].0))?;
-
-    // Generate .env file
-    client::generate_env(&api_key_env, &api_key)?;
-
-    // Build Postcard config
-    let config = PostcardAppConfig {
-        server: postcard_config::ServerConfig::default(),
-        providers: vec![postcard_config::ProviderConfig {
-            id: provider_id.clone(),
-            provider_type: provider_type_display.clone(),
-            endpoint: endpoint.clone(),
-            api_key: api_key_env,
-            models: models
-                .iter()
-                .map(|(name, display)| postcard_config::ModelInfo {
-                    name: name.clone(),
-                    display_name: display.clone(),
-                })
-                .collect(),
-        }],
-        model: ModelConfig {
-            default_provider: provider_id,
-            model: default_model,
-        },
-        prompts: PromptsConfig::default(),
-        agent: postcard_config::AgentConfig::default(),
-        security: crate::security::config::SecurityConfig::default(),
-        custom: std::collections::HashMap::new(),
-    };
-
-    // Save as Postcard
-    postcard_config::save_config(&config, None)?;
-
-    ui::print_success("Configuration saved!");
-    ui::print_info(&format!("  → {}", postcard_config::CONFIG_PATH));
-    ui::print_info("  → .env");
-
-    Ok(())
-}
 
 /// Run the setup menu (accessible from mode selector)
 pub async fn run_setup_menu() -> Result<bool, Box<dyn Error>> {
@@ -243,35 +163,4 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn to_title_case(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-    }
-}
 
-/// Generate a human-readable display name from a model identifier
-/// Converts kebab-case to Title Case (e.g., "gpt-4-turbo" → "Gpt 4 Turbo")
-#[allow(dead_code)]
-pub fn generate_display_name(name: &str) -> String {
-    name.split('-')
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().chain(chars).collect(),
-            }
-        })
-        .collect::<Vec<String>>()
-        .join(" ")
-}
-
-fn get_default_endpoint(provider_type: &str) -> String {
-    match provider_type.to_lowercase().as_str() {
-        "gemini" => "https://generativelanguage.googleapis.com".to_string(),
-        "ollama" => "http://127.0.0.1:11434".to_string(),
-        "openai" => "https://api.openai.com".to_string(),
-        _ => "https://api.example.com".to_string(),
-    }
-}

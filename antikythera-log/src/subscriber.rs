@@ -52,60 +52,6 @@ impl LogSubscriber {
         self.receiver.recv_timeout(timeout)
     }
 
-    /// Iterate over all available log entries
-    pub fn iter(&self) -> crossbeam_channel::Iter<'_, LogEntry> {
-        self.receiver.iter()
-    }
-
-    /// Check if there are pending log entries
-    pub fn has_pending(&self) -> bool {
-        !self.receiver.is_empty()
-    }
-
-    /// Get pending count
-    pub fn pending_count(&self) -> usize {
-        self.receiver.len()
-    }
 }
 
-impl Iterator for LogSubscriber {
-    type Item = LogEntry;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.receiver.recv().ok()
-    }
-}
-
-// ============================================================================
-// Log Stream (for WASM/FFI compatibility)
-// ============================================================================
-
-/// Log stream for WASM environments (no threads)
-#[cfg(not(feature = "subscriber"))]
-pub struct LogStream {
-    buffer: Vec<LogEntry>,
-}
-
-#[cfg(not(feature = "subscriber"))]
-impl LogStream {
-    pub fn new() -> Self {
-        Self { buffer: Vec::new() }
-    }
-
-    /// Get all logs
-    pub fn get_logs(&self) -> &[LogEntry] {
-        &self.buffer
-    }
-
-    /// Clear logs
-    pub fn clear(&mut self) {
-        self.buffer.clear();
-    }
-}
-
-#[cfg(not(feature = "subscriber"))]
-impl Default for LogStream {
-    fn default() -> Self {
-        Self::new()
-    }
-}

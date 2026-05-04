@@ -184,14 +184,4 @@ impl BatchLogExport {
 
         Ok(export)
     }
-
-    /// Serialize to JSON
-    pub fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string_pretty(self).map_err(|e| format!("Serialize error: {}", e))
-    }
-
-    /// Deserialize from JSON
-    pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| format!("Deserialize error: {}", e))
-    }
 }

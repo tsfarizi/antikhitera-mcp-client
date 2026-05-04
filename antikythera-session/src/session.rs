@@ -438,37 +438,11 @@ impl Session {
         }
     }
 
-    /// Get session summary (last N messages)
-    pub fn get_summary(&self, count: usize) -> Vec<Message> {
-        let len = self.messages.len();
-        if len <= count {
-            self.messages.clone()
-        } else {
-            self.messages[len - count..].to_vec()
-        }
-    }
-
     /// Clear all messages
     pub fn clear_messages(&mut self) {
         self.messages.clear();
         self.total_steps = 0;
         self.tools_used.clear();
-    }
-
-    /// Set metadata
-    pub fn with_metadata(mut self, metadata: impl Into<String>) -> Self {
-        self.metadata = Some(metadata.into());
-        self
-    }
-
-    /// Serialize to JSON
-    pub fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string(self).map_err(|e| format!("Serialize error: {}", e))
-    }
-
-    /// Deserialize from JSON
-    pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| format!("Deserialize error: {}", e))
     }
 }
 

@@ -18,7 +18,6 @@ pub enum SecretStorage {
     },
     File {
         secrets: HashMap<String, Vec<StoredSecret>>,
-        #[allow(dead_code)]
         path: String,
     },
 }

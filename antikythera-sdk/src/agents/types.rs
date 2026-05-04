@@ -125,51 +125,6 @@ pub struct AgentStatus {
     pub tasks_failed: u32,
 }
 
-/// Agent task request
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentTaskRequest {
-    /// Task description/prompt
-    pub task: String,
-    /// Optional session ID for continuity
-    pub session_id: Option<String>,
-    /// Maximum steps for this task
-    pub max_steps: Option<u32>,
-    /// Whether to allow tool calls
-    pub allow_tools: Option<bool>,
-}
-
-/// Agent task result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentTaskResult {
-    /// Task output
-    pub response: String,
-    /// Whether task succeeded
-    pub success: bool,
-    /// Error message (if failed)
-    pub error_message: Option<String>,
-    /// Number of steps executed
-    pub steps_executed: u32,
-    /// Tools called during task
-    pub tools_called: Vec<String>,
-    /// Session ID (if any)
-    pub session_id: Option<String>,
-}
-
-/// Multi-agent orchestration result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OrchestrationResult {
-    /// Final synthesized response
-    pub response: String,
-    /// Whether orchestration succeeded
-    pub success: bool,
-    /// Agent contributions (agent_id -> contribution)
-    pub contributions: Vec<(String, String)>,
-    /// Total steps across all agents
-    pub total_steps: u32,
-    /// Error message (if failed)
-    pub error_message: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationReport {
     pub valid: bool,

@@ -51,7 +51,7 @@
 }
 
 mod http_transport_async_tests {
-    use antikythera_core::tooling::transport::{
+    use antikythera_core::application::tooling::transport::{
         HttpTransport, HttpTransportConfig, McpTransport, TransportMode,
     };
     use std::collections::HashMap;

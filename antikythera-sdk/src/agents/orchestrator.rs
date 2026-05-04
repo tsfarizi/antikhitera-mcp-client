@@ -39,10 +39,7 @@ pub struct GuardrailOptions {
 
 impl GuardrailOptions {
     pub fn is_empty(&self) -> bool {
-        self.timeout.is_none()
-            && self.budget.is_none()
-            && self.rate_limit.is_none()
-            && !self.cancellation
+        self.timeout.is_none() && self.budget.is_none() && self.rate_limit.is_none() && !self.cancellation
     }
 }
 
@@ -102,18 +99,6 @@ impl OrchestratorOptions {
         }
     }
 
-    pub fn apply_to_orchestrator<P>(
-        &self,
-        orchestrator: antikythera_core::application::agent::multi_agent::orchestrator::MultiAgentOrchestrator<P>,
-    ) -> antikythera_core::application::agent::multi_agent::orchestrator::MultiAgentOrchestrator<P>
-    where
-        P: antikythera_core::infrastructure::model::ModelProvider + 'static,
-    {
-        orchestrator
-            .with_budget(self.into())
-            .with_default_retry_condition(self.default_retry_condition.into())
-            .with_guardrails(self.guardrails.to_guardrail_chain())
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

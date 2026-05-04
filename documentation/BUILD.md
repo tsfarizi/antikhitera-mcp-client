@@ -145,16 +145,16 @@ mdbook serve --open
 ```mermaid
 flowchart LR
     CHECK[cargo check --workspace] --> TEST[cargo test --workspace]
-    TEST --> FMT[cargo fmt --all]
-    FMT --> CLIPPY[cargo clippy --workspace -- -D warnings]
+    TEST --> FMT[cargo fmt --all -- --check]
+    FMT --> CLIPPY[cargo clippy --workspace --lib --bins -- -D warnings -D deprecated]
 ```
 
 ### Workspace-wide
 
 ```bash
 cargo test --workspace
-cargo fmt --all
-cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
+cargo clippy --workspace --lib --bins -- -D warnings -D deprecated
 ```
 
 ### Common targeted checks
@@ -199,7 +199,6 @@ The repository includes `Taskfile.yml` for common flows.
 | Feature | Purpose |
 |:--------|:--------|
 | `native-transport` | OS process and stdio transport support |
-| `gcp` | Google Cloud-related integrations |
 | `wasm-runtime` | Sandboxed WASM execution support |
 | `cache` | Postcard-based configuration cache |
 | `wizard` | Interactive setup and wizard-related dependencies |
@@ -215,7 +214,6 @@ The repository includes `Taskfile.yml` for common flows.
 | `wasm-config` | WASM configuration binary format support |
 | `single-agent` | Single-agent support |
 | `multi-agent` | Multi-agent support |
-| `cloud` | Cloud-related integrations |
 | `wasm-sandbox` | WASM sandbox support |
 | `full` | Broad feature bundle for the SDK/core stack |
 

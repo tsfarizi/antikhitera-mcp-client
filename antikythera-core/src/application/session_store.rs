@@ -80,12 +80,6 @@ impl SessionStore {
         }
     }
 
-    /// Number of active sessions.
-    #[allow(dead_code)]
-    pub(super) fn len(&self) -> usize {
-        self.order.len()
-    }
-
     // ── internal helpers ─────────────────────────────────────────────────────
 
     /// Move `session_id` to the back of the access-order deque (most recent).

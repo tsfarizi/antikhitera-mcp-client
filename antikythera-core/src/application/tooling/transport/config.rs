@@ -44,11 +44,3 @@ pub struct HttpTransportConfig {
     pub required_capabilities: Vec<TransportCapability>,
 }
 
-impl HttpTransportConfig {
-    /// Returns true when all required capabilities are present.
-    pub fn is_compatible_with(&self, offered: &[TransportCapability]) -> bool {
-        self.required_capabilities
-            .iter()
-            .all(|required| offered.contains(required))
-    }
-}

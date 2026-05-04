@@ -8,7 +8,6 @@
 //! json_schema/
 //! ├── types.rs      # Schema type definitions (nested structures supported)
 //! ├── validator.rs  # Validation engine with retry logic
-//! └── ffi.rs        # FFI bindings for CLI and external languages
 //! ```
 //!
 //! ## Usage
@@ -18,7 +17,6 @@
 //! 3. Validate LLM response
 //! 4. Auto-retry with error feedback on failure
 
-pub mod ffi;
 pub mod types;
 pub mod validator;
 

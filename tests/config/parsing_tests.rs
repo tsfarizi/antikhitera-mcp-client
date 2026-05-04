@@ -33,9 +33,7 @@ fn minimal_postcard_config() -> PostcardAppConfig {
     }
 }
 
-// Split into 5 parts for consistent test organization.
-include!("parsing_tests/part_01.rs");
+// Split into parts for consistent test organization.
 include!("parsing_tests/part_02.rs");
-include!("parsing_tests/part_03.rs");
 include!("parsing_tests/part_04.rs");
 include!("parsing_tests/part_05.rs");

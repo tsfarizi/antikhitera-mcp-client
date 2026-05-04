@@ -53,7 +53,6 @@ pub struct BuiltinTransport {
     inner: Arc<BuiltinTransportInner>,
 }
 
-#[allow(dead_code)]
 struct BuiltinTransportInner {
     server_name: String,
     instructions: String,

@@ -5,23 +5,6 @@
 use crate::config::AppConfig;
 use crate::domain::entities::*;
 use crate::error::{CliError, CliResult};
-use std::path::Path;
-
-pub const CLI_CONFIG_PATH: &str = antikythera_core::config::postcard_config::CONFIG_PATH;
-
-/// Load the shared config from `app.pc`.
-pub fn load_app_config(path: Option<&Path>) -> CliResult<AppConfig> {
-    crate::config::load_app_config(path)
-}
-
-/// Deprecated compatibility alias.
-#[deprecated(
-    since = "0.9.9",
-    note = "use load_app_config instead; scheduled removal in 2.0.0"
-)]
-pub fn load_cli_config(path: Option<&Path>) -> CliResult<AppConfig> {
-    load_app_config(path)
-}
 
 /// Build a CLI [`ProviderConfig`] domain entity from the active provider in `config`.
 pub fn build_active_provider_config(config: &AppConfig) -> CliResult<ProviderConfig> {

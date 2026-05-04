@@ -15,10 +15,6 @@ pub struct LogBuffer {
     max_capacity: usize,
 }
 
-// Re-export subscriber types for external access
-#[cfg(feature = "subscriber")]
-pub use crate::subscriber::{LogSender, LogSubscriber};
-
 /// Main logger
 #[derive(Clone)]
 pub struct Logger {
@@ -272,9 +268,4 @@ impl Logger {
         crate::subscriber::LogSubscriber::new(self)
     }
 
-    /// Get subscriber count
-    #[cfg(feature = "subscriber")]
-    pub fn subscriber_count(&self) -> usize {
-        self.subscribers.lock().unwrap().len()
-    }
 }

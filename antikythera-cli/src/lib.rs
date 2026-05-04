@@ -42,5 +42,4 @@ pub mod runtime;
 pub mod cli;
 
 // Re-exports for convenience
-pub use config::CliConfig;
 pub use error::{CliError, CliResult};

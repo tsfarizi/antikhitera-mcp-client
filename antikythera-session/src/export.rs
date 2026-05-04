@@ -36,12 +36,6 @@ impl SessionExport {
         }
     }
 
-    /// Create export with notes
-    pub fn with_notes(mut self, notes: impl Into<String>) -> Self {
-        self.notes = Some(notes.into());
-        self
-    }
-
     /// Get the session
     pub fn into_session(self) -> Session {
         self.session
@@ -69,15 +63,6 @@ impl SessionExport {
         Ok(export)
     }
 
-    /// Serialize to JSON (for debugging/inspection)
-    pub fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string_pretty(self).map_err(|e| format!("Serialize error: {}", e))
-    }
-
-    /// Deserialize from JSON
-    pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| format!("Deserialize error: {}", e))
-    }
 }
 
 // ============================================================================
@@ -112,12 +97,6 @@ impl BatchExport {
                 .collect(),
             notes: None,
         }
-    }
-
-    /// Create with notes
-    pub fn with_notes(mut self, notes: impl Into<String>) -> Self {
-        self.notes = Some(notes.into());
-        self
     }
 
     /// Get session count
@@ -155,13 +134,4 @@ impl BatchExport {
         Ok(export)
     }
 
-    /// Serialize to JSON
-    pub fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string_pretty(self).map_err(|e| format!("Serialize error: {}", e))
-    }
-
-    /// Deserialize from JSON
-    pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| format!("Deserialize error: {}", e))
-    }
 }

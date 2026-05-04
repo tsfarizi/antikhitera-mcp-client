@@ -53,21 +53,6 @@ pub struct ServerValidationResult {
     pub server_name: String,
 }
 
-/// Server status information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerStatus {
-    /// Server name
-    pub name: String,
-    /// Whether server is currently running
-    pub running: bool,
-    /// Number of tools provided by this server
-    pub tool_count: u32,
-    /// Last error message (if any)
-    pub last_error: Option<String>,
-    /// Uptime in seconds (if running)
-    pub uptime_secs: Option<u32>,
-}
-
 /// Server operation result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerOperationResult {
@@ -143,12 +128,6 @@ impl McpServerConfig {
 /// Global server registry
 static SERVERS: LazyLock<Mutex<HashMap<String, McpServerConfig>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Get mutable access to server registry (for tests)
-#[allow(dead_code)]
-pub fn servers_lock() -> std::sync::MutexGuard<'static, HashMap<String, McpServerConfig>> {
-    SERVERS.lock().unwrap()
-}
 
 // ============================================================================
 // FFI Bindings

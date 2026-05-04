@@ -32,9 +32,6 @@ pub mod postcard_config;
 /// WASM Agent Configuration (minimal, no provider info)
 pub mod wasm_config;
 
-/// Migration stubs (TOML → Postcard no longer supported)
-pub mod migration;
-
 pub use crate::constants::{CONFIG_PATH, ENV_PATH};
 
 pub use app::{AppConfig, DocServerConfig, PromptsConfig};

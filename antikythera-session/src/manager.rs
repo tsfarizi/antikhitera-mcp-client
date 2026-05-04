@@ -109,15 +109,6 @@ impl SessionManager {
         }
     }
 
-    /// Get latest message
-    pub fn get_latest_message(&self, session_id: &str) -> Result<Option<Message>, String> {
-        let sessions = self.sessions.read().unwrap();
-        match sessions.get(session_id) {
-            Some(session) => Ok(session.latest_message().cloned()),
-            None => Err(format!("Session not found: {}", session_id)),
-        }
-    }
-
     // ========================================================================
     // Session Management
     // ========================================================================
@@ -137,22 +128,6 @@ impl SessionManager {
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.clear_messages();
-                Ok(())
-            }
-            None => Err(format!("Session not found: {}", session_id)),
-        }
-    }
-
-    /// Update session metadata
-    pub fn update_metadata(
-        &self,
-        session_id: &str,
-        metadata: impl Into<String>,
-    ) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
-        match sessions.get_mut(session_id) {
-            Some(session) => {
-                session.metadata = Some(metadata.into());
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -209,16 +184,6 @@ impl SessionManager {
             .collect()
     }
 
-    /// Get sessions by model
-    pub fn get_sessions_by_model(&self, model: &str) -> Vec<SessionSummary> {
-        let sessions = self.sessions.read().unwrap();
-        sessions
-            .values()
-            .filter(|s| s.model == model)
-            .map(SessionSummary::from)
-            .collect()
-    }
-
     /// Search sessions by title
     pub fn search_sessions(&self, query: &str) -> Vec<SessionSummary> {
         let sessions = self.sessions.read().unwrap();
@@ -232,12 +197,6 @@ impl SessionManager {
             })
             .map(SessionSummary::from)
             .collect()
-    }
-
-    /// Clear all sessions
-    pub fn clear_all(&self) {
-        let mut sessions = self.sessions.write().unwrap();
-        sessions.clear();
     }
 
     /// Import a session into the manager, replacing any existing one.

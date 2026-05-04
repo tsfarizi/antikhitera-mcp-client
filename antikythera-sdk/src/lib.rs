@@ -26,7 +26,7 @@
 //! ├── session/       - Session Management and History
 //! ├── prompts/       - Prompt Template Management
 //! ├── response/      - Response Formatting
-//! └── high_level_api.rs - Native Rust API (native builds only)
+//! └── json_schema/     - JSON Schema Validation
 //! ```
 //!
 //! ## Feature Flags
@@ -154,20 +154,12 @@ pub use session::{
 pub mod sdk_logging;
 
 pub use sdk_logging::{
-    AgentLogger,
-    // Module loggers
     ConfigFfiLogger,
-    PromptLogger,
-    ResponseLogger,
-    ServerLogger,
-    WasmAgentLogger,
     clear_sdk_loggers,
     clear_sdk_session_logs,
     get_latest_sdk_logs,
-    // Global functions
     get_sdk_logger,
     get_sdk_logs_json,
-    // Query API
     query_sdk_logs,
     subscribe_sdk_logs,
 };
@@ -287,14 +279,6 @@ pub use component::{
     // Host functions
     run_agent_with_host,
 };
-
-// ============================================================================
-// Legacy Modules
-// ============================================================================
-
-/// Native high-level API wrapper
-#[cfg(feature = "sdk-core")]
-pub mod high_level_api;
 
 #[cfg(feature = "sdk-core")]
 pub use antikythera_core::{HostModelClient, HostModelResponse, HostModelTransport};

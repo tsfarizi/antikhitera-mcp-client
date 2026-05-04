@@ -236,7 +236,6 @@ Current aliases are maintained only for compatibility and are documented in the 
 | `load_config` | `load_app_config` |
 | `save_config` | `save_app_config` |
 | `load_cli_config` | `load_app_config` |
-| `create_llm_provider` | `build_llm_provider` |
 | `create_provider_config` | `build_active_provider_config` |
 
 ## Related documents

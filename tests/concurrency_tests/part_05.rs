@@ -44,8 +44,6 @@ async fn test_high_concurrency_execution() {
                     true, // agent enabled
                     Some(1),
                     true, // debug mode
-                    String::new(),
-                    String::new(),
                 )
                 .await;
 

@@ -20,11 +20,13 @@ The security functionality is implemented in the `antikythera-core` crate under 
 
 ```
 antikythera-core/src/security/
-├── mod.rs              # Module exports
-├── config.rs           # Security configuration types
-├── validation.rs       # Input validation implementation
-├── rate_limit.rs       # Rate limiting implementation
-└── secrets.rs          # Secrets management implementation
+├── mod.rs
+├── config.rs
+├── validation/
+│   └── mod.rs
+├── rate_limit.rs
+└── secrets/
+    └── mod.rs
 ```
 
 ### SDK Module (`antikythera-sdk`)
@@ -33,11 +35,13 @@ FFI bindings are provided in the `antikythera-sdk` crate under the `security_ffi
 
 ```
 antikythera-sdk/src/security_ffi/
-├── mod.rs              # Module exports
-├── helpers.rs          # Common FFI utilities
-├── validation.rs       # Input validation FFI
-├── rate_limit.rs       # Rate limiting FFI
-└── secrets.rs          # Secrets management FFI
+├── mod.rs
+├── helpers.rs
+├── validation/
+│   └── mod.rs
+├── rate_limit.rs
+└── secrets/
+    └── mod.rs
 ```
 
 ## Input Validation

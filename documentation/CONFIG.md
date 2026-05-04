@@ -6,7 +6,7 @@ This document describes the Postcard-based configuration flow used by the curren
 
 The repository documents two configuration stories:
 
-1. The lightweight CLI config flow built around `cli-config.pc`
+1. The lightweight CLI config flow built around `app.pc`
 2. Broader SDK and core configuration helpers that use serialized configuration data
 
 ## Configuration model

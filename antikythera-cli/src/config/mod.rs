@@ -19,14 +19,6 @@ pub use antikythera_core::config::postcard_config::{
     ProviderConfig, ServerConfig,
 };
 
-/// Type alias kept for backward compatibility within the CLI crate.
-/// Prefer using `AppConfig` directly in new code.
-pub type CliConfig = AppConfig;
-
-/// Type alias kept for backward compatibility within the CLI crate.
-/// Prefer using `ProviderConfig` directly in new code.
-pub type CliProviderConfig = ProviderConfig;
-
 // ── Thin serialization wrappers ────────────────────────────────────────────────
 
 use std::path::Path;
@@ -117,15 +109,6 @@ pub fn save_app_config(config: &AppConfig, path: Option<&Path>) -> CliResult<()>
     let data = config_to_postcard(config)?;
     std::fs::write(config_path, &data)?;
     Ok(())
-}
-
-/// Deprecated compatibility alias.
-#[deprecated(
-    since = "0.9.9",
-    note = "use save_app_config instead; scheduled removal in 2.0.0"
-)]
-pub fn save_config(config: &AppConfig, path: Option<&Path>) -> CliResult<()> {
-    save_app_config(config, path)
 }
 
 /// Returns `true` if the config file already exists at the default path.
