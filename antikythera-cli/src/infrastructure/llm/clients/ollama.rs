@@ -39,10 +39,21 @@ impl ModelClient for OllamaClient {
     async fn chat(&self, request: ModelRequest) -> Result<ModelResponse, ModelError> {
         let url = self.base.build_url("/api/chat");
 
+        let force_json = request
+            .params
+            .get("output_format")
+            .and_then(|v| v.as_str())
+            .map(|s| s == "json")
+            .unwrap_or(false);
         let payload = OllamaRequest {
             model: request.model.clone(),
             messages: MessageAdapter::to_ollama_format(&request.messages),
             stream: true,
+            format: if force_json {
+                Some("json".to_string())
+            } else {
+                None
+            },
         };
 
         let log = ProviderLogger::new(
@@ -51,6 +62,9 @@ impl ModelClient for OllamaClient {
                 .as_deref()
                 .unwrap_or(&antikythera_core::get_active_session()),
         );
+        if force_json {
+            log.debug("ModelParams detected output_format=json — Ollama format set to json");
+        }
         log.info(format!(
             "Sending request to Ollama | provider={} model={} messages={}",
             self.base.id.as_str(),
@@ -84,6 +98,8 @@ struct OllamaRequest {
     model: String,
     messages: Vec<serde_json::Value>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<String>,
 }
 
 #[derive(Deserialize)]
