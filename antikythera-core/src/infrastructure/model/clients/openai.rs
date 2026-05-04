@@ -2,7 +2,6 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::logging::ProviderLogger;
 
 use super::base::HttpClientBase;
 use crate::config::ModelProviderConfig;
@@ -10,6 +9,7 @@ use crate::infrastructure::model::adapter::MessageAdapter;
 use crate::infrastructure::model::factory::resolve_api_key;
 use crate::infrastructure::model::traits::ModelClient;
 use crate::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
+use crate::logging::ProviderLogger;
 
 /// OpenAI-compatible client (works with OpenAI, Anthropic, Mistral, Groq, etc.)
 #[derive(Clone)]
@@ -47,16 +47,27 @@ impl ModelClient for OpenAIClient {
             stream: false,
         };
 
-        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()));
-        log.info(format!(
-            "Sending request to OpenAI-compatible provider | provider={} model={} messages={}",
-            self.base.id.as_str(),
-            request.model.as_str(),
-            request.messages.len()
-        ));
+        let log = ProviderLogger::new(
+            request
+                .session_id
+                .as_deref()
+                .unwrap_or(&crate::logging::get_active_session()),
+        );
+
+        if let Some(last_msg) = request.messages.last() {
+            let preview = crate::application::client::McpClient::<
+                crate::infrastructure::model::DynamicModelProvider,
+            >::summarise(&last_msg.content());
+            log.info(format!(
+                "-> OpenAI REQ | provider={} model={} messages={} | last_msg={}",
+                self.base.id.as_str(),
+                request.model.as_str(),
+                request.messages.len(),
+                preview
+            ));
+        }
 
         let response: OpenAIResponse = self.base.post_with_bearer(&url, &payload).await?;
-        log.debug("Received response from OpenAI-compatible provider");
 
         let content = response
             .choices
@@ -65,6 +76,15 @@ impl ModelClient for OpenAIClient {
             .and_then(|c| c.message)
             .map(|m| m.content)
             .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing content"))?;
+
+        let preview = crate::application::client::McpClient::<
+            crate::infrastructure::model::DynamicModelProvider,
+        >::summarise(&content);
+        log.info(format!(
+            "<- OpenAI RES | chars={} | {}",
+            content.len(),
+            preview
+        ));
 
         Ok(ModelResponse::new(content, request.session_id))
     }

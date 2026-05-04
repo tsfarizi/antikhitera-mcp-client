@@ -171,6 +171,42 @@ pub async fn run_chat_app(
         map
     };
 
+    // Customise prompts to enforce strict MCP tool format.
+    // The template is the first thing the LLM sees — format rules go here.
+    config.prompts.template = Some(
+        concat!(
+            "You are a helpful AI assistant.\n\n",
+            // --- Format rules first so the model sees them immediately ---
+            "CRITICAL: Your ENTIRE response must be exactly ONE of the two JSON objects below.\n",
+            "Do NOT return plain text. Do NOT wrap in markdown. Do NOT add commentary.\n\n",
+
+            "=== TOOL CALL (to use a tool) ===\n",
+            r#"{"action":"call_tool","tool":"TOOL_NAME","input":{...}}"#,
+            "\n",
+            "Example: ",
+            r#"{"action":"call_tool","tool":"get_current_date","input":{}}"#,
+            "\n",
+            r#"WRONG: "tool_call", "tool_calls", "function", "parameters", "arguments" — all rejected."#,
+            "\n\n",
+
+            "=== FINAL RESPONSE (to answer the user) ===\n",
+            r#"{"action":"final","response":{"content":"your answer here"}}"#,
+            "\n",
+            "IMPORTANT: The ENTIRE response must be the JSON above. Do NOT return just ",
+            r#"{"content":"..."} "#,
+            "without the action/response wrapper.\n",
+            "Only include a ",
+            r#""data" "#,
+            "field if you used a tool — reference the step like ",
+            r#""data":"step_0""#,
+            ". If no tool was used, omit the data field entirely.\n\n",
+
+            "{{custom_instruction}}\n\n",
+            "{{language_guidance}}\n\n",
+            "{{tool_guidance}}",
+        ).to_string(),
+    );
+
     ConfigLogger::new(&antikythera_core::get_active_session()).info(format!(
         "Building runtime client | provider={} model={} providers_count={}",
         config.default_provider,
@@ -442,7 +478,8 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             KeyAction::None
         }
         KeyCode::End if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.log_scroll = u16::MAX;
+            let total = app.log_lines.len().saturating_sub(12);
+            app.log_scroll = total as u16;
             KeyAction::None
         }
         // ── Conversation scroll ──────────────────────────────────────────
@@ -467,7 +504,7 @@ fn handle_key_event(key: KeyEvent, app: &mut ChatApp) -> KeyAction {
             KeyAction::None
         }
         KeyCode::End => {
-            app.conversation_scroll = u16::MAX;
+            app.conversation_scroll = scroll_to_bottom(&app.messages, app.conversation_scroll);
             KeyAction::None
         }
         KeyCode::Char(character) => {
@@ -815,8 +852,8 @@ fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, app: &mut Cha
     app.push_message(UiMessage::new("You", &input, UiTone::User));
     app.status = format!("Mengirim ke {}/{}...", app.provider, app.model);
     app.loading = true;
-    // Auto-scroll conversation to latest on new message.
-    app.conversation_scroll = u16::MAX;
+    // Scroll to show latest messages (count lines from message body lengths).
+    app.conversation_scroll = scroll_to_bottom(&app.messages, app.conversation_scroll);
 
     // Capture user turn into the in-flight debug history session.
     if app.current_history_session.is_none() {
@@ -992,6 +1029,8 @@ fn apply_agent_outcome(app: &mut ChatApp, outcome: AgentOutcome) {
         response_text.clone(),
         UiTone::Assistant,
     ));
+    // Scroll conversation to show the response.
+    app.conversation_scroll = scroll_to_bottom(&app.messages, app.conversation_scroll);
 
     if !outcome.steps.is_empty() {
         app.push_message(UiMessage::new(
@@ -1192,6 +1231,17 @@ fn process_command(
             app.push_message(UiMessage::new("Command Error", body, UiTone::Error));
         }
     }
+}
+
+/// Estimate the scroll offset needed to show the bottom of the conversation.
+/// Each message body line counts as 1 visible line; message headers add 1 line each;
+/// blank separators add 1 line each.
+fn scroll_to_bottom(messages: &[UiMessage], _current_scroll: u16) -> u16 {
+    let total_lines: usize = messages
+        .iter()
+        .map(|m| 2 + m.body.lines().count()) // title line + 1 body line minimum + separator
+        .sum();
+    total_lines.saturating_sub(8) as u16 // ~8 lines of viewport
 }
 
 fn format_agent_response(value: &serde_json::Value) -> String {

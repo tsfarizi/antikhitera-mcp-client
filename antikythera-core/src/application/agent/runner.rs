@@ -58,6 +58,12 @@ impl<P: ModelProvider> Agent<P> {
             _ => instructions,
         };
 
+        log.info(format!(
+            "System prompt | chars={} preview={}",
+            system_prompt.len(),
+            McpClient::<P>::summarise(&system_prompt)
+        ));
+
         let prompt_preview = McpClient::<P>::summarise(&prompt);
         let mut next_prompt = self.runtime.initial_user_prompt(prompt, &context);
         logs.push(format!("Initial agent request: {prompt_preview}"));
@@ -94,6 +100,13 @@ impl<P: ModelProvider> Agent<P> {
                 session_id.as_deref(),
                 remaining_steps
             ));
+            // Log the prompt being sent for IO trace
+            let prompt_preview = McpClient::<P>::summarise(&next_prompt);
+            log.info(format!(
+                "-> Agent REQ | chars={} | {}",
+                next_prompt.len(),
+                prompt_preview
+            ));
             let request = ChatRequest {
                 prompt: next_prompt.clone(),
                 attachments: if first_call {
@@ -116,6 +129,14 @@ impl<P: ModelProvider> Agent<P> {
             logs.extend(result.logs.clone());
             session_id = Some(result.session_id.clone());
             first_call = false;
+
+            // Log the LLM response for IO trace
+            let response_preview = McpClient::<P>::summarise(&result.content);
+            log.info(format!(
+                "<- Agent RES | chars={} | {}",
+                result.content.len(),
+                response_preview
+            ));
 
             // Parse agent action with retry logic for malformed JSON
             let directive = self

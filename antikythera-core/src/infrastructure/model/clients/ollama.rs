@@ -41,21 +41,38 @@ impl ModelClient for OllamaClient {
             stream: false,
         };
 
-        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()));
-        log.info(format!(
-            "Sending request to Ollama | provider={} model={} messages={}",
-            self.base.id.as_str(),
-            request.model.as_str(),
-            request.messages.len()
-        ));
+        let log = ProviderLogger::new(
+            request
+                .session_id
+                .as_deref()
+                .unwrap_or(&crate::logging::get_active_session()),
+        );
+
+        // Log the last user message content for IO trace
+        if let Some(last_msg) = request.messages.last() {
+            let preview = crate::application::client::McpClient::<crate::infrastructure::model::DynamicModelProvider>::summarise(&last_msg.content());
+            log.info(format!(
+                "→ Ollama REQ | provider={} model={} messages={} | last_msg={}",
+                self.base.id.as_str(),
+                request.model.as_str(),
+                request.messages.len(),
+                preview
+            ));
+        }
 
         let response: OllamaResponse = self.base.post_no_auth(&url, &payload).await?;
-        log.debug("Received response from Ollama");
 
         let content = response
             .message
             .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing message"))?
             .content;
+
+        let preview = crate::application::client::McpClient::<crate::infrastructure::model::DynamicModelProvider>::summarise(&content);
+        log.info(format!(
+            "← Ollama RES | chars={} | {}",
+            content.len(),
+            preview
+        ));
 
         Ok(ModelResponse::new(content, request.session_id))
     }

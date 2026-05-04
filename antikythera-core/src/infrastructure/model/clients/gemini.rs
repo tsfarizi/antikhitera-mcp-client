@@ -3,7 +3,6 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
-use crate::logging::ProviderLogger;
 
 use super::base::HttpClientBase;
 use crate::config::ModelProviderConfig;
@@ -12,6 +11,7 @@ use crate::infrastructure::model::adapter::MessageAdapter;
 use crate::infrastructure::model::factory::resolve_api_key;
 use crate::infrastructure::model::traits::ModelClient;
 use crate::infrastructure::model::types::{ModelError, ModelRequest, ModelResponse};
+use crate::logging::ProviderLogger;
 
 /// Gemini client for Google AI
 #[derive(Clone)]
@@ -65,16 +65,28 @@ impl ModelClient for GeminiClient {
             });
         }
 
-        let log = ProviderLogger::new(request.session_id.as_deref().unwrap_or(&crate::logging::get_active_session()));
-        log.info(format!(
-            "Sending request to Gemini | provider={} model={} messages={}",
-            self.base.id.as_str(),
-            request.model.as_str(),
-            request.messages.len()
-        ));
+        let log = ProviderLogger::new(
+            request
+                .session_id
+                .as_deref()
+                .unwrap_or(&crate::logging::get_active_session()),
+        );
+
+        // Log the last user message content for IO trace
+        if let Some(last_msg) = request.messages.last() {
+            let preview = crate::application::client::McpClient::<
+                crate::infrastructure::model::DynamicModelProvider,
+            >::summarise(&last_msg.content());
+            log.info(format!(
+                "-> Gemini REQ | provider={} model={} messages={} | last_msg={}",
+                self.base.id.as_str(),
+                request.model.as_str(),
+                request.messages.len(),
+                preview
+            ));
+        }
 
         let response: GeminiResponse = self.base.post_with_query_key(&url, &payload).await?;
-        log.debug("Received response from Gemini");
 
         let content = response
             .candidates
@@ -84,6 +96,15 @@ impl ModelClient for GeminiClient {
             .flat_map(|c| c.parts)
             .find_map(|p| p.text)
             .ok_or_else(|| ModelError::invalid_response(&self.base.id, "missing text"))?;
+
+        let preview = crate::application::client::McpClient::<
+            crate::infrastructure::model::DynamicModelProvider,
+        >::summarise(&content);
+        log.info(format!(
+            "<- Gemini RES | chars={} | {}",
+            content.len(),
+            preview
+        ));
 
         Ok(ModelResponse::new(content, request.session_id))
     }
