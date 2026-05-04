@@ -30,7 +30,6 @@ pub(super) mod session_store;
 pub mod stdio;
 pub mod streaming;
 pub mod tooling;
-pub mod ui;
 
 pub use hooks::{
     AuthHook, CorrelationHook, HookContext, HookError, HookOperation, HookRegistry,
