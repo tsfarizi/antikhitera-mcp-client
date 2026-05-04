@@ -112,7 +112,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         RunMode::MultiAgent => {
-            let client = build_runtime_client(&runtime_config, &providers)?;
+            let client = build_runtime_client(
+                &runtime_config,
+                &providers,
+                std::collections::HashMap::new(),
+            )?;
             run_multi_agent(cli, client).await?;
         }
         RunMode::WasmHarness => {

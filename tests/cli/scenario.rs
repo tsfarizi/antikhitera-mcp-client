@@ -64,8 +64,12 @@ async fn greet_then_ask_time() {
     eprintln!("[SCENARIO] Provider : {selected_provider}");
     eprintln!("[SCENARIO] Model    : {selected_model}");
 
-    let client = build_runtime_client(&runtime_config, &providers)
-        .expect("McpClient harus berhasil dibangun");
+    let client = build_runtime_client(
+        &runtime_config,
+        &providers,
+        std::collections::HashMap::new(),
+    )
+    .expect("McpClient harus berhasil dibangun");
 
     let session_id = "scenario-test".to_string();
 

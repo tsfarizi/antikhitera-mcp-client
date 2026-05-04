@@ -18,4 +18,6 @@ pub use interface::{
 pub use manager::ServerManager;
 #[cfg(feature = "native-transport")]
 pub use process::spawn_and_list_tools;
-pub use transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};
+pub use transport::{
+    BuiltinTransport, HttpTransport, HttpTransportConfig, McpTransport, TransportMode,
+};

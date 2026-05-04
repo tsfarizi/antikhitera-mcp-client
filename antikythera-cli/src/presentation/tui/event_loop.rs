@@ -85,6 +85,92 @@ pub async fn run_chat_app(
         }
     };
 
+    // Register builtin MCP server with in-process tool implementations.
+    let builtin_transports = {
+        use antikythera_core::application::tooling::{
+            BuiltinTransport, ServerToolInfo, TaskSupport, ToolAnnotations, ToolExecution,
+        };
+        use antikythera_core::config::server::{ServerConfig as CoreServerConfig, TransportType};
+        use antikythera_core::config::tool::ToolConfig;
+        use std::collections::HashMap;
+
+        let builtin_server_name = "builtin_time";
+        if !config.servers.iter().any(|s| s.name == builtin_server_name) {
+            config.servers.push(CoreServerConfig {
+                name: builtin_server_name.to_string(),
+                transport: TransportType::Builtin,
+                command: None,
+                args: Vec::new(),
+                env: HashMap::new(),
+                workdir: None,
+                url: None,
+                headers: HashMap::new(),
+                default_timezone: None,
+                default_city: None,
+            });
+        }
+
+        let builtin_tools = [("get_current_date", "Get today's date in dd mm yyyy format")];
+        for (tool_name, tool_desc) in builtin_tools {
+            if !config.tools.iter().any(|t| t.name == tool_name) {
+                config.tools.push(ToolConfig {
+                    name: tool_name.to_string(),
+                    description: Some(tool_desc.to_string()),
+                    server: Some(builtin_server_name.to_string()),
+                });
+            }
+        }
+
+        let tool_infos = vec![ServerToolInfo {
+            name: "get_current_date".to_string(),
+            title: Some("Current Date Provider".to_string()),
+            description: Some(
+                "Get today's date in dd mm yyyy format. Returns the current date based on the system clock."
+                    .to_string(),
+            ),
+            icons: None,
+            input_schema: Some(serde_json::json!({
+                "type": "object",
+                "additionalProperties": false
+            })),
+            output_schema: Some(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "date": { "type": "string", "description": "Today's date in dd mm yyyy format" },
+                    "day": { "type": "string" },
+                    "month": { "type": "string" },
+                    "year": { "type": "string" }
+                },
+                "required": ["date"]
+            })),
+            annotations: Some(ToolAnnotations {
+                audience: Some(vec!["user".to_string(), "assistant".to_string()]),
+                priority: Some(1.0),
+                last_modified: None,
+            }),
+            execution: Some(ToolExecution {
+                task_support: Some(TaskSupport::Forbidden),
+            }),
+        }];
+
+        let transport = BuiltinTransport::with_tools(builtin_server_name, tool_infos).with_handler(
+            "get_current_date",
+            |_args| {
+                let now = chrono::Local::now();
+                Ok(serde_json::json!({
+                    "date": now.format("%d %m %Y").to_string(),
+                    "day": now.format("%A").to_string(),
+                    "month": now.format("%B").to_string(),
+                    "year": now.format("%Y").to_string(),
+                }))
+            },
+        );
+
+        let mut map = HashMap::new();
+        map.insert(builtin_server_name.to_string(), Arc::new(transport));
+        map
+    };
+
     ConfigLogger::new(&antikythera_core::get_active_session()).info(format!(
         "Building runtime client | provider={} model={} providers_count={}",
         config.default_provider,
@@ -92,7 +178,7 @@ pub async fn run_chat_app(
         providers.len(),
     ));
 
-    let client = build_runtime_client(&config, &providers)?;
+    let client = build_runtime_client(&config, &providers, builtin_transports)?;
     let snapshot = client.config_snapshot();
     let tools = client.tools().len();
     let mut app = ChatApp::new(config, providers, snapshot, tools);
@@ -1348,8 +1434,12 @@ fn reconfigure_runtime(
     };
     save_app_config(&pc, None).map_err(|error| error.to_string())?;
 
-    let new_client = build_runtime_client(&app.runtime_config, &app.providers)
-        .map_err(|error| error.to_string())?;
+    let new_client = build_runtime_client(
+        &app.runtime_config,
+        &app.providers,
+        std::collections::HashMap::new(),
+    )
+    .map_err(|error| error.to_string())?;
     app.snapshot = new_client.config_snapshot();
     app.tools = new_client.tools().len();
     *client = new_client;

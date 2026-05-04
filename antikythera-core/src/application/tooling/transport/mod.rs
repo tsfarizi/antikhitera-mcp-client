@@ -1,16 +1,18 @@
 //! MCP Transport Abstraction Layer
 //!
 //! This module provides transport abstraction for MCP communication,
-//! supporting both STDIO (subprocess) and HTTP transports.
+//! supporting STDIO (subprocess), HTTP, and Builtin transports.
 //!
 //! ## Module Structure
 //!
 //! - `config` - Transport configuration types (TransportMode, HttpTransportConfig)
+//! - `builtin` - In-process built-in tool transport
 //! - `http` - HTTP transport implementation
 //!   - `sse` - SSE listener and endpoint resolution
 //!   - `rpc` - JSON-RPC request/notification handling
 //!   - `tools` - Tool cache management
 
+mod builtin;
 mod config;
 mod http;
 
@@ -23,6 +25,7 @@ use super::error::ToolInvokeError;
 use super::interface::ServerToolInfo;
 
 // Re-export public types
+pub use builtin::BuiltinTransport;
 pub use config::{HttpTransportConfig, TransportCapability, TransportMode};
 pub use http::HttpTransport;
 

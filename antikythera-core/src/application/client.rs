@@ -22,7 +22,7 @@
 //! ```
 
 use super::session_store::{DEFAULT_MAX_SESSIONS, SessionStore};
-use super::tooling::{ServerManager, ToolServerInterface};
+use super::tooling::{BuiltinTransport, ServerManager, ToolServerInterface};
 use crate::config::{AppConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::domain::types::MessagePart;
 use crate::domain::types::{ChatMessage, MessageRole};
@@ -31,6 +31,7 @@ use crate::infrastructure::model::{
 };
 use crate::logging::ChatLogger;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -63,6 +64,8 @@ pub struct ClientConfig {
     pub servers: Vec<ServerConfig>,
     /// Configurable prompts for agent behavior
     pub prompts: PromptsConfig,
+    /// Pre-built builtin transports keyed by server name (registered after ServerManager init)
+    pub builtin_transports: HashMap<String, Arc<BuiltinTransport>>,
 }
 
 impl ClientConfig {
@@ -75,6 +78,7 @@ impl ClientConfig {
             tools: Vec::new(),
             servers: Vec::new(),
             prompts: PromptsConfig::default(),
+            builtin_transports: HashMap::new(),
         }
     }
 
@@ -99,6 +103,17 @@ impl ClientConfig {
     /// Set the prompts configuration.
     pub fn with_prompts(mut self, prompts: PromptsConfig) -> Self {
         self.prompts = prompts;
+        self
+    }
+
+    /// Register a pre-built builtin transport for the given server name.
+    pub fn with_builtin_transport(
+        mut self,
+        server_name: impl Into<String>,
+        transport: Arc<BuiltinTransport>,
+    ) -> Self {
+        self.builtin_transports
+            .insert(server_name.into(), transport);
         self
     }
 
@@ -242,6 +257,9 @@ impl<P: ModelProvider> McpClient<P> {
     /// default LRU capacity of [`DEFAULT_MAX_SESSIONS`].
     pub fn new(provider: P, config: ClientConfig) -> Self {
         let server_manager = Arc::new(ServerManager::new(config.servers.clone()));
+        for (name, transport) in &config.builtin_transports {
+            server_manager.register_builtin_transport(name, transport.clone());
+        }
         let bridge: Arc<dyn ToolServerInterface> = server_manager;
         Self {
             provider,
@@ -258,6 +276,9 @@ impl<P: ModelProvider> McpClient<P> {
     /// throughput services that need a larger LRU pool.
     pub fn with_session_limit(provider: P, config: ClientConfig, max_sessions: usize) -> Self {
         let server_manager = Arc::new(ServerManager::new(config.servers.clone()));
+        for (name, transport) in &config.builtin_transports {
+            server_manager.register_builtin_transport(name, transport.clone());
+        }
         let bridge: Arc<dyn ToolServerInterface> = server_manager;
         Self {
             provider,

@@ -12,7 +12,7 @@ async fn test_high_concurrency_execution() {
         return;
     }
 
-    let client = match build_runtime_client(&file_config, &providers) {
+    let client = match build_runtime_client(&file_config, &providers, std::collections::HashMap::new()) {
         Ok(c) => c,
         Err(e) => {
             println!("Skipping due to provider init failure: {}", e);

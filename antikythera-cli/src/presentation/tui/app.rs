@@ -84,8 +84,8 @@ impl ChatApp {
             streaming_content: String::new(),
             stream_rx: None,
             health: Arc::new(Mutex::new(HealthTracker::new())),
-            conversation_scroll: u16::MAX,
-            log_scroll: u16::MAX,
+            conversation_scroll: 0,
+            log_scroll: 0,
         };
         app.messages.push(UiMessage::new(
             "Welcome",

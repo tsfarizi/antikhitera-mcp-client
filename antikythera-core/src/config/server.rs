@@ -32,6 +32,8 @@ pub enum TransportType {
     Stdio,
     /// HTTP transport - connects via HTTP/SSE
     Http,
+    /// Builtin transport - runs in-process tool implementations
+    Builtin,
 }
 
 /// Configuration for an MCP server connection.
@@ -70,6 +72,11 @@ impl ServerConfig {
     /// Check if this is an HTTP transport server.
     pub fn is_http(&self) -> bool {
         matches!(self.transport, TransportType::Http)
+    }
+
+    /// Check if this is a builtin transport server.
+    pub fn is_builtin(&self) -> bool {
+        matches!(self.transport, TransportType::Builtin)
     }
 
     /// Get command path (for STDIO).
@@ -121,8 +128,8 @@ impl From<RawServer> for ServerConfig {
             let command_expanded = PathBuf::from(expand(&cmd_str));
             (TransportType::Stdio, Some(command_expanded), None)
         } else {
-            // Default to STDIO with empty command (will fail at runtime)
-            (TransportType::Stdio, None, None)
+            // Default to Builtin (in-process handler)
+            (TransportType::Builtin, None, None)
         };
 
         let workdir = raw.workdir.map(|d| PathBuf::from(expand(&d)));
@@ -187,11 +194,35 @@ mod tests {
         assert_eq!(config.name, "remote");
         assert!(!config.is_stdio());
         assert!(config.is_http());
+        assert!(!config.is_builtin());
         assert!(config.command().is_none());
         assert_eq!(config.url(), Some("https://example.com/mcp"));
         assert_eq!(
             config.headers.get("Authorization"),
             Some(&"Bearer token".to_string())
         );
+    }
+
+    #[test]
+    fn test_builtin_server_config() {
+        let raw = RawServer {
+            name: "builtin_time".to_string(),
+            command: None,
+            args: vec![],
+            env: HashMap::new(),
+            workdir: None,
+            url: None,
+            headers: HashMap::new(),
+            default_timezone: None,
+            default_city: None,
+        };
+
+        let config = ServerConfig::from(raw);
+        assert_eq!(config.name, "builtin_time");
+        assert!(!config.is_stdio());
+        assert!(!config.is_http());
+        assert!(config.is_builtin());
+        assert!(config.command().is_none());
+        assert!(config.url().is_none());
     }
 }

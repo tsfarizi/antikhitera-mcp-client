@@ -1,6 +1,6 @@
 //! Server Manager - manages MCP server connections.
 //!
-//! Handles both STDIO and HTTP transport connections.
+//! Handles STDIO, HTTP, and Builtin transport connections.
 
 use super::envelope::{
     ToolCallEnvelope, ToolResultEnvelope, validate_tool_call_envelope,
@@ -10,7 +10,9 @@ use super::error::ToolInvokeError;
 use super::interface::{ServerToolInfo, ToolServerInterface};
 #[cfg(feature = "native-transport")]
 use super::process::McpProcess;
-use super::transport::{HttpTransport, HttpTransportConfig, McpTransport, TransportMode};
+use super::transport::{
+    BuiltinTransport, HttpTransport, HttpTransportConfig, McpTransport, TransportMode,
+};
 use crate::config::{ServerConfig, TransportType};
 use crate::logging::TransportLogger;
 use async_trait::async_trait;
@@ -18,11 +20,12 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-/// Unified server instance that wraps either STDIO or HTTP transport.
+/// Unified server instance that wraps STDIO, HTTP, or Builtin transport.
 enum ServerInstance {
     #[cfg(feature = "native-transport")]
     Stdio(Arc<McpProcess>),
     Http(Arc<HttpTransport>),
+    Builtin(Arc<BuiltinTransport>),
 }
 
 impl ServerInstance {
@@ -31,6 +34,7 @@ impl ServerInstance {
             #[cfg(feature = "native-transport")]
             ServerInstance::Stdio(process) => process.call_tool(tool, arguments).await,
             ServerInstance::Http(transport) => transport.call_tool(tool, arguments).await,
+            ServerInstance::Builtin(transport) => transport.call_tool(tool, arguments).await,
         }
     }
 
@@ -39,6 +43,7 @@ impl ServerInstance {
             #[cfg(feature = "native-transport")]
             ServerInstance::Stdio(process) => process.instructions().await,
             ServerInstance::Http(transport) => transport.instructions().await,
+            ServerInstance::Builtin(transport) => transport.instructions().await,
         }
     }
 
@@ -47,6 +52,7 @@ impl ServerInstance {
             #[cfg(feature = "native-transport")]
             ServerInstance::Stdio(process) => process.tool_metadata(tool).await,
             ServerInstance::Http(transport) => transport.tool_metadata(tool).await,
+            ServerInstance::Builtin(transport) => transport.tool_metadata(tool).await,
         }
     }
 }
@@ -66,6 +72,16 @@ impl ServerManager {
             configs,
             instances: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Pre-register a builtin transport instance.
+    ///
+    /// Builtin transports are created externally (e.g. by the CLI or host)
+    /// with tool definitions and handlers, then injected into the manager.
+    /// This avoids `ensure_instance` constructing an empty transport.
+    pub fn register_builtin_transport(&self, name: &str, transport: Arc<BuiltinTransport>) {
+        let mut instances = self.instances.lock().expect("server registry lock");
+        instances.insert(name.to_string(), ServerInstance::Builtin(transport));
     }
 
     async fn ensure_instance(&self, server: &str) -> Result<(), ToolInvokeError> {
@@ -127,6 +143,14 @@ impl ServerManager {
                 transport.connect().await?;
                 ServerInstance::Http(transport)
             }
+            TransportType::Builtin => {
+                return Err(ToolInvokeError::NotConfigured {
+                    server: format!(
+                        "{}: builtin transport must be pre-registered via register_builtin_transport()",
+                        server
+                    ),
+                });
+            }
         };
 
         let mut instances = self.instances.lock().expect("server registry lock");
@@ -140,6 +164,7 @@ impl ServerManager {
             #[cfg(feature = "native-transport")]
             Some(ServerInstance::Stdio(p)) => Some(ServerInstance::Stdio(p.clone())),
             Some(ServerInstance::Http(t)) => Some(ServerInstance::Http(t.clone())),
+            Some(ServerInstance::Builtin(t)) => Some(ServerInstance::Builtin(t.clone())),
             None => None,
         }
     }

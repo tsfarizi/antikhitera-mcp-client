@@ -1,15 +1,18 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::CliError;
 use crate::CliResult;
 use crate::infrastructure::llm::ModelProviderConfig;
 use crate::infrastructure::llm::build_provider_from_configs;
+use antikythera_core::application::tooling::BuiltinTransport;
 use antikythera_core::infrastructure::model::DynamicModelProvider;
 use antikythera_core::{AppConfig, ClientConfig, McpClient};
 
 pub fn build_runtime_client(
     config: &AppConfig,
     providers: &[ModelProviderConfig],
+    builtin_transports: HashMap<String, Arc<BuiltinTransport>>,
 ) -> CliResult<Arc<McpClient<DynamicModelProvider>>> {
     let provider = build_provider_from_configs(providers)
         .map_err(|error| CliError::Validation(error.user_message()))?;
@@ -22,6 +25,10 @@ pub fn build_runtime_client(
 
     if let Some(system) = config.system_prompt.clone() {
         client_config = client_config.with_system_prompt(system);
+    }
+
+    for (name, transport) in builtin_transports {
+        client_config = client_config.with_builtin_transport(name, transport);
     }
 
     Ok(Arc::new(McpClient::new(provider, client_config)))
