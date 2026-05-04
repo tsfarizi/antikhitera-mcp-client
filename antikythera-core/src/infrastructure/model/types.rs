@@ -8,7 +8,26 @@
 
 use crate::domain::types::{ChatMessage, MessageRole};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
+
+/// Provider-agnostic model I/O payload.
+///
+/// CORE does not interpret parameter semantics — the host (CLI / WASM runtime)
+/// is responsible for mapping these opaque hints to provider-specific API fields
+/// (e.g., `output_format` → `response_format` for OpenAI or
+/// `responseMimeType` for Gemini).
+///
+/// # Well-known keys (convention, not contract)
+///
+/// | Key              | Value                    | Meaning                              |
+/// |------------------|--------------------------|--------------------------------------|
+/// | `output_format`  | `"json"`                 | Request structured JSON output       |
+/// | `temperature`    | float                    | Sampling temperature (0.0–2.0)      |
+/// | `max_tokens`     | integer                  | Maximum completion tokens            |
+///
+/// Keys not understood by a provider are silently ignored.
+pub type ModelParams = HashMap<String, serde_json::Value>;
 
 /// Model request for LLM chat
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,7 +36,10 @@ pub struct ModelRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
     pub session_id: Option<String>,
-    pub force_json: bool,
+    /// Opaque parameters forwarded to the provider implementation.
+    /// CORE does not inspect these — the host interprets them.
+    #[serde(default)]
+    pub params: ModelParams,
 }
 
 /// Model response from LLM

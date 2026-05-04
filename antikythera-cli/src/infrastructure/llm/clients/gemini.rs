@@ -61,9 +61,12 @@ impl ModelClient for GeminiClient {
             payload["system_instruction"] = json!({ "parts": [{"text": system}] });
         }
 
-        if request.force_json {
-            payload["generationConfig"] = json!({ "responseMimeType": "application/json" });
-        }
+        let force_json = request
+            .params
+            .get("output_format")
+            .and_then(|v| v.as_str())
+            .map(|s| s == "json")
+            .unwrap_or(false);
 
         let log = ProviderLogger::new(
             request
@@ -71,6 +74,9 @@ impl ModelClient for GeminiClient {
                 .as_deref()
                 .unwrap_or(&antikythera_core::get_active_session()),
         );
+        if force_json {
+            log.debug("ModelParams detected output_format=json — Gemini responseMimeType set to application/json");
+        }
         log.info(format!(
             "Sending request to Gemini | provider={} model={} messages={}",
             self.base.id.as_str(),

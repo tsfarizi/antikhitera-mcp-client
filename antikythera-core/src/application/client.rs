@@ -27,7 +27,7 @@ use crate::config::{AppConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::domain::types::MessagePart;
 use crate::domain::types::{ChatMessage, MessageRole};
 use crate::infrastructure::model::{
-    HostModelResponse, ModelError, ModelProvider, ModelRequest, ModelResponse,
+    HostModelResponse, ModelError, ModelParams, ModelProvider, ModelRequest, ModelResponse,
 };
 use crate::logging::ChatLogger;
 use serde::{Deserialize, Serialize};
@@ -424,6 +424,17 @@ impl<P: ModelProvider> McpClient<P> {
             logs.push(format!("User: {prompt_preview}"));
         }
 
+        let mut params = ModelParams::new();
+        if request.force_json {
+            params.insert(
+                "output_format".to_string(),
+                serde_json::Value::String("json".to_string()),
+            );
+            ChatLogger::new(&session_id).debug(
+                "force_json=true → ModelRequest.params set with output_format=json",
+            );
+        }
+
         PreparedChatTurn {
             session_id: session_id.clone(),
             provider: provider.clone(),
@@ -433,7 +444,7 @@ impl<P: ModelProvider> McpClient<P> {
                 model: model.clone(),
                 messages,
                 session_id: Some(session_id.clone()),
-                force_json: request.force_json,
+                params,
             },
             user_message: user_message.clone(),
             logs,

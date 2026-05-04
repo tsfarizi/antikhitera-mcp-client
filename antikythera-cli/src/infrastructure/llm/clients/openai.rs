@@ -47,10 +47,23 @@ impl ModelClient for OpenAIClient {
     async fn chat(&self, request: ModelRequest) -> Result<ModelResponse, ModelError> {
         let url = self.base.build_url(&self.api_path);
 
+        let force_json = request
+            .params
+            .get("output_format")
+            .and_then(|v| v.as_str())
+            .map(|s| s == "json")
+            .unwrap_or(false);
         let payload = OpenAIRequest {
             model: request.model.clone(),
             messages: MessageAdapter::to_openai_format(&request.messages),
             stream: true,
+            response_format: if force_json {
+                Some(ResponseFormat {
+                    r#type: "json_object".to_string(),
+                })
+            } else {
+                None
+            },
         };
 
         let log = ProviderLogger::new(
@@ -59,6 +72,9 @@ impl ModelClient for OpenAIClient {
                 .as_deref()
                 .unwrap_or(&antikythera_core::get_active_session()),
         );
+        if force_json {
+            log.debug("ModelParams detected output_format=json — OpenAI response_format set to json_object");
+        }
         log.info(format!(
             "Sending request to OpenAI-compatible provider | provider={} model={} messages={}",
             self.base.id.as_str(),
@@ -99,6 +115,13 @@ struct OpenAIRequest {
     model: String,
     messages: Vec<serde_json::Value>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<ResponseFormat>,
+}
+
+#[derive(Serialize)]
+struct ResponseFormat {
+    r#type: String,
 }
 
 #[derive(Deserialize)]

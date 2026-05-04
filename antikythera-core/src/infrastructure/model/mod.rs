@@ -27,4 +27,4 @@ pub mod types;
 pub use host::{HostModelClient, HostModelResponse, HostModelTransport};
 pub use provider::DynamicModelProvider;
 pub use traits::ModelProvider;
-pub use types::{ModelError, ModelRequest, ModelResponse};
+pub use types::{ModelError, ModelParams, ModelRequest, ModelResponse};
