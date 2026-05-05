@@ -2,26 +2,26 @@
 //
 // Tests that spawn configured servers and verify JSON-RPC communication.
 
-use antikythera_core::config::{AppConfig, ServerConfig};
+use antikythera_core::config::ServerConfig;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::thread;
-use std::time::Duration;
 
 // ============================================================================
 // Test Client
 // ============================================================================
 
+#[allow(dead_code)]
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
+#[allow(dead_code)]
 struct McpTestClient {
     child: Child,
     request_id: u32,
     reader: BufReader<std::process::ChildStdout>,
 }
 
+#[allow(dead_code)]
 impl McpTestClient {
     fn spawn(server: &ServerConfig) -> Result<Self, String> {
         // Get command path - only works for STDIO servers
@@ -149,12 +149,14 @@ impl Drop for McpTestClient {
 // Server Test Macro
 // ============================================================================
 
+#[allow(unused_macros)]
 macro_rules! server_test {
     ($test_name:ident, $server_name:expr) => {
-
-// Split into 5 parts for consistent test organization.
-include!("functionality_tests/part_01.rs");
-include!("functionality_tests/part_02.rs");
-include!("functionality_tests/part_03.rs");
-include!("functionality_tests/part_04.rs");
-include!("functionality_tests/part_05.rs");
+        // Split into 5 parts for consistent test organization.
+        include!("functionality_tests/part_01.rs");
+        include!("functionality_tests/part_02.rs");
+        include!("functionality_tests/part_03.rs");
+        include!("functionality_tests/part_04.rs");
+        include!("functionality_tests/part_05.rs");
+    };
+}

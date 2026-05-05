@@ -4,6 +4,7 @@
 // Updated to use split config: client.toml + model.toml
 
 use antikythera_core::config::AppConfig;
+use antikythera_core::domain::sanitize::{needs_sanitization, sanitize_for_toml};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
@@ -58,3 +59,4 @@ include!("toml_tests/part_02.rs");
 include!("toml_tests/part_03.rs");
 include!("toml_tests/part_04.rs");
 include!("toml_tests/part_05.rs");
+include!("toml_tests/part_06.rs");

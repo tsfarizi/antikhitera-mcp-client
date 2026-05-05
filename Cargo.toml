@@ -17,6 +17,7 @@ edition = "2024"
 authors = ["tsfarizi"]
 license = "MIT"
 repository = "https://github.com/antikythera/mcp-client"
+readme = "README.md"
 
 [workspace.dependencies]
 # Async runtime

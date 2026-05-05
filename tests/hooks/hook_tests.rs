@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use antikythera_core::{
     AuthHook, CallerContext, CorrelationHook, HookContext, HookError, HookOperation, HookRegistry,
-    HostHookMiddleware, InMemoryTelemetryHook, PolicyDecision, PolicyDecisionHook, PolicyTarget,
-    TelemetryEvent,
+    HostHookMiddleware, InMemoryTelemetryHook, PolicyDecision, PolicyDecisionHook,
+    PolicyDecisionInput, PolicyTarget, TelemetryEvent,
 };
 
 struct RequireUser;
@@ -60,9 +60,10 @@ impl PolicyDecisionHook for ToolPolicy {
     }
 }
 
-// Split into 5 parts for consistent test organization.
+// Split into 6 parts for consistent test organization.
 include!("hook_tests/part_01.rs");
 include!("hook_tests/part_02.rs");
 include!("hook_tests/part_03.rs");
 include!("hook_tests/part_04.rs");
 include!("hook_tests/part_05.rs");
+include!("hook_tests/part_06.rs");

@@ -20,7 +20,7 @@ fn archived_session_prepare_requests_restore_and_supports_progress_stream() {
     let _other = init(&cfg).unwrap();
 
     let err = prepare_user_turn(&prepare_request(&archived_id, "come back")).unwrap_err();
-    assert!(err.contains("hydrate_session"));
+    assert!(err.to_string().contains("hydrate_session"));
 
     report_session_restore_progress(
         &archived_id,

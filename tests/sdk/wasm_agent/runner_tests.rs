@@ -5,9 +5,10 @@
 //! and rolling summarization with the `KeepBalanced` truncation strategy.
 
 use antikythera_sdk::wasm_agent::runner::{
-    append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events, get_state,
-    get_telemetry_snapshot, get_tools_prompt, hydrate_session, init, prepare_user_turn,
-    register_tools, report_session_restore_progress, set_context_policy, sweep_idle_sessions,
+    AgentRunnerRuntime, append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events,
+    get_state, get_telemetry_snapshot, get_tools_prompt, hydrate_session, init, new_session_id,
+    prepare_user_turn, register_tools, report_session_restore_progress, set_context_policy,
+    sweep_idle_sessions,
 };
 
 // Split by concern to keep file size manageable and improve readability.
@@ -27,3 +28,4 @@ include!("runner_tests/part_13.rs");
 include!("runner_tests/part_14.rs");
 include!("runner_tests/part_15.rs");
 include!("runner_tests/part_16.rs");
+include!("runner_tests/part_17.rs");

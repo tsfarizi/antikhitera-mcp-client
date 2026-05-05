@@ -33,7 +33,7 @@ fn unknown_tool_call_returns_error_when_registry_populated() {
     assert!(result.is_err(), "should reject unknown tool call");
     let err = result.unwrap_err();
     assert!(
-        err.contains("flights.book"),
+        err.to_string().contains("flights.book"),
         "error should mention the unknown tool name, got: {err}"
     );
 }

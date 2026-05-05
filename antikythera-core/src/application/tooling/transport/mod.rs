@@ -26,7 +26,7 @@ use super::error::ToolInvokeError;
 use super::interface::ServerToolInfo;
 
 // Re-export public types
-pub use builtin::BuiltinTransport;
+pub use builtin::{BuiltinToolFn, BuiltinTransport, validate_arguments};
 pub use config::{HttpTransportConfig, TransportCapability, TransportMode};
 pub use http::HttpTransport;
 

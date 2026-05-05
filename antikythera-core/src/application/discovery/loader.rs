@@ -172,7 +172,7 @@ use crate::config::TransportType;
 /// # Returns
 ///
 /// A `ServerConfig` ready for use with `spawn_and_list_tools`
-fn create_server_config(name: &str, binary_path: &Path) -> ServerConfig {
+pub fn create_server_config(name: &str, binary_path: &Path) -> ServerConfig {
     ServerConfig {
         name: name.to_string(),
         transport: TransportType::Stdio,
@@ -225,32 +225,3 @@ pub async fn scan_and_load(
     Ok((servers, summary))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_create_server_config() {
-        let config = create_server_config("test-server", &PathBuf::from("/path/to/server"));
-
-        assert_eq!(config.name, "test-server");
-        assert_eq!(config.command, Some(PathBuf::from("/path/to/server")));
-        assert!(config.args.is_empty());
-        assert!(config.env.is_empty());
-        assert!(config.workdir.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_load_server_updates_status() {
-        // Test that load_server properly updates the status
-        // Note: This will fail since there's no actual server, but it tests the error handling
-        let mut server =
-            DiscoveredServer::new("nonexistent-server", PathBuf::from("/nonexistent/path"));
-
-        load_server(&mut server).await;
-
-        // Should have failed status since the binary doesn't exist
-        assert!(matches!(server.load_status, LoadStatus::Failed(_)));
-    }
-}

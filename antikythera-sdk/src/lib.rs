@@ -20,13 +20,18 @@
 //!
 //! ```text
 //! src/
-//! ├── component/     - Server-side WASM Component (Host Imports/Exports via WIT)
-//! ├── wasm_agent/    - WASM Agent FSM and LLM response processing
-//! ├── config/        - Binary Configuration (Postcard)
-//! ├── session/       - Session Management and History
-//! ├── prompts/       - Prompt Template Management
-//! ├── response/      - Response Formatting
-//! └── json_schema/     - JSON Schema Validation
+//! ├── agents/          - Agent Management (config, validation, FFI, orchestration helpers)
+//! ├── component/       - Server-side WASM Component (Host Imports/Exports via WIT)
+//! ├── config/          - Binary Configuration (Postcard)
+//! ├── ffi_helpers.rs   - Shared FFI helper utilities
+//! ├── json_schema/     - JSON Schema Validation
+//! ├── prompts/         - Prompt Template Management
+//! ├── response/        - Response Formatting
+//! ├── sdk_logging.rs   - SDK Logging module
+//! ├── security_ffi/    - Security FFI (validation, rate limiting, secrets)
+//! ├── servers/         - Server Management (config, validation, FFI)
+//! ├── session/         - Session Management and History
+//! └── wasm_agent/      - WASM Agent FSM and LLM response processing
 //! ```
 //!
 //! ## Feature Flags

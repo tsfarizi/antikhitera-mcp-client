@@ -107,6 +107,8 @@ impl OrchestratorOptions {
     }
 }
 
+/// Live snapshot of orchestrator resource consumption and limits for
+/// monitoring and guardrail enforcement.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OrchestratorMonitorSnapshot {
     pub consumed_steps: usize,
@@ -127,6 +129,8 @@ impl OrchestratorMonitorSnapshot {
     }
 }
 
+/// Detailed result metadata for a single task dispatched by the orchestrator,
+/// including routing, concurrency, budget, and guardrail information.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TaskResultDetail {
     pub error_kind: Option<String>,
@@ -141,6 +145,8 @@ pub struct TaskResultDetail {
     pub guardrail_stage: Option<String>,
 }
 
+/// Global runtime state for the orchestrator hardening layer, holding
+/// current options, cancellation flag, and the latest budget snapshot.
 #[cfg(feature = "multi-agent")]
 #[derive(Debug, Clone, Default)]
 pub struct HardeningRuntimeState {

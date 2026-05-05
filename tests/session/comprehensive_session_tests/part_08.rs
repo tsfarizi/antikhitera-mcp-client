@@ -5,13 +5,13 @@
 #[test]
 fn test_manager_clone_shares_data() {
     let manager1 = SessionManager::new();
-    let id = manager1.create_session("user", "gpt-4");
+    let id = manager1.create_session("user", "gpt-4").unwrap();
     
     let manager2 = manager1.clone();
     
     // Both managers should see the same session
-    assert!(manager1.has_session(&id));
-    assert!(manager2.has_session(&id));
+    assert!(manager1.has_session(&id).unwrap());
+    assert!(manager2.has_session(&id).unwrap());
 }
 
 #[test]

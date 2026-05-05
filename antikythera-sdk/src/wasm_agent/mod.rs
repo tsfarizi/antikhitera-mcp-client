@@ -7,9 +7,10 @@
 //!
 //! ```text
 //! wasm_agent/
+//! ├── mod.rs         # Module exports
 //! ├── types.rs       # Agent types (state, messages, actions)
 //! ├── processor.rs   # LLM response processing logic
-//! └── mod.rs         # Module exports
+//! └── runner.rs      # Agent runner (session management, lifecycle)
 //! ```
 //!
 //! ## Host Responsibility
@@ -47,9 +48,9 @@ pub use processor::{
 };
 
 pub use runner::{
-    AgentRunnerError, append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events,
-    get_slo_snapshot, get_state, get_telemetry_snapshot, get_tools_prompt, hydrate_session, init,
-    prepare_user_turn, process_llm_response_for_session, process_tool_result_for_session,
-    register_tools, report_session_restore_progress, reset_session, set_context_policy,
-    sweep_idle_sessions,
+    AgentRunnerError, AgentRunnerRuntime, append_llm_chunk, commit_llm_response, commit_llm_stream,
+    drain_events, get_slo_snapshot, get_state, get_telemetry_snapshot, get_tools_prompt,
+    hydrate_session, init, new_session_id, prepare_user_turn,
+    process_llm_response_for_session, process_tool_result_for_session, register_tools,
+    report_session_restore_progress, reset_session, set_context_policy, sweep_idle_sessions,
 };

@@ -101,20 +101,3 @@ pub use types::{DiscoveredServer, DiscoveryError, DiscoverySummary, LoadStatus};
 /// Default folder name for MCP server binaries.
 pub const DEFAULT_SERVERS_FOLDER: &str = "servers";
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_default_folder_constant() {
-        assert_eq!(DEFAULT_SERVERS_FOLDER, "servers");
-    }
-
-    #[test]
-    fn test_re_exports_available() {
-        // Verify re-exports are accessible
-        let _ = DiscoveredServer::new("test", std::path::PathBuf::new());
-        let _ = DiscoverySummary::default();
-        let _ = LoadStatus::Pending;
-    }
-}

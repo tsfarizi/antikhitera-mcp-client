@@ -8,10 +8,18 @@
 //! ```text
 //! security/
 //! ├── mod.rs              # This file - module exports
-//! ├── validation.rs       # Input validation and sanitization
+//! ├── config.rs           # Security configuration types
+//! ├── validation/
+//! │   ├── mod.rs          # Input validation and sanitization
+//! │   ├── json.rs         # JSON structure validation
+//! │   ├── types.rs        # Validation result types
+//! │   └── url.rs          # URL validation and sanitization
 //! ├── rate_limit.rs       # Rate limiting with configurable parameters
-//! ├── secrets.rs          # Secure secrets storage and rotation
-//! └── config.rs           # Security configuration types
+//! └── secrets/
+//!     ├── mod.rs          # Secure secrets storage and rotation
+//!     ├── crypto.rs       # Encryption/decryption (AES-256-GCM)
+//!     ├── error.rs        # Secret management errors
+//!     └── storage.rs      # Storage backends (memory, file)
 //! ```
 
 pub mod config;

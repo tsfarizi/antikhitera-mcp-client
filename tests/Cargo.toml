@@ -125,6 +125,22 @@ name = "observability_tests"
 path = "observability/observability_tests.rs"
 
 # ============================================================================
+# Server Tests
+# ============================================================================
+
+[[test]]
+name = "server_tests"
+path = "server_tests.rs"
+
+# ============================================================================
+# Serialization Tests
+# ============================================================================
+
+[[test]]
+name = "serialization_tests"
+path = "serialization_tests.rs"
+
+# ============================================================================
 # Provider Tests
 # ============================================================================
 
@@ -139,6 +155,22 @@ path = "provider_tests.rs"
 [[test]]
 name = "config_tests"
 path = "config_tests.rs"
+
+# ============================================================================
+# Client Integration Tests
+# ============================================================================
+
+[[test]]
+name = "client_tests"
+path = "client/client_tests.rs"
+
+# ============================================================================
+# Service Integration Tests
+# ============================================================================
+
+[[test]]
+name = "chat_tests"
+path = "services/chat_tests.rs"
 
 # ============================================================================
 # CLI Unit Tests (moved from antikythera-cli/tests/)
@@ -159,9 +191,11 @@ antikythera-core = { path = "../antikythera-core", features = ["full"] }
 antikythera-cli = { path = "../antikythera-cli" }
 antikythera-sdk = { path = "../antikythera-sdk", features = ["component", "multi-agent"] }
 serde_json.workspace = true
+base64.workspace = true
 chrono.workspace = true
 tempfile = "3.10"
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread", "test-util"] }
 serial_test = "3.0"
 async-trait.workspace = true
 clap.workspace = true
+ratatui.workspace = true

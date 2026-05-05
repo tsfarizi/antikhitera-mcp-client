@@ -23,10 +23,16 @@ antikythera-core/src/security/
 ├── mod.rs
 ├── config.rs
 ├── validation/
-│   └── mod.rs
+│   ├── mod.rs
+│   ├── json.rs
+│   ├── types.rs
+│   └── url.rs
 ├── rate_limit.rs
 └── secrets/
-    └── mod.rs
+    ├── mod.rs
+    ├── crypto.rs
+    ├── error.rs
+    └── storage.rs
 ```
 
 ### SDK Module (`antikythera-sdk`)
@@ -37,11 +43,9 @@ FFI bindings are provided in the `antikythera-sdk` crate under the `security_ffi
 antikythera-sdk/src/security_ffi/
 ├── mod.rs
 ├── helpers.rs
-├── validation/
-│   └── mod.rs
+├── validation.rs
 ├── rate_limit.rs
-└── secrets/
-    └── mod.rs
+└── secrets.rs
 ```
 
 ## Input Validation
@@ -504,10 +508,10 @@ This document summarizes the comprehensive security features implemented for the
 #### Files Created:
 - `antikythera-core/src/security/mod.rs` - Module exports
 - `antikythera-core/src/security/config.rs` - Security configuration types
-- `antikythera-core/src/security/validation.rs` - Input validation implementation
+- `antikythera-core/src/security/validation/mod.rs` - Input validation implementation
 - `antikythera-core/src/security/rate_limit.rs` - Rate limiting implementation
-- `antikythera-core/src/security/secrets.rs` - Secrets management implementation
-- `antikythera-core/src/security/tests.rs` - Comprehensive unit tests
+- `antikythera-core/src/security/secrets/mod.rs` - Secrets management implementation
+- `tests/security/mod.rs` - Comprehensive unit tests
 
 #### Key Features:
 
@@ -542,7 +546,7 @@ This document summarizes the comprehensive security features implemented for the
 - `antikythera-sdk/src/security_ffi/validation.rs` - Input validation FFI
 - `antikythera-sdk/src/security_ffi/rate_limit.rs` - Rate limiting FFI
 - `antikythera-sdk/src/security_ffi/secrets.rs` - Secrets management FFI
-- `antikythera-sdk/src/security_ffi/tests.rs` - Comprehensive FFI tests
+- `tests/security_ffi/tests.rs` - Comprehensive FFI tests
 
 #### FFI Functions Exposed:
 
@@ -663,14 +667,14 @@ This document summarizes the comprehensive security features implemented for the
 
 ### Unit Tests
 
-**Core Module Tests** (`antikythera-core/src/security/tests.rs`):
+**Core Module Tests** (`tests/security/`):
 - 30+ comprehensive unit tests
 - Tests for all validation scenarios
 - Tests for rate limiting behavior
 - Tests for secrets management
 - Tests for configuration updates
 
-**FFI Tests** (`antikythera-sdk/src/security_ffi/tests.rs`):
+**FFI Tests** (`tests/security_ffi/tests.rs`):
 - 20+ FFI-specific tests
 - Tests for all FFI functions
 - Tests for C string handling

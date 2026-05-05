@@ -61,7 +61,7 @@ pub mod task;
 // ============================================================================
 
 pub use budget::{BudgetSnapshot, OrchestratorBudget};
-pub use cancellation::CancellationToken;
+pub use cancellation::{CancellationSnapshot, CancellationToken};
 pub use execution::ExecutionMode;
 pub use guardrails::{
     BudgetGuardrail, CancellationGuardrail, GuardrailChain, GuardrailContext, GuardrailRejection,

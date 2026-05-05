@@ -2,6 +2,10 @@
 use std::fs;
 use std::path::PathBuf;
 
+use antikythera_core::infrastructure::mcp::contract::{
+    validate_tool_name, ContractValidator, ResultOutcome, ToolCallEnvelope, ToolExecutionError,
+    ToolResultEnvelope,
+};
 use antikythera_sdk::wasm_agent::runner::{
     commit_llm_response, get_slo_snapshot, init, prepare_user_turn,
     process_tool_result_for_session, reset_session,
@@ -97,3 +101,4 @@ include!("compatibility_tests/part_02.rs");
 include!("compatibility_tests/part_03.rs");
 include!("compatibility_tests/part_04.rs");
 include!("compatibility_tests/part_05.rs");
+include!("compatibility_tests/part_06.rs");

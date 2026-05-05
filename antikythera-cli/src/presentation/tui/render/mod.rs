@@ -10,7 +10,7 @@ use super::app::ChatApp;
 use super::types::{UiMessage, UiTone};
 
 pub(crate) mod history_overlay;
-pub(crate) mod log_panel;
+pub mod log_panel;
 pub(crate) mod settings_overlay;
 
 pub(super) fn draw(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {

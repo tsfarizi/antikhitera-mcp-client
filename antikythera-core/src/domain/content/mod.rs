@@ -3,8 +3,8 @@
 //! This module provides types for handling file content and attachments
 //! from MCP tool responses.
 
-mod parser;
-mod types;
+pub mod parser;
+pub mod types;
 
 pub use parser::{ParsedOutput, parse_step_output};
-pub use types::{FileContent, FileMetadata};
+pub use types::{ContentItem, FileContent, FileMetadata};

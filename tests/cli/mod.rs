@@ -32,3 +32,12 @@ mod wasm_harness;
 
 #[path = "scenario.rs"]
 mod scenario;
+
+#[path = "commands_tests.rs"]
+mod commands_tests;
+
+#[path = "log_panel_tests.rs"]
+mod log_panel_tests;
+
+#[path = "stdio_tests.rs"]
+mod stdio_tests;

@@ -21,6 +21,10 @@ fn wasm_log(session_id: &str, level: LogLevel, message: &str) {
     get_sdk_logger(session_id).log_with_source(level, "wasm_agent", message);
 }
 
+/// Errors raised by the WASM agent runner during session lifecycle operations.
+///
+/// Returned by all public runner functions to signal failures in session
+/// management, LLM interaction, tool execution, and configuration.
 #[derive(Debug, Clone)]
 pub enum AgentRunnerError {
     SessionNotFound(String),
@@ -181,7 +185,12 @@ impl SessionRuntime {
     }
 }
 
-struct AgentRunnerRuntime {
+/// Core WASM agent runtime holding all in-memory sessions, event queues,
+/// tool registry, and default configuration for the agent runner.
+///
+/// Accessed through a global `OnceLock<Mutex<…>>` to provide a singleton
+/// runtime for WASM FFI callers.
+pub struct AgentRunnerRuntime {
     sessions: HashMap<String, SessionRuntime>,
     archived_sessions: HashMap<String, ArchivedSessionRecord>,
     pending_events: HashMap<String, Vec<StreamEvent>>,
@@ -207,7 +216,7 @@ impl Default for AgentRunnerRuntime {
 }
 
 impl AgentRunnerRuntime {
-    fn p95(values: &[u64]) -> u64 {
+    pub fn p95(values: &[u64]) -> u64 {
         if values.is_empty() {
             return 0;
         }
@@ -1032,7 +1041,7 @@ fn with_runtime<T>(
 
 static SESSION_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn new_session_id() -> String {
+pub fn new_session_id() -> String {
     let ts_ns = chrono::Utc::now()
         .timestamp_nanos_opt()
         .unwrap_or_else(|| chrono::Utc::now().timestamp_micros() * 1_000);
@@ -1164,78 +1173,3 @@ pub fn sweep_idle_sessions(now_unix_ms: Option<i64>) -> Result<u32, AgentRunnerE
     with_runtime(|rt| rt.sweep_sessions(now_unix_ms))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn p95_empty_returns_zero() {
-        let values: Vec<u64> = vec![];
-        assert_eq!(AgentRunnerRuntime::p95(&values), 0);
-    }
-
-    #[test]
-    fn p95_single_value() {
-        assert_eq!(AgentRunnerRuntime::p95(&[42]), 42);
-    }
-
-    #[test]
-    fn p95_small_set() {
-        let values: Vec<u64> = (1..=100).collect();
-        let result = AgentRunnerRuntime::p95(&values);
-        assert!(result >= 95, "p95 of 1..=100 should be >= 95, got {result}");
-        assert!(result <= 96, "p95 of 1..=100 should be <= 96, got {result}");
-    }
-
-    #[test]
-    fn p95_known_example() {
-        assert_eq!(
-            AgentRunnerRuntime::p95(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
-            10
-        );
-    }
-
-    #[test]
-    fn p95_larger_set() {
-        let values: Vec<u64> = (0..1000).collect();
-        let result = AgentRunnerRuntime::p95(&values);
-        assert_eq!(result, 950);
-    }
-
-    // ── new_session_id ───────────────────────────────────────────────────
-    #[test]
-    fn new_session_id_has_prefix() {
-        let id = new_session_id();
-        assert!(
-            id.starts_with("session-"),
-            "expected 'session-' prefix, got: {id}"
-        );
-    }
-
-    #[test]
-    fn new_session_id_has_two_digits() {
-        let id = new_session_id();
-        let rest = id.strip_prefix("session-").unwrap();
-        let parts: Vec<&str> = rest.splitn(2, '-').collect();
-        assert_eq!(
-            parts.len(),
-            2,
-            "expected 'timestamp-seq' format, got: {rest}"
-        );
-        assert!(
-            parts[0].parse::<i64>().is_ok(),
-            "timestamp part should be numeric"
-        );
-        assert!(
-            parts[1].parse::<u64>().is_ok(),
-            "seq part should be numeric"
-        );
-    }
-
-    #[test]
-    fn new_session_id_generates_unique() {
-        let id1 = new_session_id();
-        let id2 = new_session_id();
-        assert_ne!(id1, id2);
-    }
-}

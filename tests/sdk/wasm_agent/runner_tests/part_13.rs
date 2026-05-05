@@ -23,7 +23,7 @@ fn capacity_pressure_archives_oldest_session_and_emits_state_payload() {
     let state_result = get_state(&oldest);
     assert!(state_result.is_err(), "oldest session should be archived");
     assert!(
-        state_result.unwrap_err().contains("archived"),
+        state_result.unwrap_err().to_string().contains("archived"),
         "expected archived-state error"
     );
 

@@ -32,6 +32,6 @@ fn malformed_tool_result_json_is_rejected() {
     )
     .unwrap_err();
 
-    assert!(err.contains("Invalid tool output_json"));
+    assert!(err.to_string().contains("Invalid tool output_json"));
 }
 

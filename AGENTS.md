@@ -47,8 +47,6 @@ Skills provide workflow templates for common tasks using MCP tools. Load and use
 
 **Purpose:** Unified workflow for codebase navigation, debugging, code review, and safe refactoring using `code-review-graph` knowledge graph.
 
-**Location:** `.claude/skills/SKILL.md`
-
 **Four Combined Workflows:**
 1. **Explore Codebase** — Understand architecture, find code, identify patterns
 2. **Debug Issue** — Trace and fix bugs using call graphs and execution flows
@@ -79,7 +77,6 @@ Using the "Antikythera Code Analysis & Improvement" skill, I need to [task]
 - "Consolidate duplicate context management code safely"
 
 **Companion Docs:**
-- Full skill details: [`.claude/skills/SKILL.md`](.claude/skills/SKILL.md)
 - Skills registry: [Memory at `/memories/repo/antikythera-skills-registry.md`]
 - Quick reference: [Memory at `/memories/antikythera-code-analysis-skill.md`]
 

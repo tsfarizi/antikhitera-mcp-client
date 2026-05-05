@@ -787,7 +787,7 @@ fn preview(text: &str) -> String {
     result
 }
 
-fn suggest_commands(prefix: &str) -> Vec<&'static str> {
+pub fn suggest_commands(prefix: &str) -> Vec<&'static str> {
     let normalized = prefix.trim().to_ascii_lowercase();
     let mut suggestions: Vec<&'static str> = if normalized.is_empty() {
         KNOWN_COMMANDS.to_vec()
@@ -828,26 +828,3 @@ async fn print_command_recommendations(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::suggest_commands;
-
-    #[test]
-    fn suggest_commands_returns_defaults_for_empty_prefix() {
-        let suggestions = suggest_commands("");
-        assert!(!suggestions.is_empty());
-        assert!(suggestions.contains(&"help"));
-    }
-
-    #[test]
-    fn suggest_commands_matches_partial_input() {
-        let suggestions = suggest_commands("co");
-        assert!(suggestions.iter().any(|value| value.starts_with("config")));
-    }
-
-    #[test]
-    fn suggest_commands_returns_empty_for_unknown_prefix() {
-        let suggestions = suggest_commands("zzzzz");
-        assert!(suggestions.is_empty());
-    }
-}

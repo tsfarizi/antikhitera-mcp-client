@@ -15,6 +15,14 @@ use regex::Regex;
 use serde_json::Value;
 use std::collections::HashSet;
 
+/// Errors raised by the input validator during validation, rejection, or
+/// configuration of validation rules.
+///
+/// # Variants
+///
+/// * `InvalidInput` — input fails a structural check (size, JSON, message length).
+/// * `Rejected` — input is blocked by a policy rule (keyword, URL pattern, nesting).
+/// * `Configuration` — validator setup or reconfiguration fails (bad regex, etc.).
 #[derive(Debug, Clone)]
 pub enum InputValidatorError {
     InvalidInput(String),
@@ -43,6 +51,7 @@ pub struct InputValidator {
 }
 
 impl InputValidator {
+    /// Create an `InputValidator` from the given validation config.
     pub fn new(config: ValidationConfig) -> Result<Self, InputValidatorError> {
         let allowed_url_regexes = config
             .allowed_url_patterns
@@ -81,6 +90,7 @@ impl InputValidator {
         })
     }
 
+    /// Create an `InputValidator` with the default validation config.
     pub fn from_config() -> Result<Self, InputValidatorError> {
         Self::new(ValidationConfig::default())
     }
@@ -143,7 +153,9 @@ impl InputValidator {
             .replace("onclick=", "")
     }
 
-    /// Validate JSON structure
+    /// Parse and validate a JSON string against configured depth/array limits.
+    ///
+    /// Returns the parsed `serde_json::Value` on success.
     pub fn validate_json(&self, json_str: &str) -> Result<Value, InputValidatorError> {
         if !self.config.validate_json_schema {
             return serde_json::from_str(json_str)
@@ -224,7 +236,9 @@ impl InputValidator {
         ValidationResult::Valid
     }
 
-    /// Comprehensive validation
+    /// Run all enabled validations (size, message length, keywords) against the input.
+    ///
+    /// Returns `Ok(())` if all checks pass, otherwise a list of `ValidationError`s.
     pub fn validate(&self, input: &str) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
 
@@ -264,7 +278,7 @@ impl InputValidator {
         &self.config
     }
 
-    /// Update configuration
+    /// Replace the current validation config and rebuild internal validators.
     pub fn update_config(&mut self, config: ValidationConfig) -> Result<(), InputValidatorError> {
         let allowed_url_patterns = config.allowed_url_patterns.clone();
         let blocked_url_patterns = config.blocked_url_patterns.clone();
@@ -306,66 +320,4 @@ impl InputValidator {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_validate_size() {
-        let validator = InputValidator::from_config().unwrap();
-        assert!(matches!(
-            validator.validate_size("small"),
-            ValidationResult::Valid
-        ));
-
-        let large_input = "x".repeat(11 * 1024 * 1024);
-        assert!(matches!(
-            validator.validate_size(&large_input),
-            ValidationResult::Invalid(_)
-        ));
-    }
-
-    #[test]
-    fn test_validate_url() {
-        let validator = InputValidator::from_config().unwrap();
-        assert!(matches!(
-            validator.validate_url("https://example.com"),
-            ValidationResult::Valid
-        ));
-        assert!(matches!(
-            validator.validate_url("file://etc/passwd"),
-            ValidationResult::Invalid(_)
-        ));
-    }
-
-    #[test]
-    fn test_check_blocked_keywords() {
-        let validator = InputValidator::from_config().unwrap();
-        assert!(matches!(
-            validator.check_blocked_keywords("normal text"),
-            ValidationResult::Valid
-        ));
-        assert!(matches!(
-            validator.check_blocked_keywords("<script>alert('xss')</script>"),
-            ValidationResult::Invalid(_)
-        ));
-    }
-
-    #[test]
-    fn test_sanitize_html() {
-        let validator = InputValidator::from_config().unwrap();
-        let html = "<script>alert('xss')</script>";
-        let sanitized = validator.sanitize_html(html);
-        assert!(!sanitized.contains("<script>"));
-    }
-
-    #[test]
-    fn test_validate_json() {
-        let validator = InputValidator::from_config().unwrap();
-        let valid_json = r#"{"key": "value"}"#;
-        assert!(validator.validate_json(valid_json).is_ok());
-
-        let invalid_json = r#"{"key": "value""#;
-        assert!(validator.validate_json(invalid_json).is_err());
-    }
-}

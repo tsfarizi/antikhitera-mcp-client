@@ -125,6 +125,8 @@ pub struct AgentStatus {
     pub tasks_failed: u32,
 }
 
+/// Summary of an agent validation pass with an overall `valid` flag and
+/// a list of human-readable error messages when validation fails.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationReport {
     pub valid: bool,

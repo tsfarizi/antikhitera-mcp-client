@@ -37,7 +37,7 @@ fn missing_required_param_returns_error() {
     );
     let err = result.unwrap_err();
     assert!(
-        err.contains("lon"),
+        err.to_string().contains("lon"),
         "error should mention the missing param, got: {err}"
     );
 }
