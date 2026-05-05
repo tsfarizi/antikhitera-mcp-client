@@ -48,6 +48,8 @@ antikythera-sdk/src/security_ffi/
 └── secrets.rs
 ```
 
+All security FFI functions use the `ffi_handler!` macro defined in `antikythera-sdk/src/ffi_helpers.rs` for consistent error handling and C string memory management.
+
 ## Input Validation
 
 ### Features
@@ -59,6 +61,15 @@ antikythera-sdk/src/security_ffi/
 - **JSON Validation**: Validates JSON structure and schema
 - **Keyword Blocking**: Blocks inputs containing dangerous keywords
 - **Concurrent Call Limits**: Enforces maximum concurrent tool calls
+
+### Error Types
+
+- **`InputValidatorError`**: Enum error type with variants:
+  - `InvalidInput` — Input failed validation checks
+  - `Rejected` — Input was explicitly rejected by policy
+  - `Configuration` — Invalid validator configuration
+- **`ValidationError`**: Struct with `field: String` and `message: String` fields describing the specific validation failure
+- **`ValidationResult::Sanitized`**: Additional variant of `ValidationResult` returned when input was sanitized (e.g., HTML stripping)
 
 ### Configuration
 
@@ -446,6 +457,21 @@ All security parameters can be configured dynamically via FFI:
 }
 ```
 
+## Security Logging
+
+The `SecurityLogger` struct provides structured logging for security events:
+
+### Methods
+
+- **`rate_limit_check(session_id: &str)`** — Logs rate limit check attempts
+- **`rate_limit_exceeded(session_id: &str)`** — Logs rate limit exceeded events
+- **`secret_stored(key: &str)`** — Logs secret storage operations
+- **`secret_retrieved(key: &str)`** — Logs secret retrieval operations
+- **`secret_rotated(key: &str)`** — Logs secret rotation events
+- **`secret_deleted(key: &str)`** — Logs secret deletion events
+- **`secret_error(key: &str, error: &str)`** — Logs secret-related errors
+- **`cleanup_task()`** — Logs cleanup task execution
+
 ## Testing
 
 Comprehensive unit tests are provided for all security modules:
@@ -457,6 +483,14 @@ cargo test -p antikythera-core security
 # Run FFI tests
 cargo test -p antikythera-sdk security_ffi
 ```
+
+### Test Files
+
+- `tests/security/mod.rs`
+- `tests/security/config_tests.rs`
+- `tests/security/validation_tests.rs`
+- `tests/security/rate_limit_tests.rs`
+- `tests/security/secrets_tests.rs`
 
 ## CLI vs Core Separation
 
@@ -495,282 +529,6 @@ Potential future security features:
 
 ## License
 
-This security module is part of the Antikythera MCP Framework and is licensed under the same terms as the main project.# Security Implementation Summary
+This security module is part of the Antikythera MCP Framework and is licensed under the same terms as the main project.
 
-## Overview
 
-This document summarizes the comprehensive security features implemented for the Antikythera MCP Framework, including input validation, rate limiting, and secrets management with full FFI accessibility.
-
-## Implementation Details
-
-### 1. Core Security Module (`antikythera-core`)
-
-#### Files Created:
-- `antikythera-core/src/security/mod.rs` - Module exports
-- `antikythera-core/src/security/config.rs` - Security configuration types
-- `antikythera-core/src/security/validation/mod.rs` - Input validation implementation
-- `antikythera-core/src/security/rate_limit.rs` - Rate limiting implementation
-- `antikythera-core/src/security/secrets/mod.rs` - Secrets management implementation
-- `tests/security/mod.rs` - Comprehensive unit tests
-
-#### Key Features:
-
-**Input Validation:**
-- Size validation (configurable max input size)
-- Message length validation
-- URL validation with regex patterns
-- HTML sanitization
-- JSON structure validation
-- Keyword blocking
-- Concurrent call limits
-
-**Rate Limiting:**
-- Multiple time windows (per-minute, per-hour, per-day)
-- Burst allowance
-- Session management
-- Concurrent session limits
-- Automatic cleanup
-
-**Secrets Management:**
-- Secure storage with encryption
-- Secret rotation (manual and automatic)
-- Versioning support
-- Metadata tracking
-- Multiple storage backends
-
-### 2. SDK FFI Module (`antikythera-sdk`)
-
-#### Files Created:
-- `antikythera-sdk/src/security_ffi/mod.rs` - Module exports
-- `antikythera-sdk/src/security_ffi/helpers.rs` - Common FFI utilities
-- `antikythera-sdk/src/security_ffi/validation.rs` - Input validation FFI
-- `antikythera-sdk/src/security_ffi/rate_limit.rs` - Rate limiting FFI
-- `antikythera-sdk/src/security_ffi/secrets.rs` - Secrets management FFI
-- `tests/security_ffi/tests.rs` - Comprehensive FFI tests
-
-#### FFI Functions Exposed:
-
-**Validation FFI:**
-- `mcp_security_init_validator()`
-- `mcp_security_validate_input()`
-- `mcp_security_validate_url()`
-- `mcp_security_validate_json()`
-- `mcp_security_sanitize_html()`
-- `mcp_security_get_validation_config()`
-- `mcp_security_set_validation_config()`
-
-**Rate Limiting FFI:**
-- `mcp_security_init_rate_limiter()`
-- `mcp_security_check_rate_limit()`
-- `mcp_security_get_usage()`
-- `mcp_security_reset_session()`
-- `mcp_security_remove_session()`
-- `mcp_security_get_rate_limit_config()`
-- `mcp_security_set_rate_limit_config()`
-
-**Secrets Management FFI:**
-- `mcp_security_init_secret_manager()`
-- `mcp_security_store_secret()`
-- `mcp_security_get_secret()`
-- `mcp_security_rotate_secret()`
-- `mcp_security_delete_secret()`
-- `mcp_security_list_secrets()`
-- `mcp_security_get_secret_metadata()`
-- `mcp_security_get_secrets_config()`
-- `mcp_security_set_secrets_config()`
-
-**Common FFI:**
-- `mcp_security_free_string()`
-
-### 3. Configuration Integration
-
-#### Updated Files:
-- `antikythera-core/src/lib.rs` - Added security module export
-- `antikythera-core/src/config/postcard_config.rs` - Added security config to PostcardAppConfig
-- `antikythera-core/Cargo.toml` - Added regex dependency
-- `antikythera-sdk/src/lib.rs` - Added security_ffi module export
-
-### 4. Documentation
-
-#### Files Created:
-- `documentation/SECURITY.md` - Comprehensive security documentation
-
-## Configuration Parameters
-
-### Validation Config
-- `max_input_size_bytes`: 10 MB (default)
-- `max_message_length`: 100,000 characters (default)
-- `max_concurrent_tool_calls`: 10 (default)
-- `allowed_url_patterns`: Regex patterns for allowed URLs
-- `blocked_url_patterns`: Regex patterns for blocked URLs
-- `sanitize_html`: true (default)
-- `validate_json_schema`: true (default)
-- `max_json_nesting_depth`: 10 (default)
-- `max_json_array_length`: 1,000 (default)
-- `blocked_keywords`: List of blocked keywords
-
-### Rate Limit Config
-- `enabled`: true (default)
-- `requests_per_minute`: 60 (default)
-- `requests_per_hour`: 1,000 (default)
-- `requests_per_day`: 10,000 (default)
-- `max_concurrent_sessions`: 5 (default)
-- `window_size_secs`: 60 (default)
-- `burst_allowance`: 10 (default)
-- `cleanup_interval_secs`: 300 (default)
-
-### Secrets Config
-- `enabled`: true (default)
-- `encrypt_at_rest`: true (default)
-- `encryption_algorithm`: "AES256-GCM" (default)
-- `key_derivation_function`: "Argon2" (default)
-- `key_derivation_iterations`: 100,000 (default)
-- `auto_rotate`: false (default)
-- `rotation_interval_hours`: 720 (default)
-- `max_secret_age_hours`: 2,160 (default)
-- `storage_backend`: "memory" (default)
-- `storage_path`: Optional file path
-- `enable_versioning`: true (default)
-- `max_versions`: 5 (default)
-
-## Architecture Verification
-
-### CLI vs Core Separation
-
-✅ **Verified**: CLI-specific code is isolated in the `antikythera-cli` crate
-✅ **Verified**: Core module (`antikythera-core`) remains agnostic of CLI concerns
-✅ **Verified**: All security logic is in the core module
-✅ **Verified**: CLI only handles user interaction and configuration management
-✅ **Verified**: FFI provides clean boundary for host languages
-
-### Module Organization
-
-**Core Module** (`antikythera-core`):
-- Contains all security logic
-- No CLI-specific code
-- Can be used independently
-- Provides Rust API
-
-**SDK Module** (`antikythera-sdk`):
-- Provides FFI bindings
-- Exposes security features to host languages
-- No business logic
-- Only translation layer
-
-**CLI Module** (`antikythera-cli`):
-- Handles user interaction
-- Manages configuration
-- Uses core security features
-- No security implementation
-
-## Testing
-
-### Unit Tests
-
-**Core Module Tests** (`tests/security/`):
-- 30+ comprehensive unit tests
-- Tests for all validation scenarios
-- Tests for rate limiting behavior
-- Tests for secrets management
-- Tests for configuration updates
-
-**FFI Tests** (`tests/security_ffi/tests.rs`):
-- 20+ FFI-specific tests
-- Tests for all FFI functions
-- Tests for C string handling
-- Tests for JSON serialization
-- Tests for error handling
-
-### Running Tests
-
-```bash
-# Run core security tests
-cargo test -p antikythera-core security
-
-# Run SDK FFI tests
-cargo test -p antikythera-sdk security_ffi
-
-# Run all tests
-cargo test
-```
-
-## Usage Examples
-
-### Rust API
-
-```rust
-use antikythera_core::security::{
-    validation::InputValidator,
-    rate_limit::RateLimiter,
-    secrets::SecretManager,
-};
-
-// Input validation
-let validator = InputValidator::from_config()?;
-validator.validate("user input")?;
-
-// Rate limiting
-let limiter = RateLimiter::from_config();
-limiter.check("session-id")?;
-
-// Secrets management
-let manager = SecretManager::from_config()?;
-manager.store_secret("api-key", "sk-1234567890")?;
-let secret = manager.get_secret("api-key")?;
-```
-
-### FFI API
-
-```c
-// Initialize
-mcp_security_init_validator();
-mcp_security_init_rate_limiter();
-mcp_security_init_secret_manager();
-
-// Use
-char* result = mcp_security_validate_input("user input");
-// Process result...
-mcp_security_free_string(result);
-
-// Configure
-char* config = "{\"max_input_size_bytes\": 5242880, ...}";
-char* result = mcp_security_set_validation_config(config);
-// Process result...
-mcp_security_free_string(result);
-```
-
-## Security Best Practices Implemented
-
-1. **Input Validation**: All inputs are validated before processing
-2. **Rate Limiting**: Prevents abuse and DoS attacks
-3. **Secrets Management**: Secure storage with encryption
-4. **Configuration**: All parameters are configurable via FFI
-5. **Separation of Concerns**: CLI and core are properly separated
-6. **Testing**: Comprehensive test coverage
-7. **Documentation**: Complete documentation provided
-
-## Future Enhancements
-
-Potential improvements for production use:
-
-1. **Advanced Cryptography**: Integrate with proper crypto libraries (rustls, ring)
-2. **Distributed Rate Limiting**: Use Redis for distributed systems
-3. **Secure Vault Integration**: HashiCorp Vault, AWS Secrets Manager
-4. **Advanced Threat Detection**: ML-based anomaly detection
-5. **Comprehensive Audit Logging**: Security event logging
-6. **Compliance Reporting**: Built-in compliance tools
-
-## Conclusion
-
-All security features have been successfully implemented with:
-
-✅ Comprehensive input validation with configurable parameters
-✅ Rate limiting with FFI-accessible configuration
-✅ Secure secrets management with rotation support
-✅ Full FFI bindings for all security features
-✅ CLI-specific code isolated in CLI module only
-✅ Core module remains agnostic of CLI concerns
-✅ Comprehensive unit tests for all security changes
-✅ Complete documentation for security features
-
-The implementation follows best practices for security, architecture, and maintainability, ensuring that the Antikythera MCP Framework has robust security features that can be customized via FFI for any use case.

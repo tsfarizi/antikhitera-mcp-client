@@ -32,7 +32,7 @@ The `antikythera-sdk` crate provides the stable integration surface:
 | Host model delegation | `DynamicModelProvider`, `ModelProvider`, `HostModelClient`, `HostModelTransport` |
 | Multi-agent | `MultiAgentOrchestrator`, `AgentProfile`, `AgentTask` |
 | Routing strategies | `DirectRouter`, `RoundRobinRouter`, `FirstAvailableRouter`, `RoleRouter` |
-| Logging | `ConfigLogger`, `AgentLogger`, `TransportLogger` |
+| Logging | `AgentLogger`, `ChatLogger`, `ConfigLogger`, `DiscoveryLogger`, `OrchestratorLogger`, `ProviderLogger`, `ResilienceLogger`, `SecurityLogger`, `SessionLogger`, `StdioLogger`, `StreamingLogger`, `TransportLogger`, `WasmLogger` |
 | Session | Session history types, import/export |
 
 ## CLI modes
@@ -69,8 +69,6 @@ The WASM component handles agent reasoning, session continuity, history shaping,
 | `component` | Server-side WASM component bindings | Active development |
 | `wasm-runtime` | Wasmtime host for running WASM agents | Active development |
 | `wizard` | Configuration wizard in CLI | Stable |
-| `cache` | Response caching layer | Stable |
-| `http-providers` | Deprecated compatibility flag; no active direct model client path | Deprecated |
 | `native-transport` | STDIO and HTTP MCP transport | Stable |
 
 ## Related documents
