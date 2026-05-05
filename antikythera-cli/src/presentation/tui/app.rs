@@ -14,7 +14,7 @@ use super::types::{
     HistoryBrowser, PendingResponse, SettingsPanel, UiMessage, UiTone, slash_command_suggestions,
 };
 
-pub(super) struct ChatApp {
+pub(crate) struct ChatApp {
     pub(super) runtime_config: AppConfig,
     pub(super) provider: String,
     pub(super) model: String,

@@ -18,9 +18,6 @@ wasm-runtime = ["dep:wasmtime", "dep:anyhow"]
 # OS-level process management (Stdio transport)
 native-transport = ["tokio/process", "tokio/io-std", "dep:sysinfo"]
 
-# Configuration cache (Postcard binary format) - now always enabled
-cache = []
-
 # Interactive configuration wizard (terminal UI + Clap argument parsing).
 # ✅ STABLE: Component model is complete; suitable for production use.
 wizard = ["dep:crossterm", "dep:ratatui"]
@@ -35,22 +32,12 @@ wizard = ["dep:crossterm", "dep:ratatui"]
 # how and where that state is persisted is entirely up to the host.
 multi-agent = []
 
-# Deprecated compatibility flag.
-#
-# Direct HTTP model request implementations are no longer part of the active
-# core runtime. Hosts are responsible for invoking model APIs and passing the
-# resulting messages back through the host/WASM boundary.
-#
-# This flag is kept only so older feature wiring keeps compiling; it currently
-# enables no additional functionality.
-http-providers = []
-
 # Full-featured build for native runtime
-full = ["wasm-runtime", "native-transport", "cache", "wizard", "multi-agent", "http-providers"]
+full = ["wasm-runtime", "native-transport", "wizard", "multi-agent"]
 
 [dependencies]
 # Core async runtime
-tokio = { version = "1.51.0", default-features = false, features = ["macros", "rt", "sync", "time", "io-util"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time", "io-util"] }
 tokio-stream.workspace = true
 futures.workspace = true
 async-trait.workspace = true

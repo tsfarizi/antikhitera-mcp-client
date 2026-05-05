@@ -5,9 +5,9 @@
 #[test]
 fn test_session_summary_creation() {
     let manager = SessionManager::new();
-    let id = manager.create_session("user-123", "gpt-4");
+    let id = manager.create_session("user-123", "gpt-4").unwrap();
     
-    let session = manager.get_session(&id).unwrap();
+    let session = manager.get_session(&id).unwrap().unwrap();
     let summary = SessionSummary::from(&session);
     
     assert_eq!(summary.id, session.id);
@@ -18,12 +18,12 @@ fn test_session_summary_creation() {
 #[test]
 fn test_session_export_creation() {
     let manager = SessionManager::new();
-    let id = manager.create_session("user-123", "gpt-4");
+    let id = manager.create_session("user-123", "gpt-4").unwrap();
     
     let _ = manager.add_message(&id, Message::user("Hello"));
     let _ = manager.add_message(&id, Message::assistant("Hi!"));
     
-    let session = manager.get_session(&id).unwrap();
+    let session = manager.get_session(&id).unwrap().unwrap();
     let export = SessionExport::from_session(session);
     
     assert_eq!(export.session.messages.len(), 2);

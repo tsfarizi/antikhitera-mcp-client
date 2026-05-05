@@ -80,7 +80,16 @@ impl ServerManager {
     /// with tool definitions and handlers, then injected into the manager.
     /// This avoids `ensure_instance` constructing an empty transport.
     pub fn register_builtin_transport(&self, name: &str, transport: Arc<BuiltinTransport>) {
-        let mut instances = self.instances.lock().expect("server registry lock");
+        let mut instances = match self.instances.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                TransportLogger::new(name).warn(format!(
+                    "ServerManager instances lock poisoned in register_builtin_transport: {}",
+                    e
+                ));
+                return;
+            }
+        };
         instances.insert(name.to_string(), ServerInstance::Builtin(transport));
     }
 
@@ -93,7 +102,19 @@ impl ServerManager {
 
         // Check if already exists
         {
-            let instances = self.instances.lock().expect("server registry lock");
+            let instances = match self.instances.lock() {
+                Ok(guard) => guard,
+                Err(e) => {
+                    TransportLogger::new(server).warn(format!(
+                        "ServerManager instances lock poisoned in ensure_instance: {}",
+                        e
+                    ));
+                    return Err(ToolInvokeError::Transport {
+                        server: server.to_string(),
+                        message: format!("ServerManager lock poisoned: {}", e),
+                    });
+                }
+            };
             if instances.contains_key(server) {
                 return Ok(());
             }
@@ -153,13 +174,34 @@ impl ServerManager {
             }
         };
 
-        let mut instances = self.instances.lock().expect("server registry lock");
+        let mut instances = match self.instances.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                TransportLogger::new(server).warn(format!(
+                    "ServerManager instances lock poisoned in ensure_instance after create: {}",
+                    e
+                ));
+                return Err(ToolInvokeError::Transport {
+                    server: server.to_string(),
+                    message: format!("ServerManager lock poisoned: {}", e),
+                });
+            }
+        };
         instances.insert(server.to_string(), instance);
         Ok(())
     }
 
     fn get_instance(&self, server: &str) -> Option<ServerInstance> {
-        let instances = self.instances.lock().expect("server registry lock");
+        let instances = match self.instances.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                TransportLogger::new(server).warn(format!(
+                    "ServerManager instances lock poisoned in get_instance: {}",
+                    e
+                ));
+                return None;
+            }
+        };
         match instances.get(server) {
             #[cfg(feature = "native-transport")]
             Some(ServerInstance::Stdio(p)) => Some(ServerInstance::Stdio(p.clone())),

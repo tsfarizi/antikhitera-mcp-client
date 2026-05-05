@@ -16,6 +16,7 @@ mod builtin;
 mod config;
 mod http;
 
+use crate::logging::TransportLogger;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -93,28 +94,46 @@ impl TransportRegistry {
 
     /// Register (or replace) a transport factory.
     pub fn register(&self, factory: Arc<dyn TransportFactory>) {
-        let mut factories = self
-            .factories
-            .lock()
-            .expect("TransportRegistry factories lock poisoned in register");
+        let mut factories = match self.factories.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                TransportLogger::new("transport").warn(format!(
+                    "TransportRegistry factories lock poisoned in register: {}",
+                    e
+                ));
+                return;
+            }
+        };
         factories.insert(factory.id().to_string(), factory);
     }
 
     /// Return all registered transport IDs.
     pub fn list(&self) -> Vec<String> {
-        let factories = self
-            .factories
-            .lock()
-            .expect("TransportRegistry factories lock poisoned in list");
+        let factories = match self.factories.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                TransportLogger::new("transport").warn(format!(
+                    "TransportRegistry factories lock poisoned in list: {}",
+                    e
+                ));
+                return Vec::new();
+            }
+        };
         factories.keys().cloned().collect()
     }
 
     /// Get a factory by ID.
     pub fn get(&self, id: &str) -> Option<Arc<dyn TransportFactory>> {
-        let factories = self
-            .factories
-            .lock()
-            .expect("TransportRegistry factories lock poisoned in get");
+        let factories = match self.factories.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                TransportLogger::new("transport").warn(format!(
+                    "TransportRegistry factories lock poisoned in get: {}",
+                    e
+                ));
+                return None;
+            }
+        };
         factories.get(id).cloned()
     }
 
@@ -123,10 +142,16 @@ impl TransportRegistry {
         &self,
         required: &[TransportCapability],
     ) -> Vec<Arc<dyn TransportFactory>> {
-        let factories = self
-            .factories
-            .lock()
-            .expect("TransportRegistry factories lock poisoned in select_by_capabilities");
+        let factories = match self.factories.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                TransportLogger::new("transport").warn(format!(
+                    "TransportRegistry factories lock poisoned in select_by_capabilities: {}",
+                    e
+                ));
+                return Vec::new();
+            }
+        };
         factories
             .values()
             .filter(|factory| {

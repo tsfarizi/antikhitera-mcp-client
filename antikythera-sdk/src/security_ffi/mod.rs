@@ -19,7 +19,7 @@ mod secrets;
 mod validation;
 
 // Re-export FFI functions
-pub use helpers::mcp_security_free_string;
+pub use crate::ffi_helpers::mcp_security_free_string;
 
 pub use validation::{
     mcp_security_get_validation_config, mcp_security_init_validator, mcp_security_sanitize_html,

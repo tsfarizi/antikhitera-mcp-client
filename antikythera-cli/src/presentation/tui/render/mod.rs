@@ -1,3 +1,5 @@
+//! TUI render orchestrator — composes chat, log, settings, and history panels.
+
 use antikythera_core::application::resilience::HealthStatus;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};

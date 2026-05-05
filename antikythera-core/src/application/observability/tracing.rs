@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use super::telemetry::TelemetryEvent;
+use crate::logging::TransportLogger;
 
 /// Minimal span context used by tracing hooks.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,31 +79,53 @@ impl InMemoryTracingHook {
     pub fn started_spans(&self) -> Vec<TraceSpanContext> {
         self.started
             .lock()
-            .expect("InMemoryTracingHook started lock poisoned in started_spans")
-            .clone()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|e| {
+                TransportLogger::new("tracing").warn(format!(
+                    "InMemoryTracingHook started lock poisoned in started_spans: {}",
+                    e
+                ));
+                Vec::new()
+            })
     }
 
     pub fn ended_spans(&self) -> Vec<(TraceSpanContext, TraceStatus)> {
         self.ended
             .lock()
-            .expect("InMemoryTracingHook ended lock poisoned in ended_spans")
-            .clone()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|e| {
+                TransportLogger::new("tracing").warn(format!(
+                    "InMemoryTracingHook ended lock poisoned in ended_spans: {}",
+                    e
+                ));
+                Vec::new()
+            })
     }
 }
 
 impl TracingHook for InMemoryTracingHook {
     fn on_span_start(&self, span: TraceSpanContext) {
-        self.started
-            .lock()
-            .expect("InMemoryTracingHook started lock poisoned in on_span_start")
-            .push(span);
+        match self.started.lock() {
+            Ok(mut guard) => guard.push(span),
+            Err(e) => {
+                TransportLogger::new("tracing").warn(format!(
+                    "InMemoryTracingHook started lock poisoned in on_span_start: {}",
+                    e
+                ));
+            }
+        }
     }
 
     fn on_span_end(&self, span: TraceSpanContext, status: TraceStatus) {
-        self.ended
-            .lock()
-            .expect("InMemoryTracingHook ended lock poisoned in on_span_end")
-            .push((span, status));
+        match self.ended.lock() {
+            Ok(mut guard) => guard.push((span, status)),
+            Err(e) => {
+                TransportLogger::new("tracing").warn(format!(
+                    "InMemoryTracingHook ended lock poisoned in on_span_end: {}",
+                    e
+                ));
+            }
+        }
     }
 }
 
@@ -142,16 +165,27 @@ impl InMemoryObservabilityHook {
     pub fn snapshot(&self) -> Vec<TelemetryEvent> {
         self.events
             .lock()
-            .expect("InMemoryObservabilityHook events lock poisoned in snapshot")
-            .clone()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|e| {
+                TransportLogger::new("observability").warn(format!(
+                    "InMemoryObservabilityHook events lock poisoned in snapshot: {}",
+                    e
+                ));
+                Vec::new()
+            })
     }
 
     /// Clear all recorded events.
     pub fn clear(&self) {
-        self.events
-            .lock()
-            .expect("InMemoryObservabilityHook events lock poisoned in clear")
-            .clear();
+        match self.events.lock() {
+            Ok(mut guard) => guard.clear(),
+            Err(e) => {
+                TransportLogger::new("observability").warn(format!(
+                    "InMemoryObservabilityHook events lock poisoned in clear: {}",
+                    e
+                ));
+            }
+        }
     }
 
     /// Filter events by type.
@@ -171,10 +205,15 @@ impl Default for InMemoryObservabilityHook {
 
 impl ObservabilityHook for InMemoryObservabilityHook {
     fn record_event(&self, event: TelemetryEvent) {
-        self.events
-            .lock()
-            .expect("InMemoryObservabilityHook events lock poisoned in record_event")
-            .push(event);
+        match self.events.lock() {
+            Ok(mut guard) => guard.push(event),
+            Err(e) => {
+                TransportLogger::new("observability").warn(format!(
+                    "InMemoryObservabilityHook events lock poisoned in record_event: {}",
+                    e
+                ));
+            }
+        }
     }
 }
 

@@ -5,7 +5,7 @@
 #[test]
 fn test_message_history_ordering_on_concurrent_adds() {
     let manager = Arc::new(SessionManager::new());
-    let session_id = manager.create_session("user", "gpt-4");
+    let session_id = manager.create_session("user", "gpt-4").unwrap();
     
     let barrier = Arc::new(Barrier::new(10));
     let mut handles = vec![];
@@ -30,14 +30,14 @@ fn test_message_history_ordering_on_concurrent_adds() {
         handle.join().unwrap();
     }
     
-    let session = manager.get_session(&session_id).unwrap();
+    let session = manager.get_session(&session_id).unwrap().unwrap();
     assert_eq!(session.messages.len(), 100);
 }
 
 #[test]
 fn test_session_message_capacity() {
     let manager = SessionManager::new();
-    let id = manager.create_session("user", "gpt-4");
+    let id = manager.create_session("user", "gpt-4").unwrap();
     
     // Add many messages
     for i in 0..10_000 {
@@ -45,7 +45,7 @@ fn test_session_message_capacity() {
         manager.add_message(&id, msg).ok();
     }
     
-    let session = manager.get_session(&id).unwrap();
+    let session = manager.get_session(&id).unwrap().unwrap();
     assert_eq!(session.messages.len(), 10_000);
 }
 

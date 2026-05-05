@@ -7,8 +7,6 @@ license.workspace = true
 description = "Unified logging system for Antikythera MCP Framework"
 
 [features]
-default = ["std"]
-std = []
 wasm = ["dep:wasm-bindgen"]
 subscriber = ["dep:tokio", "dep:crossbeam-channel"]
 # Enable compile-time lint that blocks println!, eprintln!, dbg!, and tracing macros

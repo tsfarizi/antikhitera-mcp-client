@@ -167,6 +167,9 @@ pub use servers::{
     mcp_list_servers, mcp_remove_server, mcp_validate_server,
 };
 
+/// Shared FFI helper utilities
+pub mod ffi_helpers;
+
 /// Security FFI module (validation, rate limiting, secrets management)
 #[cfg(feature = "sdk-core")]
 pub mod security_ffi;
@@ -212,6 +215,7 @@ pub use wasm_agent::{
     // Types
     AgentAction,
     AgentMessage,
+    AgentRunnerError,
     AgentState,
     ContextPolicy,
     ContextSummary,

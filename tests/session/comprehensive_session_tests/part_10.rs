@@ -8,7 +8,7 @@ fn test_rapid_session_creation() {
     let start = Instant::now();
     
     for i in 0..10_000 {
-        manager.create_session(format!("user-{}", i), "gpt-4");
+        manager.create_session(format!("user-{}", i), "gpt-4").unwrap();
     }
     
     let elapsed = start.elapsed();
@@ -21,7 +21,7 @@ fn test_rapid_session_creation() {
 #[test]
 fn test_rapid_message_addition() {
     let manager = SessionManager::new();
-    let id = manager.create_session("user", "gpt-4");
+    let id = manager.create_session("user", "gpt-4").unwrap();
     
     let start = Instant::now();
     
@@ -40,7 +40,7 @@ fn test_rapid_message_addition() {
 #[test]
 fn test_large_session_retrieval() {
     let manager = SessionManager::new();
-    let id = manager.create_session("user", "gpt-4");
+    let id = manager.create_session("user", "gpt-4").unwrap();
     
     for i in 0..5_000 {
         let msg = Message::user(format!("msg-{}", i));
@@ -48,7 +48,7 @@ fn test_large_session_retrieval() {
     }
     
     let start = Instant::now();
-    let _session = manager.get_session(&id).unwrap();
+    let _session = manager.get_session(&id).unwrap().unwrap();
     let elapsed = start.elapsed();
     
     println!("Retrieved session with 5k messages in {:?}", elapsed);
@@ -60,11 +60,11 @@ fn test_many_sessions_list() {
     let manager = SessionManager::new();
     
     for i in 0..1_000 {
-        manager.create_session(format!("user-{}", i), "gpt-4");
+        manager.create_session(format!("user-{}", i), "gpt-4").unwrap();
     }
     
     let start = Instant::now();
-    let summaries = manager.list_sessions();
+    let summaries = manager.list_sessions().unwrap();
     let elapsed = start.elapsed();
     
     assert_eq!(summaries.len(), 1_000);

@@ -1,3 +1,5 @@
+//! History browser keyboard handler.
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::presentation::tui::app::ChatApp;

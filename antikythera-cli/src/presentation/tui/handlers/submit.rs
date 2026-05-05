@@ -1,3 +1,5 @@
+//! Chat input submission handler with agent/chat dispatch.
+
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -87,6 +89,9 @@ pub(crate) fn submit_input(client: &mut Arc<McpClient<DynamicModelProvider>>, ap
         if app.agent_mode { "agent" } else { "chat" },
         app.session_id.as_deref().unwrap_or("<baru>"),
     ));
+
+    // TODO: Add integration tests for submit_input with mock ChatApp state.
+    // The function requires a full running client, channel setup, and tokio runtime.
 
     if app.agent_mode {
         let options = AgentOptions {

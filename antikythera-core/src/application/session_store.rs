@@ -44,9 +44,10 @@ impl SessionStore {
     /// Ensure a session exists and mark it as most-recently-used.
     pub(super) fn touch_or_create(&mut self, session_id: &str) {
         self.touch(session_id);
-        if !self.manager.has_session(session_id) {
-            self.manager
-                .create_session_with_id(session_id.to_string(), "core", "core-default");
+        if !self.manager.has_session(session_id).unwrap_or(false) {
+            let _ =
+                self.manager
+                    .create_session_with_id(session_id.to_string(), "core", "core-default");
         }
     }
 

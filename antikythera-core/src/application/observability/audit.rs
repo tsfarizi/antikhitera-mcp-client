@@ -1,3 +1,4 @@
+use crate::logging::TransportLogger;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -58,17 +59,26 @@ impl AuditTrail {
     }
 
     pub fn append(&self, record: AuditRecord) {
-        self.records
-            .lock()
-            .expect("AuditTrail records lock poisoned in append")
-            .push(record);
+        match self.records.lock() {
+            Ok(mut guard) => guard.push(record),
+            Err(e) => {
+                TransportLogger::new("audit")
+                    .warn(format!("AuditTrail records lock poisoned in append: {}", e));
+            }
+        }
     }
 
     pub fn snapshot(&self) -> Vec<AuditRecord> {
         self.records
             .lock()
-            .expect("AuditTrail records lock poisoned in snapshot")
-            .clone()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|e| {
+                TransportLogger::new("audit").warn(format!(
+                    "AuditTrail records lock poisoned in snapshot: {}",
+                    e
+                ));
+                Vec::new()
+            })
     }
 
     pub fn by_category(&self, category: AuditCategory) -> Vec<AuditRecord> {
@@ -79,10 +89,13 @@ impl AuditTrail {
     }
 
     pub fn clear(&self) {
-        self.records
-            .lock()
-            .expect("AuditTrail records lock poisoned in clear")
-            .clear();
+        match self.records.lock() {
+            Ok(mut guard) => guard.clear(),
+            Err(e) => {
+                TransportLogger::new("audit")
+                    .warn(format!("AuditTrail records lock poisoned in clear: {}", e));
+            }
+        }
     }
 }
 

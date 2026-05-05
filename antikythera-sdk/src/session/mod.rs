@@ -49,40 +49,56 @@ impl SdkSessionManager {
         }
     }
 
-    pub fn create_session(&self, user_id: &str, model: &str) -> String {
-        self.inner.create_session(user_id, model)
+    pub fn create_session(&self, user_id: &str, model: &str) -> Result<String, String> {
+        self.inner
+            .create_session(user_id, model)
+            .map_err(|e| e.to_string())
     }
 
-    pub fn get_session(&self, session_id: &str) -> Option<Session> {
-        self.inner.get_session(session_id)
+    pub fn get_session(&self, session_id: &str) -> Result<Option<Session>, String> {
+        self.inner
+            .get_session(session_id)
+            .map_err(|e| e.to_string())
     }
 
-    pub fn list_sessions(&self) -> Vec<SessionSummary> {
-        self.inner.list_sessions()
+    pub fn list_sessions(&self) -> Result<Vec<SessionSummary>, String> {
+        self.inner.list_sessions().map_err(|e| e.to_string())
     }
 
     pub fn add_message(&self, session_id: &str, message: Message) -> Result<(), String> {
-        self.inner.add_message(session_id, message)
+        self.inner
+            .add_message(session_id, message)
+            .map_err(|e| e.to_string())
     }
 
     pub fn get_chat_history(&self, session_id: &str) -> Result<Vec<Message>, String> {
-        self.inner.get_chat_history(session_id)
+        self.inner
+            .get_chat_history(session_id)
+            .map_err(|e| e.to_string())
     }
 
     pub fn delete_session(&self, session_id: &str) -> Result<(), String> {
-        self.inner.delete_session(session_id)
+        self.inner
+            .delete_session(session_id)
+            .map_err(|e| e.to_string())
     }
 
     pub fn clear_session(&self, session_id: &str) -> Result<(), String> {
-        self.inner.clear_session(session_id)
+        self.inner
+            .clear_session(session_id)
+            .map_err(|e| e.to_string())
     }
 
     pub fn import_session(&self, session: Session) -> Result<(), String> {
-        self.inner.import_session(session)
+        self.inner
+            .import_session(session)
+            .map_err(|e| e.to_string())
     }
 
     pub fn import_sessions(&self, sessions: Vec<Session>) -> Result<usize, String> {
-        self.inner.import_sessions(sessions)
+        self.inner
+            .import_sessions(sessions)
+            .map_err(|e| e.to_string())
     }
 }
 

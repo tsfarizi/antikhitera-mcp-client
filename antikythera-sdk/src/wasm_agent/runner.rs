@@ -21,6 +21,43 @@ fn wasm_log(session_id: &str, level: LogLevel, message: &str) {
     get_sdk_logger(session_id).log_with_source(level, "wasm_agent", message);
 }
 
+#[derive(Debug, Clone)]
+pub enum AgentRunnerError {
+    SessionNotFound(String),
+    SessionArchived(String),
+    ValidationFailed(String),
+    ToolFailed(String),
+    ConfigurationFailed(String),
+    Internal(String),
+}
+
+impl From<AgentRunnerError> for String {
+    fn from(e: AgentRunnerError) -> Self {
+        e.to_string()
+    }
+}
+
+impl std::fmt::Display for AgentRunnerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SessionNotFound(id) => write!(f, "Session not found: {id}"),
+            Self::SessionArchived(id) => write!(f, "Session archived: {id}"),
+            Self::ValidationFailed(msg) => write!(f, "Validation failed: {msg}"),
+            Self::ToolFailed(msg) => write!(f, "Tool failed: {msg}"),
+            Self::ConfigurationFailed(msg) => write!(f, "Configuration failed: {msg}"),
+            Self::Internal(msg) => write!(f, "Internal error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for AgentRunnerError {}
+
+impl From<String> for AgentRunnerError {
+    fn from(msg: String) -> Self {
+        AgentRunnerError::Internal(msg)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RunnerConfigInput {
     pub max_steps: Option<u32>,
@@ -210,7 +247,7 @@ impl AgentRunnerRuntime {
         session_id: &str,
         reason: &str,
         correlation_id: Option<String>,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, AgentRunnerError> {
         wasm_log(
             "tui",
             LogLevel::Info,
@@ -248,7 +285,7 @@ impl AgentRunnerRuntime {
         Ok(true)
     }
 
-    fn sweep_idle_sessions(&mut self, now_ms: i64) -> Result<u32, String> {
+    fn sweep_idle_sessions(&mut self, now_ms: i64) -> Result<u32, AgentRunnerError> {
         let candidates: Vec<String> = self
             .sessions
             .iter()
@@ -288,7 +325,7 @@ impl AgentRunnerRuntime {
         &mut self,
         protected_session_id: Option<&str>,
         correlation_id: Option<String>,
-    ) -> Result<u32, String> {
+    ) -> Result<u32, AgentRunnerError> {
         if self.max_in_memory_sessions == 0 {
             return Ok(0);
         }
@@ -347,21 +384,22 @@ impl AgentRunnerRuntime {
         self.default_config.context_policy.clone()
     }
 
-    fn register_tools(&mut self, tools_json: &str) -> Result<u32, String> {
+    fn register_tools(&mut self, tools_json: &str) -> Result<u32, AgentRunnerError> {
         self.known_tools = ToolRegistry::from_json(tools_json)?;
         let count = self.known_tools.len();
         wasm_log("tui", LogLevel::Info, &format!("{count} tools registered"));
         Ok(count as u32)
     }
 
-    fn get_tools_prompt(&self) -> Result<String, String> {
+    fn get_tools_prompt(&self) -> Result<String, AgentRunnerError> {
         let block = self.known_tools.to_prompt_block().unwrap_or_default();
         Ok(block)
     }
 
-    fn configure(&mut self, config_json: &str) -> Result<String, String> {
-        let input: RunnerConfigInput =
-            serde_json::from_str(config_json).map_err(|e| format!("Invalid config-json: {e}"))?;
+    fn configure(&mut self, config_json: &str) -> Result<String, AgentRunnerError> {
+        let input: RunnerConfigInput = serde_json::from_str(config_json).map_err(|e| {
+            AgentRunnerError::ConfigurationFailed(format!("Invalid config-json: {e}"))
+        })?;
 
         if let Some(value) = input.max_steps {
             self.default_config.max_steps = value;
@@ -395,9 +433,10 @@ impl AgentRunnerRuntime {
         Ok(session_id)
     }
 
-    fn set_context_policy(&mut self, policy_json: &str) -> Result<bool, String> {
-        let input: ContextPolicyUpdateInput = serde_json::from_str(policy_json)
-            .map_err(|e| format!("Invalid context-policy-json: {e}"))?;
+    fn set_context_policy(&mut self, policy_json: &str) -> Result<bool, AgentRunnerError> {
+        let input: ContextPolicyUpdateInput = serde_json::from_str(policy_json).map_err(|e| {
+            AgentRunnerError::ConfigurationFailed(format!("Invalid context-policy-json: {e}"))
+        })?;
         self.default_config.context_policy = input.policy;
         wasm_log("tui", LogLevel::Debug, "Context policy updated");
         Ok(true)
@@ -478,10 +517,11 @@ impl AgentRunnerRuntime {
         Some(summary)
     }
 
-    fn prepare_user_turn(&mut self, request_json: &str) -> Result<String, String> {
+    fn prepare_user_turn(&mut self, request_json: &str) -> Result<String, AgentRunnerError> {
         let started = Instant::now();
-        let input: PrepareUserTurnInput =
-            serde_json::from_str(request_json).map_err(|e| format!("Invalid request-json: {e}"))?;
+        let input: PrepareUserTurnInput = serde_json::from_str(request_json).map_err(|e| {
+            AgentRunnerError::ValidationFailed(format!("Invalid request-json: {e}"))
+        })?;
 
         let now_ms = now_unix_ms();
         let _ = self.sweep_idle_sessions(now_ms)?;
@@ -527,9 +567,9 @@ impl AgentRunnerRuntime {
                 LogLevel::Warn,
                 "Session archived, restore required before turn",
             );
-            return Err(format!(
+            return Err(AgentRunnerError::SessionArchived(format!(
                 "Session '{session_id}' archived and not in RAM. Host must load persisted state then call hydrate_session"
-            ));
+            )));
         }
 
         let policy = self.resolve_policy(&input);
@@ -586,12 +626,14 @@ impl AgentRunnerRuntime {
             metadata_json: input.metadata_json,
             correlation_id: input.correlation_id,
             summary_handoff: summary.or_else(|| runtime.state.rolling_summary.clone()),
-            messages_json: serde_json::to_string(&messages)
-                .map_err(|e| format!("Failed to encode messages_json: {e}"))?,
+            messages_json: serde_json::to_string(&messages).map_err(|e| {
+                AgentRunnerError::Internal(format!("Failed to encode messages_json: {e}"))
+            })?,
         };
 
-        let encoded = serde_json::to_string(&prepared)
-            .map_err(|e| format!("Failed to encode prepared turn: {e}"))?;
+        let encoded = serde_json::to_string(&prepared).map_err(|e| {
+            AgentRunnerError::Internal(format!("Failed to encode prepared turn: {e}"))
+        })?;
 
         let _ =
             self.enforce_capacity(Some(&prepared.session_id), prepared.correlation_id.clone())?;
@@ -604,7 +646,7 @@ impl AgentRunnerRuntime {
         session_id: &str,
         chunk: &str,
         correlation_id: Option<String>,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, AgentRunnerError> {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
         runtime.touch(now_unix_ms());
@@ -622,11 +664,12 @@ impl AgentRunnerRuntime {
         &mut self,
         prepared_turn_json: &str,
         llm_response_json: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, AgentRunnerError> {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let started = Instant::now();
-        let prepared: PreparedTurn = serde_json::from_str(prepared_turn_json)
-            .map_err(|e| format!("Invalid prepared-turn-json: {e}"))?;
+        let prepared: PreparedTurn = serde_json::from_str(prepared_turn_json).map_err(|e| {
+            AgentRunnerError::ValidationFailed(format!("Invalid prepared-turn-json: {e}"))
+        })?;
 
         wasm_log("tui", LogLevel::Debug, "Committing LLM response");
 
@@ -692,7 +735,7 @@ impl AgentRunnerRuntime {
                         LogLevel::Error,
                         &format!("Tool validation failed for '{tool}': {validation_err}"),
                     );
-                    return Err(validation_err.to_string());
+                    return Err(AgentRunnerError::ToolFailed(validation_err.to_string()));
                 }
 
                 runtime.state.add_message(AgentMessage {
@@ -741,12 +784,14 @@ impl AgentRunnerRuntime {
             &format!("LLM response committed: action={}", result.action),
         );
         runtime.pending_llm_chunks.clear();
-        serde_json::to_string(&result).map_err(|e| format!("Failed to encode commit result: {e}"))
+        serde_json::to_string(&result)
+            .map_err(|e| AgentRunnerError::Internal(format!("Failed to encode commit result: {e}")))
     }
 
-    fn commit_llm_stream(&mut self, prepared_turn_json: &str) -> Result<String, String> {
-        let prepared: PreparedTurn = serde_json::from_str(prepared_turn_json)
-            .map_err(|e| format!("Invalid prepared-turn-json: {e}"))?;
+    fn commit_llm_stream(&mut self, prepared_turn_json: &str) -> Result<String, AgentRunnerError> {
+        let prepared: PreparedTurn = serde_json::from_str(prepared_turn_json).map_err(|e| {
+            AgentRunnerError::ValidationFailed(format!("Invalid prepared-turn-json: {e}"))
+        })?;
 
         let runtime = self.ensure_session(&prepared.session_id);
         let payload = runtime.pending_llm_chunks.join("");
@@ -757,23 +802,24 @@ impl AgentRunnerRuntime {
         &mut self,
         session_id: &str,
         llm_response_json: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, AgentRunnerError> {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
         runtime.touch(now_unix_ms());
         wasm_log("tui", LogLevel::Debug, "Processing LLM response");
         let action = process_llm_response(&mut runtime.state, llm_response_json)?;
-        serde_json::to_string(&action).map_err(|e| format!("Failed to encode action: {e}"))
+        serde_json::to_string(&action)
+            .map_err(|e| AgentRunnerError::Internal(format!("Failed to encode action: {e}")))
     }
 
     fn process_tool_result(
         &mut self,
         session_id: &str,
         tool_result_json: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, AgentRunnerError> {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let input: ToolResultInput = serde_json::from_str(tool_result_json)
-            .map_err(|e| format!("Invalid tool-result-json: {e}"))?;
+            .map_err(|e| AgentRunnerError::ToolFailed(format!("Invalid tool-result-json: {e}")))?;
 
         wasm_log(
             "tui",
@@ -782,7 +828,7 @@ impl AgentRunnerRuntime {
         );
 
         let output: serde_json::Value = serde_json::from_str(&input.output_json)
-            .map_err(|e| format!("Invalid tool output_json: {e}"))?;
+            .map_err(|e| AgentRunnerError::ToolFailed(format!("Invalid tool output_json: {e}")))?;
 
         let runtime = self.ensure_session(session_id);
         runtime.touch(now_unix_ms());
@@ -833,10 +879,12 @@ impl AgentRunnerRuntime {
             "next_message": next_message,
             "tool_result": result,
         }))
-        .map_err(|e| format!("Failed to encode tool processing result: {e}"))
+        .map_err(|e| {
+            AgentRunnerError::Internal(format!("Failed to encode tool processing result: {e}"))
+        })
     }
 
-    fn drain_events(&mut self, session_id: &str) -> Result<String, String> {
+    fn drain_events(&mut self, session_id: &str) -> Result<String, AgentRunnerError> {
         let mut events = Vec::new();
         if let Some(runtime) = self.sessions.get_mut(session_id) {
             events.extend(std::mem::take(&mut runtime.events));
@@ -849,13 +897,14 @@ impl AgentRunnerRuntime {
             && !self.sessions.contains_key(session_id)
             && !self.archived_sessions.contains_key(session_id)
         {
-            return Err(format!("Session not found: {session_id}"));
+            return Err(AgentRunnerError::SessionNotFound(session_id.to_string()));
         }
 
-        serde_json::to_string(&events).map_err(|e| format!("Failed to encode events: {e}"))
+        serde_json::to_string(&events)
+            .map_err(|e| AgentRunnerError::Internal(format!("Failed to encode events: {e}")))
     }
 
-    fn telemetry_snapshot(&mut self, session_id: &str) -> Result<String, String> {
+    fn telemetry_snapshot(&mut self, session_id: &str) -> Result<String, AgentRunnerError> {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
         runtime.touch(now_unix_ms());
@@ -865,16 +914,17 @@ impl AgentRunnerRuntime {
             runtime.telemetry.correlation_id.clone(),
             serde_json::json!({"snapshot": true}),
         );
-        serde_json::to_string(&runtime.telemetry)
-            .map_err(|e| format!("Failed to encode telemetry snapshot: {e}"))
+        serde_json::to_string(&runtime.telemetry).map_err(|e| {
+            AgentRunnerError::Internal(format!("Failed to encode telemetry snapshot: {e}"))
+        })
     }
 
-    fn slo_snapshot(&mut self, session_id: &str) -> Result<String, String> {
+    fn slo_snapshot(&mut self, session_id: &str) -> Result<String, AgentRunnerError> {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self
             .sessions
             .get(session_id)
-            .ok_or_else(|| format!("Session not found: {session_id}"))?;
+            .ok_or_else(|| AgentRunnerError::SessionNotFound(session_id.to_string()))?;
 
         wasm_log("tui", LogLevel::Debug, "SLO snapshot");
 
@@ -908,10 +958,15 @@ impl AgentRunnerRuntime {
             p95_commit_latency_ms: Self::p95(&runtime.commit_latencies_ms),
         };
 
-        serde_json::to_string(&snapshot).map_err(|e| format!("Failed to encode SLO snapshot: {e}"))
+        serde_json::to_string(&snapshot)
+            .map_err(|e| AgentRunnerError::Internal(format!("Failed to encode SLO snapshot: {e}")))
     }
 
-    fn hydrate_session(&mut self, session_id: &str, state_json: &str) -> Result<bool, String> {
+    fn hydrate_session(
+        &mut self,
+        session_id: &str,
+        state_json: &str,
+    ) -> Result<bool, AgentRunnerError> {
         wasm_log("tui", LogLevel::Info, "Hydrating session from host state");
         let mut state = AgentState::from_json(state_json)?;
         state.session_id = session_id.to_string();
@@ -942,9 +997,9 @@ impl AgentRunnerRuntime {
         &mut self,
         session_id: &str,
         progress_json: &str,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, AgentRunnerError> {
         let payload: serde_json::Value = serde_json::from_str(progress_json)
-            .map_err(|e| format!("Invalid progress-json: {e}"))?;
+            .map_err(|e| AgentRunnerError::Internal(format!("Invalid progress-json: {e}")))?;
         self.emit_pending_event(
             session_id,
             StreamEventKind::SessionRestoreProgress,
@@ -954,7 +1009,7 @@ impl AgentRunnerRuntime {
         Ok(true)
     }
 
-    fn sweep_sessions(&mut self, now_ms: Option<i64>) -> Result<u32, String> {
+    fn sweep_sessions(&mut self, now_ms: Option<i64>) -> Result<u32, AgentRunnerError> {
         let now = now_ms.unwrap_or_else(now_unix_ms);
         self.sweep_idle_sessions(now)
     }
@@ -966,11 +1021,11 @@ fn runtime() -> &'static Mutex<AgentRunnerRuntime> {
 }
 
 fn with_runtime<T>(
-    f: impl FnOnce(&mut AgentRunnerRuntime) -> Result<T, String>,
-) -> Result<T, String> {
+    f: impl FnOnce(&mut AgentRunnerRuntime) -> Result<T, AgentRunnerError>,
+) -> Result<T, AgentRunnerError> {
     let mut guard = runtime().lock().map_err(|_| {
         wasm_log("tui", LogLevel::Error, "Runtime lock poisoned");
-        "AgentRunner runtime lock poisoned".to_string()
+        AgentRunnerError::Internal("AgentRunner runtime lock poisoned".to_string())
     })?;
     f(&mut guard)
 }
@@ -989,15 +1044,15 @@ fn now_unix_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-pub fn init(config_json: &str) -> Result<String, String> {
+pub fn init(config_json: &str) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.configure(config_json))
 }
 
-pub fn set_context_policy(policy_json: &str) -> Result<bool, String> {
+pub fn set_context_policy(policy_json: &str) -> Result<bool, AgentRunnerError> {
     with_runtime(|rt| rt.set_context_policy(policy_json))
 }
 
-pub fn prepare_user_turn(request_json: &str) -> Result<String, String> {
+pub fn prepare_user_turn(request_json: &str) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.prepare_user_turn(request_json))
 }
 
@@ -1005,48 +1060,48 @@ pub fn append_llm_chunk(
     session_id: &str,
     chunk: &str,
     correlation_id: Option<&str>,
-) -> Result<bool, String> {
+) -> Result<bool, AgentRunnerError> {
     with_runtime(|rt| rt.append_llm_chunk(session_id, chunk, correlation_id.map(|v| v.to_string())))
 }
 
 pub fn commit_llm_response(
     prepared_turn_json: &str,
     llm_response_json: &str,
-) -> Result<String, String> {
+) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.commit_llm_response(prepared_turn_json, llm_response_json))
 }
 
-pub fn commit_llm_stream(prepared_turn_json: &str) -> Result<String, String> {
+pub fn commit_llm_stream(prepared_turn_json: &str) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.commit_llm_stream(prepared_turn_json))
 }
 
 pub fn process_llm_response_for_session(
     session_id: &str,
     llm_response_json: &str,
-) -> Result<String, String> {
+) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.process_llm_response(session_id, llm_response_json))
 }
 
 pub fn process_tool_result_for_session(
     session_id: &str,
     tool_result_json: &str,
-) -> Result<String, String> {
+) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.process_tool_result(session_id, tool_result_json))
 }
 
-pub fn drain_events(session_id: &str) -> Result<String, String> {
+pub fn drain_events(session_id: &str) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.drain_events(session_id))
 }
 
-pub fn get_telemetry_snapshot(session_id: &str) -> Result<String, String> {
+pub fn get_telemetry_snapshot(session_id: &str) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.telemetry_snapshot(session_id))
 }
 
-pub fn get_slo_snapshot(session_id: &str) -> Result<String, String> {
+pub fn get_slo_snapshot(session_id: &str) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.slo_snapshot(session_id))
 }
 
-pub fn get_state(session_id: &str) -> Result<String, String> {
+pub fn get_state(session_id: &str) -> Result<String, AgentRunnerError> {
     with_runtime(|rt| {
         let Some(state) = rt.sessions.get(session_id) else {
             if rt.archived_sessions.contains_key(session_id) {
@@ -1055,18 +1110,18 @@ pub fn get_state(session_id: &str) -> Result<String, String> {
                     LogLevel::Warn,
                     "get_state called on archived session",
                 );
-                return Err(format!(
+                return Err(AgentRunnerError::SessionArchived(format!(
                     "Session '{session_id}' is archived in host storage; call hydrate_session after host load"
-                ));
+                )));
             }
             wasm_log("tui", LogLevel::Error, "get_state: session not found");
-            return Err(format!("Session not found: {session_id}"));
+            return Err(AgentRunnerError::SessionNotFound(session_id.to_string()));
         };
-        state.state.to_json()
+        state.state.to_json().map_err(AgentRunnerError::from)
     })
 }
 
-pub fn reset_session(session_id: &str) -> Result<bool, String> {
+pub fn reset_session(session_id: &str) -> Result<bool, AgentRunnerError> {
     with_runtime(|rt| {
         let removed = rt.sessions.remove(session_id).is_some();
         rt.archived_sessions.remove(session_id);
@@ -1081,18 +1136,18 @@ pub fn reset_session(session_id: &str) -> Result<bool, String> {
 /// `tools_json` must be a JSON array of `ToolDefinition` objects.  The call
 /// replaces the entire registry; pass an empty array to clear it.  Returns the
 /// number of tools registered.
-pub fn register_tools(tools_json: &str) -> Result<u32, String> {
+pub fn register_tools(tools_json: &str) -> Result<u32, AgentRunnerError> {
     with_runtime(|rt| rt.register_tools(tools_json))
 }
 
 /// Returns a formatted tool-list block suitable for injection into a system
 /// prompt, or an empty string when no tools have been registered.
-pub fn get_tools_prompt() -> Result<String, String> {
+pub fn get_tools_prompt() -> Result<String, AgentRunnerError> {
     with_runtime(|rt| rt.get_tools_prompt())
 }
 
 /// Restore an archived session into WASM memory after the host has loaded it.
-pub fn hydrate_session(session_id: &str, state_json: &str) -> Result<bool, String> {
+pub fn hydrate_session(session_id: &str, state_json: &str) -> Result<bool, AgentRunnerError> {
     with_runtime(|rt| rt.hydrate_session(session_id, state_json))
 }
 
@@ -1100,11 +1155,87 @@ pub fn hydrate_session(session_id: &str, state_json: &str) -> Result<bool, Strin
 pub fn report_session_restore_progress(
     session_id: &str,
     progress_json: &str,
-) -> Result<bool, String> {
+) -> Result<bool, AgentRunnerError> {
     with_runtime(|rt| rt.report_restore_progress(session_id, progress_json))
 }
 
 /// Trigger idle-timeout sweep manually (useful for deterministic tests and host schedulers).
-pub fn sweep_idle_sessions(now_unix_ms: Option<i64>) -> Result<u32, String> {
+pub fn sweep_idle_sessions(now_unix_ms: Option<i64>) -> Result<u32, AgentRunnerError> {
     with_runtime(|rt| rt.sweep_sessions(now_unix_ms))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn p95_empty_returns_zero() {
+        let values: Vec<u64> = vec![];
+        assert_eq!(AgentRunnerRuntime::p95(&values), 0);
+    }
+
+    #[test]
+    fn p95_single_value() {
+        assert_eq!(AgentRunnerRuntime::p95(&[42]), 42);
+    }
+
+    #[test]
+    fn p95_small_set() {
+        let values: Vec<u64> = (1..=100).collect();
+        let result = AgentRunnerRuntime::p95(&values);
+        assert!(result >= 95, "p95 of 1..=100 should be >= 95, got {result}");
+        assert!(result <= 96, "p95 of 1..=100 should be <= 96, got {result}");
+    }
+
+    #[test]
+    fn p95_known_example() {
+        assert_eq!(
+            AgentRunnerRuntime::p95(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            10
+        );
+    }
+
+    #[test]
+    fn p95_larger_set() {
+        let values: Vec<u64> = (0..1000).collect();
+        let result = AgentRunnerRuntime::p95(&values);
+        assert_eq!(result, 950);
+    }
+
+    // ── new_session_id ───────────────────────────────────────────────────
+    #[test]
+    fn new_session_id_has_prefix() {
+        let id = new_session_id();
+        assert!(
+            id.starts_with("session-"),
+            "expected 'session-' prefix, got: {id}"
+        );
+    }
+
+    #[test]
+    fn new_session_id_has_two_digits() {
+        let id = new_session_id();
+        let rest = id.strip_prefix("session-").unwrap();
+        let parts: Vec<&str> = rest.splitn(2, '-').collect();
+        assert_eq!(
+            parts.len(),
+            2,
+            "expected 'timestamp-seq' format, got: {rest}"
+        );
+        assert!(
+            parts[0].parse::<i64>().is_ok(),
+            "timestamp part should be numeric"
+        );
+        assert!(
+            parts[1].parse::<u64>().is_ok(),
+            "seq part should be numeric"
+        );
+    }
+
+    #[test]
+    fn new_session_id_generates_unique() {
+        let id1 = new_session_id();
+        let id2 = new_session_id();
+        assert_ne!(id1, id2);
+    }
 }

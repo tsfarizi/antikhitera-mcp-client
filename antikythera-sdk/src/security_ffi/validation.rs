@@ -26,8 +26,9 @@ pub extern "C" fn mcp_security_init_validator() -> *mut c_char {
             success_response()
         }
         Err(e) => {
-            logger.ffi_error("mcp_security_init_validator", &e);
-            error_response(&e)
+            let err_msg = e.to_string();
+            logger.ffi_error("mcp_security_init_validator", &err_msg);
+            error_response(&err_msg)
         }
     }
 }
@@ -168,11 +169,12 @@ pub extern "C" fn mcp_security_validate_json(json_str: *const c_char) -> *mut c_
                 success_with(&[("valid", serde_json::json!(true))])
             }
             Err(e) => {
-                logger.validation_failed("json", &e);
+                let err_msg = e.to_string();
+                logger.validation_failed("json", &err_msg);
                 logger.ffi_result("mcp_security_validate_json", false, 0);
                 success_with(&[
                     ("valid", serde_json::json!(false)),
-                    ("error", serde_json::json!(e)),
+                    ("error", serde_json::json!(err_msg)),
                 ])
             }
         },
@@ -284,8 +286,9 @@ pub extern "C" fn mcp_security_set_validation_config(config_json: *const c_char)
                 success_response()
             }
             Err(e) => {
-                logger.ffi_error("mcp_security_set_validation_config", &e);
-                error_response(&e)
+                let err_msg = e.to_string();
+                logger.ffi_error("mcp_security_set_validation_config", &err_msg);
+                error_response(&err_msg)
             }
         },
         None => {

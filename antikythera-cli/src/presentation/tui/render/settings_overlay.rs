@@ -1,3 +1,5 @@
+//! Settings overlay with Provider, Model, Prompts, System, Agent tabs.
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -6,7 +8,7 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use super::super::app::ChatApp;
 use super::super::types::{PromptField, SettingsTab};
 
-pub(crate) fn draw_settings_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
+pub(super) fn draw_settings_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     let area = frame.area();
     // Blank the entire terminal before drawing the overlay.
     frame.render_widget(Clear, area);
@@ -58,7 +60,7 @@ pub(crate) fn draw_settings_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatAp
     }
 }
 
-pub(crate) fn draw_settings_tab_provider(
+pub(super) fn draw_settings_tab_provider(
     frame: &mut ratatui::Frame<'_>,
     app: &ChatApp,
     area: Rect,
@@ -137,7 +139,7 @@ pub(crate) fn draw_settings_tab_provider(
     }
 }
 
-pub(crate) fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+pub(super) fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
     // Reserve the bottom row for the add-model input bar when active.
     let (list_area, input_area) = if app.settings.model_add_mode {
         let rows = Layout::default()
@@ -237,7 +239,7 @@ pub(crate) fn draw_settings_tab_model(frame: &mut ratatui::Frame<'_>, app: &Chat
     }
 }
 
-pub(crate) fn draw_settings_tab_prompts(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+pub(super) fn draw_settings_tab_prompts(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -302,7 +304,7 @@ pub(crate) fn draw_settings_tab_prompts(frame: &mut ratatui::Frame<'_>, app: &Ch
     }
 }
 
-pub(crate) fn draw_settings_tab_system(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+pub(super) fn draw_settings_tab_system(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(5), Constraint::Min(8)])
@@ -345,7 +347,7 @@ pub(crate) fn draw_settings_tab_system(frame: &mut ratatui::Frame<'_>, app: &Cha
     }
 }
 
-pub(crate) fn draw_settings_tab_agent(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
+pub(super) fn draw_settings_tab_agent(frame: &mut ratatui::Frame<'_>, app: &ChatApp, area: Rect) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(9), Constraint::Min(4)])

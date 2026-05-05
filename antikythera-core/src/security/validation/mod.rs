@@ -15,6 +15,25 @@ use regex::Regex;
 use serde_json::Value;
 use std::collections::HashSet;
 
+#[derive(Debug, Clone)]
+pub enum InputValidatorError {
+    InvalidInput(String),
+    Rejected(String),
+    Configuration(String),
+}
+
+impl std::fmt::Display for InputValidatorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidInput(msg) => write!(f, "Invalid input: {msg}"),
+            Self::Rejected(msg) => write!(f, "Input rejected: {msg}"),
+            Self::Configuration(msg) => write!(f, "Configuration error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for InputValidatorError {}
+
 /// Input validator
 pub struct InputValidator {
     config: ValidationConfig,
@@ -24,12 +43,14 @@ pub struct InputValidator {
 }
 
 impl InputValidator {
-    pub fn new(config: ValidationConfig) -> Result<Self, String> {
+    pub fn new(config: ValidationConfig) -> Result<Self, InputValidatorError> {
         let allowed_url_regexes = config
             .allowed_url_patterns
             .iter()
             .map(|pattern| {
-                Regex::new(pattern).map_err(|e| format!("Invalid allowed URL pattern: {}", e))
+                Regex::new(pattern).map_err(|e| {
+                    InputValidatorError::Configuration(format!("Invalid allowed URL pattern: {e}"))
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -37,7 +58,9 @@ impl InputValidator {
             .blocked_url_patterns
             .iter()
             .map(|pattern| {
-                Regex::new(pattern).map_err(|e| format!("Invalid blocked URL pattern: {}", e))
+                Regex::new(pattern).map_err(|e| {
+                    InputValidatorError::Configuration(format!("Invalid blocked URL pattern: {e}"))
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -58,7 +81,7 @@ impl InputValidator {
         })
     }
 
-    pub fn from_config() -> Result<Self, String> {
+    pub fn from_config() -> Result<Self, InputValidatorError> {
         Self::new(ValidationConfig::default())
     }
 
@@ -121,14 +144,18 @@ impl InputValidator {
     }
 
     /// Validate JSON structure
-    pub fn validate_json(&self, json_str: &str) -> Result<Value, String> {
+    pub fn validate_json(&self, json_str: &str) -> Result<Value, InputValidatorError> {
         if !self.config.validate_json_schema {
-            return serde_json::from_str(json_str).map_err(|e| e.to_string());
+            return serde_json::from_str(json_str)
+                .map_err(|e| InputValidatorError::InvalidInput(e.to_string()));
         }
 
-        let value: Value = serde_json::from_str(json_str).map_err(|e| e.to_string())?;
+        let value: Value = serde_json::from_str(json_str)
+            .map_err(|e| InputValidatorError::InvalidInput(e.to_string()))?;
 
-        self.json_validator.validate_structure(&value, 0)?;
+        self.json_validator
+            .validate_structure(&value, 0)
+            .map_err(InputValidatorError::Rejected)?;
 
         Ok(value)
     }
@@ -238,7 +265,7 @@ impl InputValidator {
     }
 
     /// Update configuration
-    pub fn update_config(&mut self, config: ValidationConfig) -> Result<(), String> {
+    pub fn update_config(&mut self, config: ValidationConfig) -> Result<(), InputValidatorError> {
         let allowed_url_patterns = config.allowed_url_patterns.clone();
         let blocked_url_patterns = config.blocked_url_patterns.clone();
 
@@ -247,14 +274,18 @@ impl InputValidator {
         let allowed_url_regexes = allowed_url_patterns
             .iter()
             .map(|pattern| {
-                Regex::new(pattern).map_err(|e| format!("Invalid allowed URL pattern: {}", e))
+                Regex::new(pattern).map_err(|e| {
+                    InputValidatorError::Configuration(format!("Invalid allowed URL pattern: {e}"))
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         let blocked_url_regexes = blocked_url_patterns
             .iter()
             .map(|pattern| {
-                Regex::new(pattern).map_err(|e| format!("Invalid blocked URL pattern: {}", e))
+                Regex::new(pattern).map_err(|e| {
+                    InputValidatorError::Configuration(format!("Invalid blocked URL pattern: {e}"))
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
 

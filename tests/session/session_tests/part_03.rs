@@ -1,7 +1,7 @@
 ﻿#[test]
 fn test_clear_session() {
     let manager = SessionManager::new();
-    let session_id = manager.create_session("user-123", "gpt-4");
+    let session_id = manager.create_session("user-123", "gpt-4").unwrap();
 
     manager
         .add_message(&session_id, Message::user("Hello!"))
@@ -22,7 +22,7 @@ fn test_clear_session() {
 #[test]
 fn test_export_import_postcard() {
     let manager = SessionManager::new();
-    let session_id = manager.create_session("user-123", "gpt-4");
+    let session_id = manager.create_session("user-123", "gpt-4").unwrap();
 
     manager
         .add_message(&session_id, Message::user("Test"))
@@ -32,7 +32,7 @@ fn test_export_import_postcard() {
         .unwrap();
 
     // Export
-    let session = manager.get_session(&session_id).unwrap();
+    let session = manager.get_session(&session_id).unwrap().unwrap();
     let export = SessionExport::from_session(session);
     let postcard_data = export.to_postcard().unwrap();
 

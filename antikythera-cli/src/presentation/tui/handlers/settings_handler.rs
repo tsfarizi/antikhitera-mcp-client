@@ -1,3 +1,5 @@
+//! Settings panel keyboard handler.
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::infrastructure::llm::ModelInfo;

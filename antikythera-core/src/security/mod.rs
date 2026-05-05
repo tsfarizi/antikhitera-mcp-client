@@ -22,4 +22,4 @@ pub mod validation;
 pub use config::{RateLimitConfig, SecretsConfig, SecurityConfig, ValidationConfig};
 pub use rate_limit::RateLimiter;
 pub use secrets::{SecretManager, SecretRotationPolicy};
-pub use validation::{InputValidator, ValidationError, ValidationResult};
+pub use validation::{InputValidator, InputValidatorError, ValidationError, ValidationResult};

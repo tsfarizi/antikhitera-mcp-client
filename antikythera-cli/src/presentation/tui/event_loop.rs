@@ -33,6 +33,8 @@ use super::handlers::submit::submit_input;
 use super::render::draw;
 use super::types::{PendingResponse, UiMessage, UiTone};
 
+// TODO: Consider splitting this file further — at ~637 lines it handles event
+// loop, key dispatch, message rendering, log fetching, and session management.
 pub async fn run_chat_app(
     mut config: AppConfig,
     providers: Vec<ModelProviderConfig>,
@@ -392,7 +394,7 @@ async fn run_loop(
     Ok(())
 }
 
-pub(super) enum KeyAction {
+pub(crate) enum KeyAction {
     None,
     Submit,
     ApplySettings,

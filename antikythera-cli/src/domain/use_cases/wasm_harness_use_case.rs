@@ -8,8 +8,8 @@
 //! No network I/O is performed — the probe drives only in-process state.
 
 use antikythera_sdk::{
-    AgentState, PromptVariables, SloSnapshot, StreamEvent, TelemetrySnapshot, ToolRegistry,
-    append_llm_chunk, build_llm_messages, build_system_prompt, commit_llm_response,
+    AgentRunnerError, AgentState, PromptVariables, SloSnapshot, StreamEvent, TelemetrySnapshot,
+    ToolRegistry, append_llm_chunk, build_llm_messages, build_system_prompt, commit_llm_response,
     commit_llm_stream, drain_events, get_agent_state, get_slo_snapshot, get_telemetry_snapshot,
     get_tools_prompt, init_agent_runner, prepare_user_turn, register_tools,
     report_session_restore_progress, reset_agent_session, set_context_policy, sweep_idle_sessions,
@@ -273,7 +273,7 @@ pub fn render_wasm_stream_report(report: &WasmStreamProbeReport) -> CliResult<St
     Ok(out)
 }
 
-fn map_ffi_err(stage: &'static str) -> impl FnOnce(String) -> CliError {
+fn map_ffi_err(stage: &'static str) -> impl FnOnce(AgentRunnerError) -> CliError {
     move |err| CliError::Validation(format!("WASM FFI stage '{stage}' failed: {err}"))
 }
 

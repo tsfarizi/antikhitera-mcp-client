@@ -3,6 +3,10 @@
 //! Common utilities used across all FFI modules (security, session, servers).
 //! Eliminates duplicate helper implementations previously scattered in
 //! `security_ffi/helpers.rs`, `session/ffi/helpers.rs`, and `servers/mod.rs`.
+//!
+//! Functions below are used by the ffi_handler! macro and external FFI callers.
+//! Suppress dead_code warnings since macro-driven usage isn't detected.
+#![allow(dead_code)]
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
@@ -150,30 +154,6 @@ macro_rules! ffi_handler {
         let guard = $global.lock().unwrap();
         match guard.as_ref() {
             Some($instance) => $($body)*,
-            None => {
-                $logger.ffi_error($fn_name, "Not initialized");
-                $crate::ffi_helpers::error_response("Not initialized")
-            }
-        }
-    }};
-}
-        };
-        $logger.ffi_call($fn_name, &format!("input={}", input_str));
-        let guard = $global.lock().expect("FFI global state lock poisoned");
-        match guard.as_ref() {
-            Some($instance) => $body,
-            None => {
-                $logger.ffi_error($fn_name, "Not initialized");
-                $crate::ffi_helpers::error_response("Not initialized")
-            }
-        }
-    }};
-    // Without input (just guard check)
-    ($fn_name:expr, $logger:expr, $global:expr, |$instance:ident| $body:block) => {{
-        $logger.ffi_call($fn_name, "");
-        let guard = $global.lock().expect("FFI global state lock poisoned");
-        match guard.as_ref() {
-            Some($instance) => $body,
             None => {
                 $logger.ffi_error($fn_name, "Not initialized");
                 $crate::ffi_helpers::error_response("Not initialized")

@@ -1,3 +1,5 @@
+//! History browser overlay rendering.
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
@@ -7,7 +9,7 @@ use crate::infrastructure::history::{ChatHistorySession, TurnRole};
 
 use super::super::app::ChatApp;
 
-pub(crate) fn render_history_detail(session: &ChatHistorySession, scroll: usize) -> Text<'static> {
+pub(super) fn render_history_detail(session: &ChatHistorySession, scroll: usize) -> Text<'static> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     for turn in session.turns.iter().skip(scroll).take(20) {
         let ts = turn
@@ -49,7 +51,7 @@ pub(crate) fn render_history_detail(session: &ChatHistorySession, scroll: usize)
     Text::from(lines)
 }
 
-pub(crate) fn draw_history_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
+pub(super) fn draw_history_overlay(frame: &mut ratatui::Frame<'_>, app: &ChatApp) {
     let area = frame.area();
     frame.render_widget(Clear, area);
 

@@ -26,7 +26,10 @@ pub fn mcp_session_create(user_id: *const c_char, model: *const c_char) -> *mut 
         Err(e) => return error_response(&e),
     };
 
-    let session_id = SESSION_MANAGER.create_session(&user_str, &model_str);
+    let session_id = match SESSION_MANAGER.create_session(&user_str, &model_str) {
+        Ok(id) => id,
+        Err(e) => return error_response(&e),
+    };
 
     success_with(&[
         ("session_id", serde_json::json!(session_id)),
@@ -45,10 +48,12 @@ pub fn mcp_session_get(session_id: *const c_char) -> *mut c_char {
         Err(e) => return error_response(&e),
     };
 
-    match SESSION_MANAGER.get_session(&id_str) {
-        Some(session) => serialize_result(&session),
-        None => error_response(&format!("Session not found: {}", id_str)),
-    }
+    let session = match SESSION_MANAGER.get_session(&id_str) {
+        Ok(Some(session)) => session,
+        Ok(None) => return error_response(&format!("Session not found: {}", id_str)),
+        Err(e) => return error_response(&e),
+    };
+    serialize_result(&session)
 }
 
 /// List all sessions
@@ -56,7 +61,10 @@ pub fn mcp_session_get(session_id: *const c_char) -> *mut c_char {
 /// # Returns
 /// JSON array of SessionSummary objects
 pub fn mcp_session_list() -> *mut c_char {
-    let sessions = SESSION_MANAGER.list_sessions();
+    let sessions = match SESSION_MANAGER.list_sessions() {
+        Ok(list) => list,
+        Err(e) => return error_response(&e),
+    };
     serialize_result(&sessions)
 }
 

@@ -19,7 +19,7 @@ pub fn mcp_session_export(session_id: *const c_char) -> *mut c_char {
     };
 
     match SESSION_MANAGER.get_session(&id_str) {
-        Some(session) => {
+        Ok(Some(session)) => {
             let export = SessionExport::from_session(session);
             match export.to_postcard() {
                 Ok(data) => {
@@ -33,7 +33,8 @@ pub fn mcp_session_export(session_id: *const c_char) -> *mut c_char {
                 Err(e) => error_response(&e),
             }
         }
-        None => error_response(&format!("Session not found: {}", id_str)),
+        Ok(None) => error_response(&format!("Session not found: {}", id_str)),
+        Err(e) => error_response(&e.to_string()),
     }
 }
 
@@ -74,11 +75,22 @@ pub fn mcp_session_import(export_data: *const c_char) -> *mut c_char {
 /// # Returns
 /// JSON with `session_count`, `export_data` (hex), `size` fields
 pub fn mcp_batch_export() -> *mut c_char {
-    let sessions: Vec<_> = SESSION_MANAGER
-        .list_sessions()
-        .iter()
-        .filter_map(|s| SESSION_MANAGER.get_session(&s.id))
-        .collect();
+    let sessions: Vec<_> = match SESSION_MANAGER.list_sessions() {
+        Ok(list) => {
+            let mut out = Vec::new();
+            for summary in &list {
+                match SESSION_MANAGER.get_session(&summary.id) {
+                    Ok(Some(session)) => out.push(session),
+                    Ok(None) => {}
+                    Err(e) => {
+                        return error_response(&e.to_string());
+                    }
+                }
+            }
+            out
+        }
+        Err(e) => return error_response(&e.to_string()),
+    };
 
     let batch = BatchExport::from_sessions(sessions);
 

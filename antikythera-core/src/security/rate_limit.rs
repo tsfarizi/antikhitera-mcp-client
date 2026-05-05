@@ -76,41 +76,17 @@ impl TimeWindow {
 }
 
 /// Rate limit error
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum RateLimitError {
+    #[error("Rate limit exceeded: {current}/{limit} requests per {window_secs}s")]
     LimitExceeded {
         limit: u32,
         current: u32,
         window_secs: u64,
     },
-    TooManyConcurrentSessions {
-        max: u32,
-        current: u32,
-    },
+    #[error("Too many concurrent sessions: {current}/{max}")]
+    TooManyConcurrentSessions { max: u32, current: u32 },
 }
-
-impl std::fmt::Display for RateLimitError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RateLimitError::LimitExceeded {
-                limit,
-                current,
-                window_secs,
-            } => {
-                write!(
-                    f,
-                    "Rate limit exceeded: {}/{} requests per {}s",
-                    current, limit, window_secs
-                )
-            }
-            RateLimitError::TooManyConcurrentSessions { max, current } => {
-                write!(f, "Too many concurrent sessions: {}/{}", current, max)
-            }
-        }
-    }
-}
-
-impl std::error::Error for RateLimitError {}
 
 impl RateLimiter {
     pub fn new(config: RateLimitConfig) -> Self {

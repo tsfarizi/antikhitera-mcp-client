@@ -1,3 +1,4 @@
+use crate::logging::TransportLogger;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -87,24 +88,40 @@ impl InMemoryMetricsExporter {
     pub fn snapshot(&self) -> Vec<MetricRecord> {
         self.metrics
             .lock()
-            .expect("InMemoryMetricsExporter metrics lock poisoned in snapshot")
-            .clone()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|e| {
+                TransportLogger::new("metrics").warn(format!(
+                    "InMemoryMetricsExporter metrics lock poisoned in snapshot: {}",
+                    e
+                ));
+                Vec::new()
+            })
     }
 
     pub fn clear(&self) {
-        self.metrics
-            .lock()
-            .expect("InMemoryMetricsExporter metrics lock poisoned in clear")
-            .clear();
+        match self.metrics.lock() {
+            Ok(mut guard) => guard.clear(),
+            Err(e) => {
+                TransportLogger::new("metrics").warn(format!(
+                    "InMemoryMetricsExporter metrics lock poisoned in clear: {}",
+                    e
+                ));
+            }
+        }
     }
 }
 
 impl MetricsExporter for InMemoryMetricsExporter {
     fn export_metric(&self, metric: MetricRecord) {
-        self.metrics
-            .lock()
-            .expect("InMemoryMetricsExporter metrics lock poisoned in export_metric")
-            .push(metric);
+        match self.metrics.lock() {
+            Ok(mut guard) => guard.push(metric),
+            Err(e) => {
+                TransportLogger::new("metrics").warn(format!(
+                    "InMemoryMetricsExporter metrics lock poisoned in export_metric: {}",
+                    e
+                ));
+            }
+        }
     }
 }
 

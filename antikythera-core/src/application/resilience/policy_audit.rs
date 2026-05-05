@@ -157,16 +157,29 @@ impl InMemoryAuditSink {
     pub fn snapshot(&self) -> Vec<PolicyAuditEvent> {
         self.events
             .lock()
-            .expect("InMemoryAuditSink events lock poisoned in snapshot")
-            .clone()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|e| {
+                let log = ResilienceLogger::new(&crate::logging::get_active_session());
+                log.warn(format!(
+                    "InMemoryAuditSink events lock poisoned in snapshot: {}",
+                    e
+                ));
+                Vec::new()
+            })
     }
 
     /// Clear all recorded events.
     pub fn clear(&self) {
-        self.events
-            .lock()
-            .expect("InMemoryAuditSink events lock poisoned in clear")
-            .clear();
+        match self.events.lock() {
+            Ok(mut guard) => guard.clear(),
+            Err(e) => {
+                let log = ResilienceLogger::new(&crate::logging::get_active_session());
+                log.warn(format!(
+                    "InMemoryAuditSink events lock poisoned in clear: {}",
+                    e
+                ));
+            }
+        }
     }
 }
 
@@ -178,10 +191,16 @@ impl Default for InMemoryAuditSink {
 
 impl PolicyAuditSink for InMemoryAuditSink {
     fn record_event(&self, event: PolicyAuditEvent) {
-        self.events
-            .lock()
-            .expect("InMemoryAuditSink events lock poisoned in record_event")
-            .push(event);
+        match self.events.lock() {
+            Ok(mut guard) => guard.push(event),
+            Err(e) => {
+                let log = ResilienceLogger::new(&crate::logging::get_active_session());
+                log.warn(format!(
+                    "InMemoryAuditSink events lock poisoned in record_event: {}",
+                    e
+                ));
+            }
+        }
     }
 }
 

@@ -64,17 +64,3 @@ pub fn serialize_result<T: serde::Serialize>(value: &T) -> *mut c_char {
         Err(_) => error_response("Failed to serialize result"),
     }
 }
-
-/// Free C string allocated by Rust
-///
-/// # Safety
-///
-/// The pointer must be a valid pointer to a C string allocated by Rust using `into_raw`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mcp_security_free_string(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = CString::from_raw(ptr);
-        }
-    }
-}

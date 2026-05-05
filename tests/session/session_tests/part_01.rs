@@ -2,16 +2,16 @@
 fn test_create_session() {
     let manager = SessionManager::new();
 
-    let session_id = manager.create_session("user-123", "gpt-4");
+    let session_id = manager.create_session("user-123", "gpt-4").unwrap();
     assert!(!session_id.is_empty());
-    assert!(manager.has_session(&session_id));
+    assert!(manager.has_session(&session_id).unwrap());
 }
 
 
 #[test]
 fn test_add_message() {
     let manager = SessionManager::new();
-    let session_id = manager.create_session("user-123", "gpt-4");
+    let session_id = manager.create_session("user-123", "gpt-4").unwrap();
 
     manager
         .add_message(&session_id, Message::user("Hello!"))
