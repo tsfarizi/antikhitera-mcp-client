@@ -145,13 +145,17 @@ impl RateLimiter {
             return Ok(());
         }
 
-        let mut limits = self.session_limits.lock().unwrap();
+        let mut limits = self
+            .session_limits
+            .lock()
+            .expect("RateLimiter session_limits lock poisoned in check");
 
         // Check concurrent session limit
         if limits.len() as u32 >= self.config.max_concurrent_sessions
             && !limits.contains_key(session_id)
         {
-            self.log.rate_limit_exceeded(session_id, "too many concurrent sessions");
+            self.log
+                .rate_limit_exceeded(session_id, "too many concurrent sessions");
             return Err(RateLimitError::TooManyConcurrentSessions {
                 max: self.config.max_concurrent_sessions,
                 current: limits.len() as u32,
@@ -202,7 +206,10 @@ impl RateLimiter {
 
     /// Get current usage statistics for a session
     pub fn get_usage(&self, session_id: &str) -> Option<SessionUsage> {
-        let limits = self.session_limits.lock().unwrap();
+        let limits = self
+            .session_limits
+            .lock()
+            .expect("RateLimiter session_limits lock poisoned in get_usage");
         limits.get(session_id).map(|session| SessionUsage {
             requests_per_minute: session.minute_window.request_count(),
             requests_per_hour: session.hour_window.request_count(),
@@ -213,7 +220,10 @@ impl RateLimiter {
 
     /// Reset rate limits for a session
     pub fn reset_session(&self, session_id: &str) {
-        let mut limits = self.session_limits.lock().unwrap();
+        let mut limits = self
+            .session_limits
+            .lock()
+            .expect("RateLimiter session_limits lock poisoned in reset_session");
         if let Some(session) = limits.get_mut(session_id) {
             session.minute_window.reset();
             session.hour_window.reset();
@@ -223,13 +233,19 @@ impl RateLimiter {
 
     /// Remove a session
     pub fn remove_session(&self, session_id: &str) {
-        let mut limits = self.session_limits.lock().unwrap();
+        let mut limits = self
+            .session_limits
+            .lock()
+            .expect("RateLimiter session_limits lock poisoned in remove_session");
         limits.remove(session_id);
     }
 
     /// Get total number of active sessions
     pub fn active_session_count(&self) -> usize {
-        let limits = self.session_limits.lock().unwrap();
+        let limits = self
+            .session_limits
+            .lock()
+            .expect("RateLimiter session_limits lock poisoned in active_session_count");
         limits.len()
     }
 
@@ -238,7 +254,7 @@ impl RateLimiter {
         loop {
             std::thread::sleep(interval);
 
-            let mut limits_guard = limits.lock().unwrap();
+            let mut limits_guard = limits.lock().expect("RateLimiter cleanup lock poisoned");
             let now = Instant::now();
             let timeout = Duration::from_secs(300); // 5 minutes inactivity timeout
 
@@ -254,7 +270,10 @@ impl RateLimiter {
     /// Update configuration
     pub fn update_config(&mut self, config: RateLimitConfig) {
         let cleanup_interval_secs = config.cleanup_interval_secs;
-        self.log.info(format!("Rate limiter config updated | enabled={}", config.enabled));
+        self.log.info(format!(
+            "Rate limiter config updated | enabled={}",
+            config.enabled
+        ));
         self.config = config;
 
         // Restart cleanup task if enabled

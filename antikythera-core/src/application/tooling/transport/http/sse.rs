@@ -50,7 +50,9 @@ pub fn start_sse_listener(
             request = request.header(key, value);
         }
 
-        let mut es = request.eventsource().unwrap();
+        let mut es = request
+            .eventsource()
+            .expect("SSE eventsource failed to connect");
 
         while let Some(event) = es.next().await {
             match event {

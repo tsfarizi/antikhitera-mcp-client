@@ -81,6 +81,69 @@ pub fn install_terminal_stream_sink() {
     }));
 }
 
+/// Action returned by a stream-line parser closure.
+pub(crate) enum StreamAction {
+    /// A content chunk extracted from the line.
+    Chunk(String),
+    /// Signal that the stream is complete — break the parsing loop.
+    Done,
+}
+
+/// Shared SSE/NDJSON stream extraction loop.
+///
+/// Iterates over every line of `raw`, calling `parse_line` on each non-empty
+/// line.  The closure may return:
+///
+/// | Return                | Behaviour                                    |
+/// |-----------------------|----------------------------------------------|
+/// | `Some(Chunk(s))`      | Emit `StreamEvent::Chunk`, accumulate `s`.   |
+/// | `Some(Done)`          | Break the loop.                              |
+/// | `None`                | Skip the line.                               |
+///
+/// Emits `Started` before the first line and `Completed` after the loop exits.
+pub(crate) fn extract_stream_content(
+    raw: &str,
+    provider_id: &str,
+    session_id: Option<&str>,
+    parse_line: impl Fn(&str) -> Option<StreamAction>,
+) -> Option<String> {
+    let mut content = String::new();
+    let mut saw_chunk = false;
+    let session = session_id.map(|v| v.to_string());
+
+    emit_stream_event(StreamEvent::Started {
+        provider_id: provider_id.to_string(),
+        session_id: session.clone(),
+    });
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match parse_line(trimmed) {
+            Some(StreamAction::Chunk(piece)) => {
+                saw_chunk = true;
+                emit_stream_event(StreamEvent::Chunk {
+                    provider_id: provider_id.to_string(),
+                    session_id: session.clone(),
+                    content: piece.clone(),
+                });
+                content.push_str(&piece);
+            }
+            Some(StreamAction::Done) => break,
+            None => {}
+        }
+    }
+
+    emit_stream_event(StreamEvent::Completed {
+        provider_id: provider_id.to_string(),
+        session_id: session,
+    });
+
+    if saw_chunk { Some(content) } else { None }
+}
+
 pub(crate) fn emit_stream_event(event: StreamEvent) {
     // Emit log entries for Start and Completion so they appear in the log
     // panel under the "cli:streaming" source label.  Chunks are intentionally

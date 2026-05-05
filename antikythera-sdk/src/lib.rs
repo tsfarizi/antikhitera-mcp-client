@@ -154,14 +154,8 @@ pub use session::{
 pub mod sdk_logging;
 
 pub use sdk_logging::{
-    ConfigFfiLogger,
-    clear_sdk_loggers,
-    clear_sdk_session_logs,
-    get_latest_sdk_logs,
-    get_sdk_logger,
-    get_sdk_logs_json,
-    query_sdk_logs,
-    subscribe_sdk_logs,
+    ConfigFfiLogger, clear_sdk_loggers, clear_sdk_session_logs, get_latest_sdk_logs,
+    get_sdk_logger, get_sdk_logs_json, query_sdk_logs, subscribe_sdk_logs,
 };
 
 /// Server Management feature slice (Config, Validation, FFI)

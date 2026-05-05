@@ -267,5 +267,4 @@ impl Logger {
     pub fn subscribe(&self) -> crate::subscriber::LogSubscriber {
         crate::subscriber::LogSubscriber::new(self)
     }
-
 }

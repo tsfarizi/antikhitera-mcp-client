@@ -98,3 +98,17 @@ pub use logger::*;
 pub use subscriber::{LogSender, LogSubscriber};
 
 pub use session_logs::{BatchLogExport, SessionLogExport};
+
+/// Shared trait for Postcard binary serialization / deserialization.
+///
+/// Provides a default `to_postcard` / `from_postcard` pair backed by
+/// [`postcard::to_allocvec`] and [`postcard::from_bytes`], unifying the
+/// duplicated pattern across export types.
+pub trait PostcardSerde: serde::Serialize + serde::de::DeserializeOwned + Sized {
+    fn to_postcard(&self) -> Result<Vec<u8>, String> {
+        postcard::to_allocvec(self).map_err(|e| format!("Postcard serialize error: {e}"))
+    }
+    fn from_postcard(data: &[u8]) -> Result<Self, String> {
+        postcard::from_bytes(data).map_err(|e| format!("Postcard deserialize error: {e}"))
+    }
+}

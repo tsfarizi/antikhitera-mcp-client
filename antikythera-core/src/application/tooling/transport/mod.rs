@@ -93,19 +93,28 @@ impl TransportRegistry {
 
     /// Register (or replace) a transport factory.
     pub fn register(&self, factory: Arc<dyn TransportFactory>) {
-        let mut factories = self.factories.lock().expect("transport registry lock");
+        let mut factories = self
+            .factories
+            .lock()
+            .expect("TransportRegistry factories lock poisoned in register");
         factories.insert(factory.id().to_string(), factory);
     }
 
     /// Return all registered transport IDs.
     pub fn list(&self) -> Vec<String> {
-        let factories = self.factories.lock().expect("transport registry lock");
+        let factories = self
+            .factories
+            .lock()
+            .expect("TransportRegistry factories lock poisoned in list");
         factories.keys().cloned().collect()
     }
 
     /// Get a factory by ID.
     pub fn get(&self, id: &str) -> Option<Arc<dyn TransportFactory>> {
-        let factories = self.factories.lock().expect("transport registry lock");
+        let factories = self
+            .factories
+            .lock()
+            .expect("TransportRegistry factories lock poisoned in get");
         factories.get(id).cloned()
     }
 
@@ -114,7 +123,10 @@ impl TransportRegistry {
         &self,
         required: &[TransportCapability],
     ) -> Vec<Arc<dyn TransportFactory>> {
-        let factories = self.factories.lock().expect("transport registry lock");
+        let factories = self
+            .factories
+            .lock()
+            .expect("TransportRegistry factories lock poisoned in select_by_capabilities");
         factories
             .values()
             .filter(|factory| {

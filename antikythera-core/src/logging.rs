@@ -32,18 +32,25 @@ static ACTIVE_SESSION: LazyLock<std::sync::Mutex<String>> =
 /// Set the session key that the logging bridge writes events to.
 /// Call this from the TUI when a session becomes active.
 pub fn set_active_session(session_id: &str) {
-    let mut s = ACTIVE_SESSION.lock().unwrap();
+    let mut s = ACTIVE_SESSION
+        .lock()
+        .expect("ACTIVE_SESSION lock poisoned in set_active_session");
     *s = session_id.to_string();
 }
 
 /// Get the current active session key.
 pub fn get_active_session() -> String {
-    ACTIVE_SESSION.lock().unwrap().clone()
+    ACTIVE_SESSION
+        .lock()
+        .expect("ACTIVE_SESSION lock poisoned in get_active_session")
+        .clone()
 }
 
 /// Get or create a logger for a session
 pub fn get_logger(session_id: &str) -> Arc<Logger> {
-    let mut loggers = LOGGERS.lock().unwrap();
+    let mut loggers = LOGGERS
+        .lock()
+        .expect("LOGGERS registry lock poisoned in get_logger");
 
     loggers
         .entry(session_id.to_string())
@@ -53,13 +60,17 @@ pub fn get_logger(session_id: &str) -> Arc<Logger> {
 
 /// Clear all loggers
 pub fn clear_all_loggers() {
-    let mut loggers = LOGGERS.lock().unwrap();
+    let mut loggers = LOGGERS
+        .lock()
+        .expect("LOGGERS registry lock poisoned in clear_all_loggers");
     loggers.clear();
 }
 
 /// Get logger count
 pub fn logger_count() -> usize {
-    let loggers = LOGGERS.lock().unwrap();
+    let loggers = LOGGERS
+        .lock()
+        .expect("LOGGERS registry lock poisoned in logger_count");
     loggers.len()
 }
 
@@ -289,36 +300,78 @@ define_module_logger! {
 
 impl SecurityLogger {
     pub fn rate_limit_check(&self, session_id: &str, allowed: bool) {
-        let level = if allowed { LogLevel::Debug } else { LogLevel::Warn };
-        self.logger.log_with_source(level, "security", format!("Rate limit check | session={} allowed={}", session_id, allowed));
+        let level = if allowed {
+            LogLevel::Debug
+        } else {
+            LogLevel::Warn
+        };
+        self.logger.log_with_source(
+            level,
+            "security",
+            format!(
+                "Rate limit check | session={} allowed={}",
+                session_id, allowed
+            ),
+        );
     }
 
     pub fn rate_limit_exceeded(&self, session_id: &str, reason: &str) {
-        self.logger.log_with_source(LogLevel::Warn, "security", format!("Rate limit exceeded | session={} reason={}", session_id, reason));
+        self.logger.log_with_source(
+            LogLevel::Warn,
+            "security",
+            format!(
+                "Rate limit exceeded | session={} reason={}",
+                session_id, reason
+            ),
+        );
     }
 
     pub fn secret_stored(&self, id: &str) {
-        self.logger.log_with_source(LogLevel::Debug, "security", format!("Secret stored | id={}", id));
+        self.logger.log_with_source(
+            LogLevel::Debug,
+            "security",
+            format!("Secret stored | id={}", id),
+        );
     }
 
     pub fn secret_retrieved(&self, id: &str) {
-        self.logger.log_with_source(LogLevel::Debug, "security", format!("Secret retrieved | id={}", id));
+        self.logger.log_with_source(
+            LogLevel::Debug,
+            "security",
+            format!("Secret retrieved | id={}", id),
+        );
     }
 
     pub fn secret_rotated(&self, id: &str) {
-        self.logger.log_with_source(LogLevel::Info, "security", format!("Secret rotated | id={}", id));
+        self.logger.log_with_source(
+            LogLevel::Info,
+            "security",
+            format!("Secret rotated | id={}", id),
+        );
     }
 
     pub fn secret_deleted(&self, id: &str) {
-        self.logger.log_with_source(LogLevel::Info, "security", format!("Secret deleted | id={}", id));
+        self.logger.log_with_source(
+            LogLevel::Info,
+            "security",
+            format!("Secret deleted | id={}", id),
+        );
     }
 
     pub fn secret_error(&self, id: &str, error: &str) {
-        self.logger.log_with_source(LogLevel::Error, "security", format!("Secret error | id={} error={}", id, error));
+        self.logger.log_with_source(
+            LogLevel::Error,
+            "security",
+            format!("Secret error | id={} error={}", id, error),
+        );
     }
 
     pub fn cleanup_task(&self, action: &str) {
-        self.logger.log_with_source(LogLevel::Debug, "security", format!("Cleanup task | action={}", action));
+        self.logger.log_with_source(
+            LogLevel::Debug,
+            "security",
+            format!("Cleanup task | action={}", action),
+        );
     }
 }
 
@@ -328,7 +381,11 @@ impl SecurityLogger {
 
 /// Query logs across all modules
 pub fn query_logs(session_id: &str, filter: &LogFilter) -> LogBatch {
-    if let Some(logger) = LOGGERS.lock().unwrap().get(session_id) {
+    if let Some(logger) = LOGGERS
+        .lock()
+        .expect("LOGGERS registry lock poisoned in query_logs")
+        .get(session_id)
+    {
         logger.get_logs(filter)
     } else {
         LogBatch::new(Vec::new(), 0, false)
@@ -337,7 +394,11 @@ pub fn query_logs(session_id: &str, filter: &LogFilter) -> LogBatch {
 
 /// Get latest logs across all modules
 pub fn get_latest_logs(session_id: &str, count: usize) -> Vec<LogEntry> {
-    if let Some(logger) = LOGGERS.lock().unwrap().get(session_id) {
+    if let Some(logger) = LOGGERS
+        .lock()
+        .expect("LOGGERS registry lock poisoned in get_latest_logs")
+        .get(session_id)
+    {
         logger.get_latest(count)
     } else {
         Vec::new()
@@ -346,7 +407,11 @@ pub fn get_latest_logs(session_id: &str, count: usize) -> Vec<LogEntry> {
 
 /// Get logs as JSON
 pub fn get_logs_json(session_id: &str, filter: &LogFilter) -> Result<String, String> {
-    if let Some(logger) = LOGGERS.lock().unwrap().get(session_id) {
+    if let Some(logger) = LOGGERS
+        .lock()
+        .expect("LOGGERS registry lock poisoned in get_logs_json")
+        .get(session_id)
+    {
         logger.get_logs_json(filter)
     } else {
         Ok(r#"{"entries":[],"total_count":0,"has_more":false}"#.to_string())
@@ -357,14 +422,18 @@ pub fn get_logs_json(session_id: &str, filter: &LogFilter) -> Result<String, Str
 pub fn subscribe_logs(session_id: &str) -> Option<antikythera_log::LogSubscriber> {
     LOGGERS
         .lock()
-        .unwrap()
+        .expect("LOGGERS registry lock poisoned in subscribe_logs")
         .get(session_id)
         .map(|l| l.subscribe())
 }
 
 /// Clear logs for a session
 pub fn clear_logs(session_id: &str) {
-    if let Some(logger) = LOGGERS.lock().unwrap().get(session_id) {
+    if let Some(logger) = LOGGERS
+        .lock()
+        .expect("LOGGERS registry lock poisoned in clear_logs")
+        .get(session_id)
+    {
         logger.clear();
     }
 }

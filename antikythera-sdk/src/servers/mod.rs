@@ -196,7 +196,13 @@ pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
 
     let validation = config.validate();
     if !validation.valid {
-        server_log(LogLevel::Info, &format!("Server validation failed for '{}': {:?}", config.name, validation.errors));
+        server_log(
+            LogLevel::Info,
+            &format!(
+                "Server validation failed for '{}': {:?}",
+                config.name, validation.errors
+            ),
+        );
         return serialize_result(&validation);
     }
 
@@ -221,7 +227,10 @@ pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
             })
         }
         Err(e) => {
-            server_log(LogLevel::Error, &format!("Lock error in mcp_add_server: {e}"));
+            server_log(
+                LogLevel::Error,
+                &format!("Lock error in mcp_add_server: {e}"),
+            );
             serialize_result(&ServerValidationResult {
                 valid: false,
                 errors: vec![format!("Failed to lock registry: {}", e)],
@@ -266,14 +275,17 @@ pub fn mcp_remove_server(name: *const c_char) -> *mut c_char {
             }
         }
         Err(e) => {
-            server_log(LogLevel::Error, &format!("Lock error in mcp_remove_server: {e}"));
+            server_log(
+                LogLevel::Error,
+                &format!("Lock error in mcp_remove_server: {e}"),
+            );
             serialize_result(&ServerOperationResult {
                 success: false,
                 error_message: Some(format!("Failed to lock registry: {}", e)),
                 server_name: name_str,
                 tools_affected: 0,
             })
-        },
+        }
     }
 }
 
@@ -337,9 +349,18 @@ pub fn mcp_validate_server(config_json: *const c_char) -> *mut c_char {
 
     let result = config.validate();
     if result.valid {
-        server_log(LogLevel::Info, &format!("Server validated: '{}'", config.name));
+        server_log(
+            LogLevel::Info,
+            &format!("Server validated: '{}'", config.name),
+        );
     } else {
-        server_log(LogLevel::Info, &format!("Server validation failed for '{}': {:?}", config.name, result.errors));
+        server_log(
+            LogLevel::Info,
+            &format!(
+                "Server validation failed for '{}': {:?}",
+                config.name, result.errors
+            ),
+        );
     }
     serialize_result(&result)
 }
@@ -389,7 +410,10 @@ pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
                 let name = config.name.clone();
                 servers.insert(name, config);
             }
-            server_log(LogLevel::Info, &format!("Imported {count} server configurations"));
+            server_log(
+                LogLevel::Info,
+                &format!("Imported {count} server configurations"),
+            );
             serialize_result(&ServerOperationResult {
                 success: true,
                 error_message: None,
@@ -398,13 +422,16 @@ pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
             })
         }
         Err(e) => {
-            server_log(LogLevel::Error, &format!("Lock error in mcp_import_servers_config: {e}"));
+            server_log(
+                LogLevel::Error,
+                &format!("Lock error in mcp_import_servers_config: {e}"),
+            );
             serialize_result(&ServerOperationResult {
                 success: false,
                 error_message: Some(format!("Failed to lock registry: {}", e)),
                 server_name: "import".to_string(),
                 tools_affected: 0,
             })
-        },
+        }
     }
 }

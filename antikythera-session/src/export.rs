@@ -3,7 +3,7 @@
 //! Export and import sessions with consistent Postcard binary format.
 
 use crate::session::Session;
-use antikythera_log::{Logger, LogLevel};
+use antikythera_log::{LogLevel, Logger, PostcardSerde};
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -44,7 +44,7 @@ impl SessionExport {
 
     /// Serialize to Postcard binary
     pub fn to_postcard(&self) -> Result<Vec<u8>, String> {
-        postcard::to_allocvec(self).map_err(|e| {
+        PostcardSerde::to_postcard(self).map_err(|e| {
             let log = Logger::new(&self.session.id);
             log.log_with_source(
                 LogLevel::Error,
@@ -57,16 +57,15 @@ impl SessionExport {
 
     /// Deserialize from Postcard binary
     pub fn from_postcard(data: &[u8]) -> Result<Self, String> {
-        let export: SessionExport =
-            postcard::from_bytes(data).map_err(|e| {
-                let log = Logger::new("export");
-                log.log_with_source(
-                    LogLevel::Error,
-                    "export",
-                    format!("Session export deserialize error: {}", e),
-                );
-                format!("Deserialize error: {}", e)
-            })?;
+        let export: SessionExport = PostcardSerde::from_postcard(data).map_err(|e| {
+            let log = Logger::new("export");
+            log.log_with_source(
+                LogLevel::Error,
+                "export",
+                format!("Session export deserialize error: {}", e),
+            );
+            format!("Deserialize error: {}", e)
+        })?;
 
         // Validate version
         if export.version != Self::VERSION {
@@ -89,7 +88,6 @@ impl SessionExport {
 
         Ok(export)
     }
-
 }
 
 // ============================================================================
@@ -141,7 +139,7 @@ impl BatchExport {
 
     /// Serialize to Postcard binary
     pub fn to_postcard(&self) -> Result<Vec<u8>, String> {
-        postcard::to_allocvec(self).map_err(|e| {
+        PostcardSerde::to_postcard(self).map_err(|e| {
             let log = Logger::new("export");
             log.log_with_source(
                 LogLevel::Error,
@@ -154,16 +152,15 @@ impl BatchExport {
 
     /// Deserialize from Postcard binary
     pub fn from_postcard(data: &[u8]) -> Result<Self, String> {
-        let export: BatchExport =
-            postcard::from_bytes(data).map_err(|e| {
-                let log = Logger::new("export");
-                log.log_with_source(
-                    LogLevel::Error,
-                    "export",
-                    format!("Batch export deserialize error: {}", e),
-                );
-                format!("Deserialize error: {}", e)
-            })?;
+        let export: BatchExport = PostcardSerde::from_postcard(data).map_err(|e| {
+            let log = Logger::new("export");
+            log.log_with_source(
+                LogLevel::Error,
+                "export",
+                format!("Batch export deserialize error: {}", e),
+            );
+            format!("Deserialize error: {}", e)
+        })?;
 
         // Validate version
         if export.version != Self::VERSION {
@@ -186,5 +183,8 @@ impl BatchExport {
 
         Ok(export)
     }
-
 }
+
+impl PostcardSerde for SessionExport {}
+
+impl PostcardSerde for BatchExport {}

@@ -141,6 +141,12 @@ pub struct GuardrailChain {
     log: OrchestratorLogger,
 }
 
+impl Default for GuardrailChain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GuardrailChain {
     /// Create an empty chain.
     pub fn new() -> Self {

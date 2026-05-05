@@ -1,12 +1,12 @@
 //! Orchestrator options and monitoring
 
-use serde::{Deserialize, Serialize};
-#[cfg(feature = "multi-agent")]
-use std::sync::{LazyLock, Mutex};
 #[cfg(feature = "multi-agent")]
 use crate::sdk_logging::get_sdk_logger;
 #[cfg(feature = "multi-agent")]
 use antikythera_log::LogLevel;
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "multi-agent")]
+use std::sync::{LazyLock, Mutex};
 
 /// SDK-level orchestrator configuration options.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -43,7 +43,10 @@ pub struct GuardrailOptions {
 
 impl GuardrailOptions {
     pub fn is_empty(&self) -> bool {
-        self.timeout.is_none() && self.budget.is_none() && self.rate_limit.is_none() && !self.cancellation
+        self.timeout.is_none()
+            && self.budget.is_none()
+            && self.rate_limit.is_none()
+            && !self.cancellation
     }
 }
 
@@ -102,7 +105,6 @@ impl OrchestratorOptions {
             task.retry_policy = Some(self.default_task_retry_policy());
         }
     }
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -156,12 +158,14 @@ pub static HARDENING_RUNTIME: LazyLock<Mutex<HardeningRuntimeState>> =
 pub fn with_hardening_runtime<T>(
     f: impl FnOnce(&mut HardeningRuntimeState) -> Result<T, String>,
 ) -> Result<T, String> {
-    let mut guard = HARDENING_RUNTIME
-        .lock()
-        .map_err(|_| {
-            get_sdk_logger("tui").log_with_source(LogLevel::Error, "orchestrator", "Lock poisoned");
-            "hardening runtime lock poisoned".to_string()
-        })?;
-    get_sdk_logger("tui").log_with_source(LogLevel::Debug, "orchestrator", "Orchestrator operation");
+    let mut guard = HARDENING_RUNTIME.lock().map_err(|_| {
+        get_sdk_logger("tui").log_with_source(LogLevel::Error, "orchestrator", "Lock poisoned");
+        "hardening runtime lock poisoned".to_string()
+    })?;
+    get_sdk_logger("tui").log_with_source(
+        LogLevel::Debug,
+        "orchestrator",
+        "Orchestrator operation",
+    );
     f(&mut guard)
 }

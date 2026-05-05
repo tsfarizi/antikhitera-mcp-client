@@ -43,4 +43,3 @@ pub struct HttpTransportConfig {
     /// Optional required capabilities for selection/negotiation.
     pub required_capabilities: Vec<TransportCapability>,
 }
-

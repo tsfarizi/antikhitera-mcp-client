@@ -1,6 +1,6 @@
 //! Session and Message Types
 
-use antikythera_log::{Logger, LogLevel};
+use antikythera_log::{LogLevel, Logger};
 use serde::{Deserialize, Serialize};
 
 struct SessionLog {
@@ -15,20 +15,16 @@ impl SessionLog {
         }
     }
     fn info(&self, msg: &str) {
-        self.logger
-            .log_with_source(LogLevel::Info, "session", msg);
+        self.logger.log_with_source(LogLevel::Info, "session", msg);
     }
     fn debug(&self, msg: &str) {
-        self.logger
-            .log_with_source(LogLevel::Debug, "session", msg);
+        self.logger.log_with_source(LogLevel::Debug, "session", msg);
     }
     fn warn(&self, msg: &str) {
-        self.logger
-            .log_with_source(LogLevel::Warn, "session", msg);
+        self.logger.log_with_source(LogLevel::Warn, "session", msg);
     }
     fn error(&self, msg: &str) {
-        self.logger
-            .log_with_source(LogLevel::Error, "session", msg);
+        self.logger.log_with_source(LogLevel::Error, "session", msg);
     }
 }
 
@@ -377,7 +373,11 @@ impl Message {
     pub fn to_json(&self) -> Result<String, String> {
         serde_json::to_string(self).map_err(|e| {
             let log = Logger::new("message");
-            log.log_with_source(LogLevel::Error, "session", format!("Serialize error: {}", e));
+            log.log_with_source(
+                LogLevel::Error,
+                "session",
+                format!("Serialize error: {}", e),
+            );
             format!("Serialize error: {}", e)
         })
     }
@@ -386,7 +386,11 @@ impl Message {
     pub fn from_json(json: &str) -> Result<Self, String> {
         serde_json::from_str(json).map_err(|e| {
             let log = Logger::new("message");
-            log.log_with_source(LogLevel::Error, "session", format!("Deserialize error: {}", e));
+            log.log_with_source(
+                LogLevel::Error,
+                "session",
+                format!("Deserialize error: {}", e),
+            );
             format!("Deserialize error: {}", e)
         })
     }

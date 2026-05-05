@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::super::adapter::MessageAdapter;
 use super::super::http_client::HttpClientBase;
-use super::super::streaming::{StreamEvent, emit_stream_event};
+use super::super::streaming::{StreamAction, extract_stream_content};
 use super::super::types::ModelProviderConfig;
 
 /// Ollama client for a local LLM inference server.
@@ -75,10 +75,17 @@ impl ModelClient for OllamaClient {
         let raw = self.base.post_no_auth_text(&url, &payload).await?;
         log.debug("Received response from Ollama");
 
-        let content = extract_ollama_stream_content(
+        let content = extract_stream_content(
             &raw,
             self.base.id.as_str(),
             request.session_id.as_deref(),
+            |line| {
+                let chunk = serde_json::from_str::<OllamaStreamChunk>(line).ok()?;
+                if chunk.done.unwrap_or(false) {
+                    return Some(StreamAction::Done);
+                }
+                chunk.message.map(|m| StreamAction::Chunk(m.content))
+            },
         )
         .or_else(|| {
             serde_json::from_str::<OllamaResponse>(&raw)
@@ -116,48 +123,4 @@ struct OllamaMessage {
 struct OllamaStreamChunk {
     message: Option<OllamaMessage>,
     done: Option<bool>,
-}
-
-fn extract_ollama_stream_content(
-    raw: &str,
-    provider_id: &str,
-    session_id: Option<&str>,
-) -> Option<String> {
-    let mut content = String::new();
-    let mut saw_chunk = false;
-    let session = session_id.map(|v| v.to_string());
-
-    emit_stream_event(StreamEvent::Started {
-        provider_id: provider_id.to_string(),
-        session_id: session.clone(),
-    });
-
-    for line in raw.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        if let Ok(chunk) = serde_json::from_str::<OllamaStreamChunk>(trimmed) {
-            if let Some(msg) = chunk.message {
-                saw_chunk = true;
-                emit_stream_event(StreamEvent::Chunk {
-                    provider_id: provider_id.to_string(),
-                    session_id: session.clone(),
-                    content: msg.content.clone(),
-                });
-                content.push_str(&msg.content);
-            }
-            if chunk.done.unwrap_or(false) {
-                break;
-            }
-        }
-    }
-
-    emit_stream_event(StreamEvent::Completed {
-        provider_id: provider_id.to_string(),
-        session_id: session,
-    });
-
-    if saw_chunk { Some(content) } else { None }
 }

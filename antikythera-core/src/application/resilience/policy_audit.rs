@@ -155,12 +155,18 @@ impl InMemoryAuditSink {
 
     /// Get a snapshot of recorded events.
     pub fn snapshot(&self) -> Vec<PolicyAuditEvent> {
-        self.events.lock().unwrap().clone()
+        self.events
+            .lock()
+            .expect("InMemoryAuditSink events lock poisoned in snapshot")
+            .clone()
     }
 
     /// Clear all recorded events.
     pub fn clear(&self) {
-        self.events.lock().unwrap().clear();
+        self.events
+            .lock()
+            .expect("InMemoryAuditSink events lock poisoned in clear")
+            .clear();
     }
 }
 
@@ -172,7 +178,10 @@ impl Default for InMemoryAuditSink {
 
 impl PolicyAuditSink for InMemoryAuditSink {
     fn record_event(&self, event: PolicyAuditEvent) {
-        self.events.lock().unwrap().push(event);
+        self.events
+            .lock()
+            .expect("InMemoryAuditSink events lock poisoned in record_event")
+            .push(event);
     }
 }
 

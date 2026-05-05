@@ -88,7 +88,10 @@ impl SecretManager {
             value.to_string()
         };
 
-        let mut storage = self.storage.lock().unwrap();
+        let mut storage = self
+            .storage
+            .lock()
+            .expect("SecretManager storage lock poisoned in store_secret");
         let secrets = match &mut *storage {
             SecretStorage::Memory { secrets } => secrets,
             SecretStorage::File { secrets, .. } => secrets,
@@ -115,18 +118,19 @@ impl SecretManager {
 
     /// Retrieve a secret
     pub fn get_secret(&self, id: &str) -> Result<String, SecretManagerError> {
-        let storage = self.storage.lock().unwrap();
+        let storage = self
+            .storage
+            .lock()
+            .expect("SecretManager storage lock poisoned in get_secret");
         let secrets = match &*storage {
             SecretStorage::Memory { secrets } => secrets,
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets
-            .get(id)
-            .ok_or_else(|| {
-                self.log.secret_error(id, "secret not found");
-                SecretManagerError::SecretNotFound(id.to_string())
-            })?;
+        let entry = secrets.get(id).ok_or_else(|| {
+            self.log.secret_error(id, "secret not found");
+            SecretManagerError::SecretNotFound(id.to_string())
+        })?;
 
         // Get the latest active version
         let latest = entry
@@ -155,18 +159,19 @@ impl SecretManager {
 
     /// Rotate a secret
     pub fn rotate_secret(&self, id: &str, new_value: &str) -> Result<(), SecretManagerError> {
-        let mut storage = self.storage.lock().unwrap();
+        let mut storage = self
+            .storage
+            .lock()
+            .expect("SecretManager storage lock poisoned in rotate_secret");
         let secrets = match &mut *storage {
             SecretStorage::Memory { secrets } => secrets,
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets
-            .get_mut(id)
-            .ok_or_else(|| {
-                self.log.secret_error(id, "secret not found for rotation");
-                SecretManagerError::SecretNotFound(id.to_string())
-            })?;
+        let entry = secrets.get_mut(id).ok_or_else(|| {
+            self.log.secret_error(id, "secret not found for rotation");
+            SecretManagerError::SecretNotFound(id.to_string())
+        })?;
 
         // Deactivate old versions
         for secret in entry.iter_mut() {
@@ -184,7 +189,7 @@ impl SecretManager {
         let mut metadata = SecretMetadata::new(id.to_string(), version);
         metadata.last_rotated_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime clock went backwards — cannot get duration since UNIX_EPOCH in rotate_secret")
             .as_secs();
 
         entry.push(StoredSecret {
@@ -203,25 +208,28 @@ impl SecretManager {
 
     /// Check if a secret needs rotation
     pub fn needs_rotation(&self, id: &str) -> Result<bool, SecretManagerError> {
-        let storage = self.storage.lock().unwrap();
+        let storage = self
+            .storage
+            .lock()
+            .expect("SecretManager storage lock poisoned in needs_rotation");
         let secrets = match &*storage {
             SecretStorage::Memory { secrets } => secrets,
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets
-            .get(id)
-            .ok_or_else(|| {
-                self.log.secret_error(id, "secret not found for rotation check");
-                SecretManagerError::SecretNotFound(id.to_string())
-            })?;
+        let entry = secrets.get(id).ok_or_else(|| {
+            self.log
+                .secret_error(id, "secret not found for rotation check");
+            SecretManagerError::SecretNotFound(id.to_string())
+        })?;
 
         let latest = entry
             .iter()
             .filter(|s| s.metadata.active)
             .max_by_key(|s| s.metadata.version)
             .ok_or_else(|| {
-                self.log.secret_error(id, "no active version for rotation check");
+                self.log
+                    .secret_error(id, "no active version for rotation check");
                 SecretManagerError::SecretNotFound(id.to_string())
             })?;
 
@@ -232,25 +240,29 @@ impl SecretManager {
 
     /// Delete a secret
     pub fn delete_secret(&self, id: &str) -> Result<(), SecretManagerError> {
-        let mut storage = self.storage.lock().unwrap();
+        let mut storage = self
+            .storage
+            .lock()
+            .expect("SecretManager storage lock poisoned in delete_secret");
         let secrets = match &mut *storage {
             SecretStorage::Memory { secrets } => secrets,
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        secrets
-            .remove(id)
-            .ok_or_else(|| {
-                self.log.secret_error(id, "secret not found for deletion");
-                SecretManagerError::SecretNotFound(id.to_string())
-            })?;
+        secrets.remove(id).ok_or_else(|| {
+            self.log.secret_error(id, "secret not found for deletion");
+            SecretManagerError::SecretNotFound(id.to_string())
+        })?;
         self.log.secret_deleted(id);
         Ok(())
     }
 
     /// List all secret IDs
     pub fn list_secrets(&self) -> Vec<String> {
-        let storage = self.storage.lock().unwrap();
+        let storage = self
+            .storage
+            .lock()
+            .expect("SecretManager storage lock poisoned in list_secrets");
         let secrets = match &*storage {
             SecretStorage::Memory { secrets } => secrets,
             SecretStorage::File { secrets, .. } => secrets,
@@ -261,18 +273,19 @@ impl SecretManager {
 
     /// Get secret metadata
     pub fn get_metadata(&self, id: &str) -> Result<SecretMetadata, SecretManagerError> {
-        let storage = self.storage.lock().unwrap();
+        let storage = self
+            .storage
+            .lock()
+            .expect("SecretManager storage lock poisoned in get_metadata");
         let secrets = match &*storage {
             SecretStorage::Memory { secrets } => secrets,
             SecretStorage::File { secrets, .. } => secrets,
         };
 
-        let entry = secrets
-            .get(id)
-            .ok_or_else(|| {
-                self.log.secret_error(id, "secret not found for metadata");
-                SecretManagerError::SecretNotFound(id.to_string())
-            })?;
+        let entry = secrets.get(id).ok_or_else(|| {
+            self.log.secret_error(id, "secret not found for metadata");
+            SecretManagerError::SecretNotFound(id.to_string())
+        })?;
 
         let latest = entry
             .iter()
@@ -291,7 +304,9 @@ impl SecretManager {
         loop {
             std::thread::sleep(interval);
 
-            let mut storage_guard = storage.lock().unwrap();
+            let mut storage_guard = storage
+                .lock()
+                .expect("SecretManager rotation storage lock poisoned");
             let secrets = match &mut *storage_guard {
                 SecretStorage::Memory { secrets } => secrets,
                 SecretStorage::File { secrets, .. } => secrets,

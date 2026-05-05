@@ -3,7 +3,7 @@
 //! Manages multiple concurrent sessions with thread-safe operations.
 
 use crate::session::*;
-use antikythera_log::{Logger, LogLevel};
+use antikythera_log::{LogLevel, Logger};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -34,11 +34,18 @@ impl SessionManager {
         let session = Session::new(user_id, model);
         let id = session.id.clone();
 
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in create_session");
         sessions.insert(id.clone(), session);
 
         let log = Logger::new(&id);
-        log.log_with_source(LogLevel::Info, "session", format!("Session created | id={}", id));
+        log.log_with_source(
+            LogLevel::Info,
+            "session",
+            format!("Session created | id={}", id),
+        );
 
         id
     }
@@ -54,11 +61,18 @@ impl SessionManager {
         let id = session_id.into();
         session.id = id.clone();
 
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in create_session_with_id");
         sessions.insert(id.clone(), session);
 
         let log = Logger::new(&id);
-        log.log_with_source(LogLevel::Info, "session", format!("Session created with custom ID | id={}", id));
+        log.log_with_source(
+            LogLevel::Info,
+            "session",
+            format!("Session created with custom ID | id={}", id),
+        );
 
         id
     }
@@ -69,25 +83,37 @@ impl SessionManager {
 
     /// Get a session by ID
     pub fn get_session(&self, session_id: &str) -> Option<Session> {
-        let sessions = self.sessions.read().unwrap();
+        let sessions = self
+            .sessions
+            .read()
+            .expect("SessionManager sessions read lock poisoned in get_session");
         sessions.get(session_id).cloned()
     }
 
     /// Check if session exists
     pub fn has_session(&self, session_id: &str) -> bool {
-        let sessions = self.sessions.read().unwrap();
+        let sessions = self
+            .sessions
+            .read()
+            .expect("SessionManager sessions read lock poisoned in has_session");
         sessions.contains_key(session_id)
     }
 
     /// List all session summaries
     pub fn list_sessions(&self) -> Vec<SessionSummary> {
-        let sessions = self.sessions.read().unwrap();
+        let sessions = self
+            .sessions
+            .read()
+            .expect("SessionManager sessions read lock poisoned in list_sessions");
         sessions.values().map(SessionSummary::from).collect()
     }
 
     /// Get session count
     pub fn session_count(&self) -> usize {
-        let sessions = self.sessions.read().unwrap();
+        let sessions = self
+            .sessions
+            .read()
+            .expect("SessionManager sessions read lock poisoned in session_count");
         sessions.len()
     }
 
@@ -97,12 +123,19 @@ impl SessionManager {
 
     /// Add a message to a session
     pub fn add_message(&self, session_id: &str, message: Message) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in add_message");
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.add_message(message);
                 let log = Logger::new(session_id);
-                log.log_with_source(LogLevel::Debug, "session", format!("Message appended | id={}", session_id));
+                log.log_with_source(
+                    LogLevel::Debug,
+                    "session",
+                    format!("Message appended | id={}", session_id),
+                );
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -111,7 +144,10 @@ impl SessionManager {
 
     /// Get chat history for a session
     pub fn get_chat_history(&self, session_id: &str) -> Result<Vec<Message>, String> {
-        let sessions = self.sessions.read().unwrap();
+        let sessions = self
+            .sessions
+            .read()
+            .expect("SessionManager sessions read lock poisoned in get_chat_history");
         match sessions.get(session_id) {
             Some(session) => Ok(session.messages.clone()),
             None => Err(format!("Session not found: {}", session_id)),
@@ -124,11 +160,18 @@ impl SessionManager {
 
     /// Delete a session
     pub fn delete_session(&self, session_id: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in delete_session");
         match sessions.remove(session_id) {
             Some(_) => {
                 let log = Logger::new(session_id);
-                log.log_with_source(LogLevel::Info, "session", format!("Session deleted | id={}", session_id));
+                log.log_with_source(
+                    LogLevel::Info,
+                    "session",
+                    format!("Session deleted | id={}", session_id),
+                );
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -137,12 +180,19 @@ impl SessionManager {
 
     /// Clear all messages in a session
     pub fn clear_session(&self, session_id: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in clear_session");
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.clear_messages();
                 let log = Logger::new(session_id);
-                log.log_with_source(LogLevel::Debug, "session", format!("History cleared | id={}", session_id));
+                log.log_with_source(
+                    LogLevel::Debug,
+                    "session",
+                    format!("History cleared | id={}", session_id),
+                );
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -151,12 +201,19 @@ impl SessionManager {
 
     /// Update session title
     pub fn update_title(&self, session_id: &str, title: impl Into<String>) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in update_title");
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.set_title(title);
                 let log = Logger::new(session_id);
-                log.log_with_source(LogLevel::Debug, "session", format!("Title updated | id={}", session_id));
+                log.log_with_source(
+                    LogLevel::Debug,
+                    "session",
+                    format!("Title updated | id={}", session_id),
+                );
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -165,12 +222,19 @@ impl SessionManager {
 
     /// Record token usage
     pub fn record_tokens(&self, session_id: &str, tokens: u64) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in record_tokens");
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.add_tokens(tokens);
                 let log = Logger::new(session_id);
-                log.log_with_source(LogLevel::Debug, "session", format!("Tokens recorded | id={} | tokens={}", session_id, tokens));
+                log.log_with_source(
+                    LogLevel::Debug,
+                    "session",
+                    format!("Tokens recorded | id={} | tokens={}", session_id, tokens),
+                );
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -179,12 +243,22 @@ impl SessionManager {
 
     /// Record tool usage
     pub fn record_tool(&self, session_id: &str, tool_name: &str, step: u32) -> Result<(), String> {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in record_tool");
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.record_tool(tool_name, step);
                 let log = Logger::new(session_id);
-                log.log_with_source(LogLevel::Debug, "session", format!("Tool recorded | id={} | tool={} | step={}", session_id, tool_name, step));
+                log.log_with_source(
+                    LogLevel::Debug,
+                    "session",
+                    format!(
+                        "Tool recorded | id={} | tool={} | step={}",
+                        session_id, tool_name, step
+                    ),
+                );
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -197,7 +271,10 @@ impl SessionManager {
 
     /// Get sessions by user ID
     pub fn get_sessions_by_user(&self, user_id: &str) -> Vec<SessionSummary> {
-        let sessions = self.sessions.read().unwrap();
+        let sessions = self
+            .sessions
+            .read()
+            .expect("SessionManager sessions read lock poisoned in get_sessions_by_user");
         sessions
             .values()
             .filter(|s| s.user_id == user_id)
@@ -207,7 +284,10 @@ impl SessionManager {
 
     /// Search sessions by title
     pub fn search_sessions(&self, query: &str) -> Vec<SessionSummary> {
-        let sessions = self.sessions.read().unwrap();
+        let sessions = self
+            .sessions
+            .read()
+            .expect("SessionManager sessions read lock poisoned in search_sessions");
         sessions
             .values()
             .filter(|s| {
@@ -223,22 +303,36 @@ impl SessionManager {
     /// Import a session into the manager, replacing any existing one.
     pub fn import_session(&self, session: Session) -> Result<(), String> {
         let session_id = session.id.clone();
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in import_session");
         sessions.insert(session_id.clone(), session);
         let log = Logger::new(&session_id);
-        log.log_with_source(LogLevel::Info, "session", format!("Session imported | id={}", session_id));
+        log.log_with_source(
+            LogLevel::Info,
+            "session",
+            format!("Session imported | id={}", session_id),
+        );
         Ok(())
     }
 
     /// Import many sessions into the manager.
     pub fn import_sessions(&self, imported_sessions: Vec<Session>) -> Result<usize, String> {
         let count = imported_sessions.len();
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self
+            .sessions
+            .write()
+            .expect("SessionManager sessions write lock poisoned in import_sessions");
         for session in imported_sessions {
             let id = session.id.clone();
             sessions.insert(id.clone(), session);
             let log = Logger::new(&id);
-            log.log_with_source(LogLevel::Info, "session", format!("Session imported | id={}", id));
+            log.log_with_source(
+                LogLevel::Info,
+                "session",
+                format!("Session imported | id={}", id),
+            );
         }
         Ok(count)
     }

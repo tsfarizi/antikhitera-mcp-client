@@ -64,3 +64,8 @@ pub fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
         })
         .collect()
 }
+
+/// Encode bytes to hex string
+pub fn hex_encode(data: &[u8]) -> String {
+    data.iter().map(|b| format!("{:02x}", b)).collect()
+}

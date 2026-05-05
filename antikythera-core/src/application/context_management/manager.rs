@@ -53,14 +53,11 @@ impl RuntimeContextManager {
     /// Returns an error if the internal mutex is poisoned.
     pub fn set_policy(&self, policy: ContextPolicy) -> Result<(), String> {
         self.log.info("Context policy updated");
-        *self
-            .policy
-            .lock()
-            .map_err(|e| {
-                self.log
-                    .error(format!("Policy lock poisoned | error={}", e));
-                format!("policy lock poisoned: {}", e)
-            })? = policy;
+        *self.policy.lock().map_err(|e| {
+            self.log
+                .error(format!("Policy lock poisoned | error={}", e));
+            format!("policy lock poisoned: {}", e)
+        })? = policy;
         Ok(())
     }
 

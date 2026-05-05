@@ -23,10 +23,7 @@ pub fn mcp_session_export(session_id: *const c_char) -> *mut c_char {
             let export = SessionExport::from_session(session);
             match export.to_postcard() {
                 Ok(data) => {
-                    let hex_str = data
-                        .iter()
-                        .map(|b| format!("{:02x}", b))
-                        .collect::<String>();
+                    let hex_str = hex_encode(&data);
                     success_with(&[
                         ("session_id", serde_json::json!(id_str)),
                         ("export_data", serde_json::json!(hex_str)),
@@ -87,10 +84,7 @@ pub fn mcp_batch_export() -> *mut c_char {
 
     match batch.to_postcard() {
         Ok(data) => {
-            let hex_str = data
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>();
+            let hex_str = hex_encode(&data);
             success_with(&[
                 ("session_count", serde_json::json!(batch.session_count())),
                 ("export_data", serde_json::json!(hex_str)),

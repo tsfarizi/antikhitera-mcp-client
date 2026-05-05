@@ -430,9 +430,8 @@ impl<P: ModelProvider> McpClient<P> {
                 "output_format".to_string(),
                 serde_json::Value::String("json".to_string()),
             );
-            ChatLogger::new(&session_id).debug(
-                "force_json=true → ModelRequest.params set with output_format=json",
-            );
+            ChatLogger::new(&session_id)
+                .debug("force_json=true → ModelRequest.params set with output_format=json");
         }
 
         PreparedChatTurn {

@@ -162,5 +162,3 @@ async fn edit_prompt_template() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-

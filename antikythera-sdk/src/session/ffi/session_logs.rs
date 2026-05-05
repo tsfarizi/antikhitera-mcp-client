@@ -5,9 +5,9 @@
 use std::os::raw::c_char;
 
 use super::helpers::*;
+use crate::sdk_logging::get_latest_sdk_logs;
 use antikythera_core::logging::get_latest_logs;
 use antikythera_log::{BatchLogExport, SessionLogExport};
-use crate::sdk_logging::get_latest_sdk_logs;
 
 /// Get logs for a specific session
 ///
@@ -48,10 +48,7 @@ pub fn mcp_session_export_logs(session_id: *const c_char) -> *mut c_char {
 
     match export.to_postcard() {
         Ok(data) => {
-            let hex_str = data
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>();
+            let hex_str = hex_encode(&data);
             success_with(&[
                 ("session_id", serde_json::json!(id_str)),
                 ("export_data", serde_json::json!(hex_str)),
@@ -108,10 +105,7 @@ pub fn mcp_session_batch_export_logs() -> *mut c_char {
 
     match batch.to_postcard() {
         Ok(data) => {
-            let hex_str = data
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>();
+            let hex_str = hex_encode(&data);
             success_with(&[
                 ("session_count", serde_json::json!(batch.session_count())),
                 (

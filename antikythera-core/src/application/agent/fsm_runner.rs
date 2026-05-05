@@ -649,7 +649,9 @@ impl<P: ModelProvider> FsmAgent<P> {
             }
             AgentState::Terminated { reason } => match reason {
                 TerminationReason::Success if !steps.is_empty() => {
-                    let last_step = steps.last().unwrap();
+                    let last_step = steps.last().expect(
+                        "AgentState Terminated::Success with empty steps — invariant violation",
+                    );
                     Ok(AgentOutcome {
                         logs,
                         session_id: session_id.unwrap_or_default(),

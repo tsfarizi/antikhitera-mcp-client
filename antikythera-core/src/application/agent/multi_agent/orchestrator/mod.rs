@@ -141,7 +141,8 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let id = profile.id.clone();
         let role = profile.role.clone();
         self.registry.register(profile);
-        self.log.debug(format!("Agent registered | id={} role={}", id, role));
+        self.log
+            .debug(format!("Agent registered | id={} role={}", id, role));
         self
     }
 
@@ -321,10 +322,8 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let profile = match self.router.route(&task, &profiles) {
             Some(p) => p.clone(),
             None => {
-                self.log.error(format!(
-                    "No agent available | task={}",
-                    task.task_id
-                ));
+                self.log
+                    .error(format!("No agent available | task={}", task.task_id));
                 return TaskResult::failure(
                     task.task_id.clone(),
                     task.agent_id.clone().unwrap_or_default(),
@@ -347,7 +346,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                 sem.clone()
                     .acquire_owned()
                     .await
-                    .expect("orchestrator semaphore closed"),
+                    .expect("orchestrator concurrency semaphore closed in dispatch"),
             )
         } else {
             None
@@ -356,7 +355,9 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
 
         self.log.info(format!(
             "Task dispatched | task={} agent={} router={}",
-            task.task_id, profile.id, self.router.name()
+            task.task_id,
+            profile.id,
+            self.router.name()
         ));
 
         let result = execute_task(
@@ -482,16 +483,14 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
 
                     // Concurrency slot
                     let concurrency_wait_start = Instant::now();
-                    let _permit = if let Some(sem) = &concurrency_sem {
-                        Some(
-                            sem.clone()
-                                .acquire_owned()
-                                .await
-                                .expect("orchestrator semaphore closed"),
-                        )
-                    } else {
-                        None
-                    };
+                    let _permit =
+                        if let Some(sem) = &concurrency_sem {
+                            Some(sem.clone().acquire_owned().await.expect(
+                                "orchestrator concurrency semaphore closed in dispatch_many",
+                            ))
+                        } else {
+                            None
+                        };
                     let concurrency_wait_ms = concurrency_wait_start.elapsed().as_millis() as u64;
 
                     match profile {

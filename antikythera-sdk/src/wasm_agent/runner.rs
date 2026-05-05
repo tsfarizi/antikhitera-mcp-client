@@ -211,7 +211,11 @@ impl AgentRunnerRuntime {
         reason: &str,
         correlation_id: Option<String>,
     ) -> Result<bool, String> {
-        wasm_log("tui", LogLevel::Info, &format!("Session archived: {reason}"));
+        wasm_log(
+            "tui",
+            LogLevel::Info,
+            &format!("Session archived: {reason}"),
+        );
         let Some(runtime) = self.sessions.remove(session_id) else {
             return Ok(false);
         };
@@ -271,7 +275,11 @@ impl AgentRunnerRuntime {
             }
         }
         if archived > 0 {
-            wasm_log("tui", LogLevel::Info, &format!("Idle sweep archived {archived} sessions"));
+            wasm_log(
+                "tui",
+                LogLevel::Info,
+                &format!("Idle sweep archived {archived} sessions"),
+            );
         }
         Ok(archived)
     }
@@ -313,7 +321,11 @@ impl AgentRunnerRuntime {
         }
 
         if archived > 0 {
-            wasm_log("tui", LogLevel::Info, &format!("Capacity pressure archived {archived} sessions"));
+            wasm_log(
+                "tui",
+                LogLevel::Info,
+                &format!("Capacity pressure archived {archived} sessions"),
+            );
         }
         Ok(archived)
     }
@@ -373,12 +385,10 @@ impl AgentRunnerRuntime {
         let session_id = input.session_id.unwrap_or_else(new_session_id);
         let mut config = self.default_config.clone();
         config.session_id = session_id.clone();
-        self.sessions
-            .entry(session_id.clone())
-            .or_insert_with(|| {
-                wasm_log("tui", LogLevel::Info, "Session created");
-                SessionRuntime::new(config)
-            });
+        self.sessions.entry(session_id.clone()).or_insert_with(|| {
+            wasm_log("tui", LogLevel::Info, "Session created");
+            SessionRuntime::new(config)
+        });
 
         let _ = self.enforce_capacity(Some(&session_id), None)?;
 
@@ -457,10 +467,14 @@ impl AgentRunnerRuntime {
         }
 
         state.rolling_summary = Some(summary.clone());
-        wasm_log("tui", LogLevel::Debug, &format!(
-            "Context summary: {} source messages summarized, {} retained",
-            summary.source_messages, retain
-        ));
+        wasm_log(
+            "tui",
+            LogLevel::Debug,
+            &format!(
+                "Context summary: {} source messages summarized, {} retained",
+                summary.source_messages, retain
+            ),
+        );
         Some(summary)
     }
 
@@ -508,7 +522,11 @@ impl AgentRunnerRuntime {
                     "message": "Host load_state required before this turn can continue"
                 }),
             );
-            wasm_log("tui", LogLevel::Warn, "Session archived, restore required before turn");
+            wasm_log(
+                "tui",
+                LogLevel::Warn,
+                "Session archived, restore required before turn",
+            );
             return Err(format!(
                 "Session '{session_id}' archived and not in RAM. Host must load persisted state then call hydrate_session"
             ));
@@ -669,7 +687,11 @@ impl AgentRunnerRuntime {
             AgentAction::CallTool { tool, input } => {
                 // Validate the tool call against the registered registry (no-op if empty).
                 if let Err(validation_err) = validate_tool_call(&registry_snapshot, &tool, &input) {
-                    wasm_log("tui", LogLevel::Error, &format!("Tool validation failed for '{tool}': {validation_err}"));
+                    wasm_log(
+                        "tui",
+                        LogLevel::Error,
+                        &format!("Tool validation failed for '{tool}': {validation_err}"),
+                    );
                     return Err(validation_err.to_string());
                 }
 
@@ -713,9 +735,11 @@ impl AgentRunnerRuntime {
             }
         };
 
-        wasm_log("tui", LogLevel::Debug, &format!(
-            "LLM response committed: action={}", result.action
-        ));
+        wasm_log(
+            "tui",
+            LogLevel::Debug,
+            &format!("LLM response committed: action={}", result.action),
+        );
         runtime.pending_llm_chunks.clear();
         serde_json::to_string(&result).map_err(|e| format!("Failed to encode commit result: {e}"))
     }
@@ -751,7 +775,11 @@ impl AgentRunnerRuntime {
         let input: ToolResultInput = serde_json::from_str(tool_result_json)
             .map_err(|e| format!("Invalid tool-result-json: {e}"))?;
 
-        wasm_log("tui", LogLevel::Debug, &format!("Processing tool result for '{}'", input.tool_name));
+        wasm_log(
+            "tui",
+            LogLevel::Debug,
+            &format!("Processing tool result for '{}'", input.tool_name),
+        );
 
         let output: serde_json::Value = serde_json::from_str(&input.output_json)
             .map_err(|e| format!("Invalid tool output_json: {e}"))?;
@@ -769,11 +797,15 @@ impl AgentRunnerRuntime {
         runtime.telemetry.counters.tool_results += 1;
         if !input.success {
             runtime.telemetry.counters.tool_errors += 1;
-            wasm_log("tui", LogLevel::Error, &format!(
-                "Tool '{}' failed: {}",
-                input.tool_name,
-                input.error_message.as_deref().unwrap_or("unknown error")
-            ));
+            wasm_log(
+                "tui",
+                LogLevel::Error,
+                &format!(
+                    "Tool '{}' failed: {}",
+                    input.tool_name,
+                    input.error_message.as_deref().unwrap_or("unknown error")
+                ),
+            );
         }
         runtime.emit_event(
             StreamEventKind::ToolResult,
@@ -936,12 +968,10 @@ fn runtime() -> &'static Mutex<AgentRunnerRuntime> {
 fn with_runtime<T>(
     f: impl FnOnce(&mut AgentRunnerRuntime) -> Result<T, String>,
 ) -> Result<T, String> {
-    let mut guard = runtime()
-        .lock()
-        .map_err(|_| {
-            wasm_log("tui", LogLevel::Error, "Runtime lock poisoned");
-            "AgentRunner runtime lock poisoned".to_string()
-        })?;
+    let mut guard = runtime().lock().map_err(|_| {
+        wasm_log("tui", LogLevel::Error, "Runtime lock poisoned");
+        "AgentRunner runtime lock poisoned".to_string()
+    })?;
     f(&mut guard)
 }
 
@@ -1020,7 +1050,11 @@ pub fn get_state(session_id: &str) -> Result<String, String> {
     with_runtime(|rt| {
         let Some(state) = rt.sessions.get(session_id) else {
             if rt.archived_sessions.contains_key(session_id) {
-                wasm_log("tui", LogLevel::Warn, "get_state called on archived session");
+                wasm_log(
+                    "tui",
+                    LogLevel::Warn,
+                    "get_state called on archived session",
+                );
                 return Err(format!(
                     "Session '{session_id}' is archived in host storage; call hydrate_session after host load"
                 ));

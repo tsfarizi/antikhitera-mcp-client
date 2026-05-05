@@ -85,17 +85,26 @@ impl InMemoryMetricsExporter {
     }
 
     pub fn snapshot(&self) -> Vec<MetricRecord> {
-        self.metrics.lock().unwrap().clone()
+        self.metrics
+            .lock()
+            .expect("InMemoryMetricsExporter metrics lock poisoned in snapshot")
+            .clone()
     }
 
     pub fn clear(&self) {
-        self.metrics.lock().unwrap().clear();
+        self.metrics
+            .lock()
+            .expect("InMemoryMetricsExporter metrics lock poisoned in clear")
+            .clear();
     }
 }
 
 impl MetricsExporter for InMemoryMetricsExporter {
     fn export_metric(&self, metric: MetricRecord) {
-        self.metrics.lock().unwrap().push(metric);
+        self.metrics
+            .lock()
+            .expect("InMemoryMetricsExporter metrics lock poisoned in export_metric")
+            .push(metric);
     }
 }
 

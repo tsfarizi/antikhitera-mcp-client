@@ -51,7 +51,4 @@ impl LogSubscriber {
     ) -> Result<LogEntry, crossbeam_channel::RecvTimeoutError> {
         self.receiver.recv_timeout(timeout)
     }
-
 }
-
-

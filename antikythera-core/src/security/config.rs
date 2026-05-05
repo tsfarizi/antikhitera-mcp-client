@@ -169,7 +169,7 @@ impl SecretMetadata {
     pub fn new(id: String, version: u32) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime clock went backwards in SecretMetadata::new")
             .as_secs();
 
         Self {
@@ -186,7 +186,7 @@ impl SecretMetadata {
     pub fn is_expired(&self) -> bool {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime clock went backwards in SecretMetadata::is_expired")
             .as_secs();
         now >= self.expires_at
     }
@@ -194,7 +194,7 @@ impl SecretMetadata {
     pub fn needs_rotation(&self, max_age_hours: u32) -> bool {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("SystemTime clock went backwards in SecretMetadata::needs_rotation")
             .as_secs();
         let max_age_secs = max_age_hours as u64 * 3600;
         (now - self.last_rotated_at) >= max_age_secs

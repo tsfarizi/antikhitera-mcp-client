@@ -247,7 +247,9 @@ pub fn validate_arguments(schema: &Value, arguments: &Value) -> Result<(), Strin
         return Err("arguments must be a JSON object matching the tool's input schema. Provide parameters as key-value pairs.".to_string());
     }
 
-    let args_obj = arguments.as_object().unwrap();
+    let args_obj = arguments
+        .as_object()
+        .expect("arguments is not a JSON object — already checked by is_object()");
 
     // Check additionalProperties
     let allow_additional = schema_obj
@@ -333,7 +335,9 @@ pub fn validate_output(schema: &Value, result: &Value, log: &TransportLogger, to
         return;
     }
 
-    let result_obj = result.as_object().unwrap();
+    let result_obj = result
+        .as_object()
+        .expect("result is not a JSON object — already checked by is_object()");
 
     if let Some(required) = schema_obj.get("required").and_then(Value::as_array) {
         for req in required {

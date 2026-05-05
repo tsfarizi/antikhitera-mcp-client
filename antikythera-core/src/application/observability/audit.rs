@@ -58,11 +58,17 @@ impl AuditTrail {
     }
 
     pub fn append(&self, record: AuditRecord) {
-        self.records.lock().unwrap().push(record);
+        self.records
+            .lock()
+            .expect("AuditTrail records lock poisoned in append")
+            .push(record);
     }
 
     pub fn snapshot(&self) -> Vec<AuditRecord> {
-        self.records.lock().unwrap().clone()
+        self.records
+            .lock()
+            .expect("AuditTrail records lock poisoned in snapshot")
+            .clone()
     }
 
     pub fn by_category(&self, category: AuditCategory) -> Vec<AuditRecord> {
@@ -73,7 +79,10 @@ impl AuditTrail {
     }
 
     pub fn clear(&self) {
-        self.records.lock().unwrap().clear();
+        self.records
+            .lock()
+            .expect("AuditTrail records lock poisoned in clear")
+            .clear();
     }
 }
 

@@ -12,6 +12,7 @@ use std::path::Path;
 // ============================================================================
 
 /// Configuration for WASM agent (minimal, no provider info)
+// TODO: Consolidate with postcard_config::AgentConfig (adds session_id field)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
     /// Maximum tool interaction steps
@@ -43,6 +44,7 @@ impl Default for AgentConfig {
 // ============================================================================
 
 /// Prompt templates for agent behavior
+// TODO: Consolidate with postcard_config::PromptsConfig (same fields, different defaults)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptConfig {
     /// Main system prompt template

@@ -76,21 +76,33 @@ impl InMemoryTracingHook {
     }
 
     pub fn started_spans(&self) -> Vec<TraceSpanContext> {
-        self.started.lock().unwrap().clone()
+        self.started
+            .lock()
+            .expect("InMemoryTracingHook started lock poisoned in started_spans")
+            .clone()
     }
 
     pub fn ended_spans(&self) -> Vec<(TraceSpanContext, TraceStatus)> {
-        self.ended.lock().unwrap().clone()
+        self.ended
+            .lock()
+            .expect("InMemoryTracingHook ended lock poisoned in ended_spans")
+            .clone()
     }
 }
 
 impl TracingHook for InMemoryTracingHook {
     fn on_span_start(&self, span: TraceSpanContext) {
-        self.started.lock().unwrap().push(span);
+        self.started
+            .lock()
+            .expect("InMemoryTracingHook started lock poisoned in on_span_start")
+            .push(span);
     }
 
     fn on_span_end(&self, span: TraceSpanContext, status: TraceStatus) {
-        self.ended.lock().unwrap().push((span, status));
+        self.ended
+            .lock()
+            .expect("InMemoryTracingHook ended lock poisoned in on_span_end")
+            .push((span, status));
     }
 }
 
@@ -128,12 +140,18 @@ impl InMemoryObservabilityHook {
 
     /// Get a snapshot of recorded events.
     pub fn snapshot(&self) -> Vec<TelemetryEvent> {
-        self.events.lock().unwrap().clone()
+        self.events
+            .lock()
+            .expect("InMemoryObservabilityHook events lock poisoned in snapshot")
+            .clone()
     }
 
     /// Clear all recorded events.
     pub fn clear(&self) {
-        self.events.lock().unwrap().clear();
+        self.events
+            .lock()
+            .expect("InMemoryObservabilityHook events lock poisoned in clear")
+            .clear();
     }
 
     /// Filter events by type.
@@ -153,7 +171,10 @@ impl Default for InMemoryObservabilityHook {
 
 impl ObservabilityHook for InMemoryObservabilityHook {
     fn record_event(&self, event: TelemetryEvent) {
-        self.events.lock().unwrap().push(event);
+        self.events
+            .lock()
+            .expect("InMemoryObservabilityHook events lock poisoned in record_event")
+            .push(event);
     }
 }
 
