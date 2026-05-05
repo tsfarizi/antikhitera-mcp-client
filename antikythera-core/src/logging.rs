@@ -74,6 +74,7 @@ macro_rules! define_module_logger {
         $vis:vis struct $name:ident => $source:literal
     ) => {
         $(#[$meta])*
+        #[derive(Clone, Debug)]
         $vis struct $name {
             logger: Arc<Logger>,
         }
@@ -279,6 +280,46 @@ define_module_logger! {
 define_module_logger! {
     /// Streaming module logger — covers LLM streaming
     pub struct StreamingLogger => "streaming"
+}
+
+define_module_logger! {
+    /// Security module logger — covers rate limiting, secrets, validation
+    pub struct SecurityLogger => "security"
+}
+
+impl SecurityLogger {
+    pub fn rate_limit_check(&self, session_id: &str, allowed: bool) {
+        let level = if allowed { LogLevel::Debug } else { LogLevel::Warn };
+        self.logger.log_with_source(level, "security", format!("Rate limit check | session={} allowed={}", session_id, allowed));
+    }
+
+    pub fn rate_limit_exceeded(&self, session_id: &str, reason: &str) {
+        self.logger.log_with_source(LogLevel::Warn, "security", format!("Rate limit exceeded | session={} reason={}", session_id, reason));
+    }
+
+    pub fn secret_stored(&self, id: &str) {
+        self.logger.log_with_source(LogLevel::Debug, "security", format!("Secret stored | id={}", id));
+    }
+
+    pub fn secret_retrieved(&self, id: &str) {
+        self.logger.log_with_source(LogLevel::Debug, "security", format!("Secret retrieved | id={}", id));
+    }
+
+    pub fn secret_rotated(&self, id: &str) {
+        self.logger.log_with_source(LogLevel::Info, "security", format!("Secret rotated | id={}", id));
+    }
+
+    pub fn secret_deleted(&self, id: &str) {
+        self.logger.log_with_source(LogLevel::Info, "security", format!("Secret deleted | id={}", id));
+    }
+
+    pub fn secret_error(&self, id: &str, error: &str) {
+        self.logger.log_with_source(LogLevel::Error, "security", format!("Secret error | id={} error={}", id, error));
+    }
+
+    pub fn cleanup_task(&self, action: &str) {
+        self.logger.log_with_source(LogLevel::Debug, "security", format!("Cleanup task | action={}", action));
+    }
 }
 
 // ============================================================================

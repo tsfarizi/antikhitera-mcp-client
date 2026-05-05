@@ -3,6 +3,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::logging::OrchestratorLogger;
+
 use super::super::budget::BudgetSnapshot;
 use super::super::registry::AgentProfile;
 use super::super::task::{AgentTask, ErrorKind, TaskResult};
@@ -133,15 +135,19 @@ pub trait TaskGuardrail: Send + Sync {
 }
 
 /// Ordered composition of multiple guardrails.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct GuardrailChain {
     guardrails: Vec<Arc<dyn TaskGuardrail>>,
+    log: OrchestratorLogger,
 }
 
 impl GuardrailChain {
     /// Create an empty chain.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            guardrails: Vec::new(),
+            log: OrchestratorLogger::new("default"),
+        }
     }
 
     /// Append a guardrail to the chain.
@@ -173,7 +179,17 @@ impl GuardrailChain {
         context: &GuardrailContext,
     ) -> Result<(), GuardrailRejection> {
         for guardrail in &self.guardrails {
-            guardrail.pre_check(task, profile, context)?;
+            if let Err(ref rejection) = guardrail.pre_check(task, profile, context) {
+                self.log.warn(format!(
+                    "Guardrail rejection | guardrail={} stage={} task={} error={:?} message={}",
+                    rejection.guardrail_name,
+                    rejection.stage.as_str(),
+                    task.task_id,
+                    rejection.error_kind,
+                    rejection.message,
+                ));
+                return Err(rejection.clone());
+            }
         }
         Ok(())
     }
@@ -186,7 +202,17 @@ impl GuardrailChain {
         context: &GuardrailContext,
     ) -> Result<(), GuardrailRejection> {
         for guardrail in &self.guardrails {
-            guardrail.mid_check(task, profile, context)?;
+            if let Err(ref rejection) = guardrail.mid_check(task, profile, context) {
+                self.log.warn(format!(
+                    "Guardrail rejection | guardrail={} stage={} task={} error={:?} message={}",
+                    rejection.guardrail_name,
+                    rejection.stage.as_str(),
+                    task.task_id,
+                    rejection.error_kind,
+                    rejection.message,
+                ));
+                return Err(rejection.clone());
+            }
         }
         Ok(())
     }
@@ -200,7 +226,17 @@ impl GuardrailChain {
         context: &GuardrailContext,
     ) -> Result<(), GuardrailRejection> {
         for guardrail in &self.guardrails {
-            guardrail.post_check(task, profile, result, context)?;
+            if let Err(ref rejection) = guardrail.post_check(task, profile, result, context) {
+                self.log.warn(format!(
+                    "Guardrail rejection | guardrail={} stage={} task={} error={:?} message={}",
+                    rejection.guardrail_name,
+                    rejection.stage.as_str(),
+                    task.task_id,
+                    rejection.error_kind,
+                    rejection.message,
+                ));
+                return Err(rejection.clone());
+            }
         }
         Ok(())
     }

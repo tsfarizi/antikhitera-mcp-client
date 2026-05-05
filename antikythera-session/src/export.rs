@@ -3,6 +3,7 @@
 //! Export and import sessions with consistent Postcard binary format.
 
 use crate::session::Session;
+use antikythera_log::{Logger, LogLevel};
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -43,16 +44,42 @@ impl SessionExport {
 
     /// Serialize to Postcard binary
     pub fn to_postcard(&self) -> Result<Vec<u8>, String> {
-        postcard::to_allocvec(self).map_err(|e| format!("Serialize error: {}", e))
+        postcard::to_allocvec(self).map_err(|e| {
+            let log = Logger::new(&self.session.id);
+            log.log_with_source(
+                LogLevel::Error,
+                "export",
+                format!("Session export serialize error: {}", e),
+            );
+            format!("Serialize error: {}", e)
+        })
     }
 
     /// Deserialize from Postcard binary
     pub fn from_postcard(data: &[u8]) -> Result<Self, String> {
         let export: SessionExport =
-            postcard::from_bytes(data).map_err(|e| format!("Deserialize error: {}", e))?;
+            postcard::from_bytes(data).map_err(|e| {
+                let log = Logger::new("export");
+                log.log_with_source(
+                    LogLevel::Error,
+                    "export",
+                    format!("Session export deserialize error: {}", e),
+                );
+                format!("Deserialize error: {}", e)
+            })?;
 
         // Validate version
         if export.version != Self::VERSION {
+            let log = Logger::new("export");
+            log.log_with_source(
+                LogLevel::Error,
+                "export",
+                format!(
+                    "Unsupported export version: {}. Expected: {}",
+                    export.version,
+                    Self::VERSION
+                ),
+            );
             return Err(format!(
                 "Unsupported export version: {}. Expected: {}",
                 export.version,
@@ -114,16 +141,42 @@ impl BatchExport {
 
     /// Serialize to Postcard binary
     pub fn to_postcard(&self) -> Result<Vec<u8>, String> {
-        postcard::to_allocvec(self).map_err(|e| format!("Serialize error: {}", e))
+        postcard::to_allocvec(self).map_err(|e| {
+            let log = Logger::new("export");
+            log.log_with_source(
+                LogLevel::Error,
+                "export",
+                format!("Batch export serialize error: {}", e),
+            );
+            format!("Serialize error: {}", e)
+        })
     }
 
     /// Deserialize from Postcard binary
     pub fn from_postcard(data: &[u8]) -> Result<Self, String> {
         let export: BatchExport =
-            postcard::from_bytes(data).map_err(|e| format!("Deserialize error: {}", e))?;
+            postcard::from_bytes(data).map_err(|e| {
+                let log = Logger::new("export");
+                log.log_with_source(
+                    LogLevel::Error,
+                    "export",
+                    format!("Batch export deserialize error: {}", e),
+                );
+                format!("Deserialize error: {}", e)
+            })?;
 
         // Validate version
         if export.version != Self::VERSION {
+            let log = Logger::new("export");
+            log.log_with_source(
+                LogLevel::Error,
+                "export",
+                format!(
+                    "Unsupported batch export version: {}. Expected: {}",
+                    export.version,
+                    Self::VERSION
+                ),
+            );
             return Err(format!(
                 "Unsupported export version: {}. Expected: {}",
                 export.version,

@@ -9,6 +9,13 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::sync::{LazyLock, Mutex};
 
+use crate::sdk_logging::get_sdk_logger;
+use antikythera_log::LogLevel;
+
+fn server_log(level: LogLevel, message: &str) {
+    get_sdk_logger("mcp_servers").log_with_source(level, "mcp_servers", message);
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -164,6 +171,7 @@ fn serialize_result<T: serde::Serialize>(result: &T) -> *mut c_char {
 
 /// Add a new MCP server configuration
 pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
+    server_log(LogLevel::Debug, "mcp_add_server called");
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => {
@@ -188,6 +196,7 @@ pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
 
     let validation = config.validate();
     if !validation.valid {
+        server_log(LogLevel::Info, &format!("Server validation failed for '{}': {:?}", config.name, validation.errors));
         return serialize_result(&validation);
     }
 
@@ -204,22 +213,27 @@ pub fn mcp_add_server(config_json: *const c_char) -> *mut c_char {
             }
 
             servers.insert(name.clone(), config);
+            server_log(LogLevel::Info, &format!("Server added: '{}'", name));
             serialize_result(&ServerValidationResult {
                 valid: true,
                 errors: vec![],
                 server_name: name,
             })
         }
-        Err(e) => serialize_result(&ServerValidationResult {
-            valid: false,
-            errors: vec![format!("Failed to lock registry: {}", e)],
-            server_name: String::new(),
-        }),
+        Err(e) => {
+            server_log(LogLevel::Error, &format!("Lock error in mcp_add_server: {e}"));
+            serialize_result(&ServerValidationResult {
+                valid: false,
+                errors: vec![format!("Failed to lock registry: {}", e)],
+                server_name: String::new(),
+            })
+        }
     }
 }
 
 /// Remove an MCP server by name
 pub fn mcp_remove_server(name: *const c_char) -> *mut c_char {
+    server_log(LogLevel::Debug, "mcp_remove_server called");
     let name_str = match from_c_string(name) {
         Ok(s) => s,
         Err(e) => {
@@ -235,6 +249,7 @@ pub fn mcp_remove_server(name: *const c_char) -> *mut c_char {
     match SERVERS.lock() {
         Ok(mut servers) => {
             if servers.remove(&name_str).is_some() {
+                server_log(LogLevel::Info, &format!("Server removed: '{}'", name_str));
                 serialize_result(&ServerOperationResult {
                     success: true,
                     error_message: None,
@@ -250,12 +265,15 @@ pub fn mcp_remove_server(name: *const c_char) -> *mut c_char {
                 })
             }
         }
-        Err(e) => serialize_result(&ServerOperationResult {
-            success: false,
-            error_message: Some(format!("Failed to lock registry: {}", e)),
-            server_name: name_str,
-            tools_affected: 0,
-        }),
+        Err(e) => {
+            server_log(LogLevel::Error, &format!("Lock error in mcp_remove_server: {e}"));
+            serialize_result(&ServerOperationResult {
+                success: false,
+                error_message: Some(format!("Failed to lock registry: {}", e)),
+                server_name: name_str,
+                tools_affected: 0,
+            })
+        },
     }
 }
 
@@ -294,6 +312,7 @@ pub fn mcp_get_server(name: *const c_char) -> *mut c_char {
 
 /// Validate server configuration without adding
 pub fn mcp_validate_server(config_json: *const c_char) -> *mut c_char {
+    server_log(LogLevel::Debug, "mcp_validate_server called");
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => {
@@ -316,7 +335,13 @@ pub fn mcp_validate_server(config_json: *const c_char) -> *mut c_char {
         }
     };
 
-    serialize_result(&config.validate())
+    let result = config.validate();
+    if result.valid {
+        server_log(LogLevel::Info, &format!("Server validated: '{}'", config.name));
+    } else {
+        server_log(LogLevel::Info, &format!("Server validation failed for '{}': {:?}", config.name, result.errors));
+    }
+    serialize_result(&result)
 }
 
 /// Export all servers configuration as JSON
@@ -332,6 +357,7 @@ pub fn mcp_export_servers_config() -> *mut c_char {
 
 /// Import servers configuration from JSON
 pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
+    server_log(LogLevel::Debug, "mcp_import_servers_config called");
     let json_str = match from_c_string(config_json) {
         Ok(s) => s,
         Err(e) => {
@@ -363,6 +389,7 @@ pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
                 let name = config.name.clone();
                 servers.insert(name, config);
             }
+            server_log(LogLevel::Info, &format!("Imported {count} server configurations"));
             serialize_result(&ServerOperationResult {
                 success: true,
                 error_message: None,
@@ -370,11 +397,14 @@ pub fn mcp_import_servers_config(config_json: *const c_char) -> *mut c_char {
                 tools_affected: count as u32,
             })
         }
-        Err(e) => serialize_result(&ServerOperationResult {
-            success: false,
-            error_message: Some(format!("Failed to lock registry: {}", e)),
-            server_name: "import".to_string(),
-            tools_affected: 0,
-        }),
+        Err(e) => {
+            server_log(LogLevel::Error, &format!("Lock error in mcp_import_servers_config: {e}"));
+            serialize_result(&ServerOperationResult {
+                success: false,
+                error_message: Some(format!("Failed to lock registry: {}", e)),
+                server_name: "import".to_string(),
+                tools_affected: 0,
+            })
+        },
     }
 }

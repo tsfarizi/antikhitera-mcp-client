@@ -3,6 +3,7 @@
 //! Manages multiple concurrent sessions with thread-safe operations.
 
 use crate::session::*;
+use antikythera_log::{Logger, LogLevel};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -36,6 +37,9 @@ impl SessionManager {
         let mut sessions = self.sessions.write().unwrap();
         sessions.insert(id.clone(), session);
 
+        let log = Logger::new(&id);
+        log.log_with_source(LogLevel::Info, "session", format!("Session created | id={}", id));
+
         id
     }
 
@@ -47,11 +51,14 @@ impl SessionManager {
         model: impl Into<String>,
     ) -> String {
         let mut session = Session::new(user_id, model);
-        session.id = session_id.into();
-        let id = session.id.clone();
+        let id = session_id.into();
+        session.id = id.clone();
 
         let mut sessions = self.sessions.write().unwrap();
         sessions.insert(id.clone(), session);
+
+        let log = Logger::new(&id);
+        log.log_with_source(LogLevel::Info, "session", format!("Session created with custom ID | id={}", id));
 
         id
     }
@@ -94,6 +101,8 @@ impl SessionManager {
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.add_message(message);
+                let log = Logger::new(session_id);
+                log.log_with_source(LogLevel::Debug, "session", format!("Message appended | id={}", session_id));
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -117,7 +126,11 @@ impl SessionManager {
     pub fn delete_session(&self, session_id: &str) -> Result<(), String> {
         let mut sessions = self.sessions.write().unwrap();
         match sessions.remove(session_id) {
-            Some(_) => Ok(()),
+            Some(_) => {
+                let log = Logger::new(session_id);
+                log.log_with_source(LogLevel::Info, "session", format!("Session deleted | id={}", session_id));
+                Ok(())
+            }
             None => Err(format!("Session not found: {}", session_id)),
         }
     }
@@ -128,6 +141,8 @@ impl SessionManager {
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.clear_messages();
+                let log = Logger::new(session_id);
+                log.log_with_source(LogLevel::Debug, "session", format!("History cleared | id={}", session_id));
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -140,6 +155,8 @@ impl SessionManager {
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.set_title(title);
+                let log = Logger::new(session_id);
+                log.log_with_source(LogLevel::Debug, "session", format!("Title updated | id={}", session_id));
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -152,6 +169,8 @@ impl SessionManager {
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.add_tokens(tokens);
+                let log = Logger::new(session_id);
+                log.log_with_source(LogLevel::Debug, "session", format!("Tokens recorded | id={} | tokens={}", session_id, tokens));
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -164,6 +183,8 @@ impl SessionManager {
         match sessions.get_mut(session_id) {
             Some(session) => {
                 session.record_tool(tool_name, step);
+                let log = Logger::new(session_id);
+                log.log_with_source(LogLevel::Debug, "session", format!("Tool recorded | id={} | tool={} | step={}", session_id, tool_name, step));
                 Ok(())
             }
             None => Err(format!("Session not found: {}", session_id)),
@@ -201,8 +222,11 @@ impl SessionManager {
 
     /// Import a session into the manager, replacing any existing one.
     pub fn import_session(&self, session: Session) -> Result<(), String> {
+        let session_id = session.id.clone();
         let mut sessions = self.sessions.write().unwrap();
-        sessions.insert(session.id.clone(), session);
+        sessions.insert(session_id.clone(), session);
+        let log = Logger::new(&session_id);
+        log.log_with_source(LogLevel::Info, "session", format!("Session imported | id={}", session_id));
         Ok(())
     }
 
@@ -211,7 +235,10 @@ impl SessionManager {
         let count = imported_sessions.len();
         let mut sessions = self.sessions.write().unwrap();
         for session in imported_sessions {
-            sessions.insert(session.id.clone(), session);
+            let id = session.id.clone();
+            sessions.insert(id.clone(), session);
+            let log = Logger::new(&id);
+            log.log_with_source(LogLevel::Info, "session", format!("Session imported | id={}", id));
         }
         Ok(count)
     }

@@ -5,6 +5,7 @@ use super::types::{
     PolicyTarget, TelemetryHook,
 };
 use crate::application::observability::TelemetryEvent;
+use crate::logging::AgentLogger;
 
 /// Registry of all host integration hooks.
 #[derive(Clone, Default)]
@@ -13,6 +14,7 @@ pub struct HookRegistry {
     pub(super) correlation_hooks: Vec<Arc<dyn CorrelationHook>>,
     pub(super) policy_hooks: Vec<Arc<dyn PolicyDecisionHook>>,
     pub(super) telemetry_hooks: Vec<Arc<dyn TelemetryHook>>,
+    log: Option<AgentLogger>,
 }
 
 impl HookRegistry {
@@ -21,19 +23,37 @@ impl HookRegistry {
         Self::default()
     }
 
+    /// Attach a logger for registration and execution tracing.
+    pub fn with_logger(mut self, log: AgentLogger) -> Self {
+        self.log = Some(log);
+        self
+    }
+
     pub fn register_auth_hook(&mut self, hook: Arc<dyn AuthHook>) {
+        if let Some(ref log) = self.log {
+            log.info("Auth hook registered");
+        }
         self.auth_hooks.push(hook);
     }
 
     pub fn register_correlation_hook(&mut self, hook: Arc<dyn CorrelationHook>) {
+        if let Some(ref log) = self.log {
+            log.info("Correlation hook registered");
+        }
         self.correlation_hooks.push(hook);
     }
 
     pub fn register_policy_hook(&mut self, hook: Arc<dyn PolicyDecisionHook>) {
+        if let Some(ref log) = self.log {
+            log.info("Policy decision hook registered");
+        }
         self.policy_hooks.push(hook);
     }
 
     pub fn register_telemetry_hook(&mut self, hook: Arc<dyn TelemetryHook>) {
+        if let Some(ref log) = self.log {
+            log.info("Telemetry hook registered");
+        }
         self.telemetry_hooks.push(hook);
     }
 
@@ -85,12 +105,14 @@ impl HookRegistry {
 #[derive(Clone, Default)]
 pub struct HostHookMiddleware {
     registry: HookRegistry,
+    log: Option<AgentLogger>,
 }
 
 impl HostHookMiddleware {
     /// Create middleware from a registry.
     pub fn new(registry: HookRegistry) -> Self {
-        Self { registry }
+        let log = registry.log.clone();
+        Self { registry, log }
     }
 
     /// Borrow the underlying registry.
@@ -100,11 +122,17 @@ impl HostHookMiddleware {
 
     /// Run auth and correlation hooks and return the resulting context.
     pub fn prepare_context(&self, mut context: HookContext) -> Result<HookContext, HookError> {
+        if let Some(ref log) = self.log {
+            log.debug("Preparing hook context");
+        }
         for hook in &self.registry.auth_hooks {
             hook.authorize(&context)?;
         }
         for hook in &self.registry.correlation_hooks {
             hook.apply(&mut context)?;
+        }
+        if let Some(ref log) = self.log {
+            log.debug("Hook context prepared");
         }
         Ok(context)
     }
@@ -151,15 +179,27 @@ impl HostHookMiddleware {
             match hook.decide(&input)? {
                 PolicyDecision::Allow => {}
                 PolicyDecision::Audit => saw_audit = true,
-                PolicyDecision::Deny => return Ok(PolicyDecision::Deny),
+                PolicyDecision::Deny => {
+                    if let Some(ref log) = self.log {
+                        log.warn("Policy decision: deny");
+                    }
+                    return Ok(PolicyDecision::Deny);
+                }
             }
         }
 
-        if saw_audit {
-            Ok(PolicyDecision::Audit)
+        let decision = if saw_audit {
+            if let Some(ref log) = self.log {
+                log.info("Policy decision: audit");
+            }
+            PolicyDecision::Audit
         } else {
-            Ok(PolicyDecision::Allow)
-        }
+            if let Some(ref log) = self.log {
+                log.debug("Policy decision: allow");
+            }
+            PolicyDecision::Allow
+        };
+        Ok(decision)
     }
 
     /// Emit a telemetry event to all registered telemetry hooks.
@@ -168,6 +208,9 @@ impl HostHookMiddleware {
         context: &HookContext,
         event: TelemetryEvent,
     ) -> Result<(), HookError> {
+        if let Some(ref log) = self.log {
+            log.debug("Emitting telemetry event");
+        }
         for hook in &self.registry.telemetry_hooks {
             hook.emit(context, &event)?;
         }

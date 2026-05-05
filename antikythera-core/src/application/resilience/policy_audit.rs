@@ -7,6 +7,8 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::logging::ResilienceLogger;
+
 /// Policy decision event types.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -66,14 +68,34 @@ impl PolicyAuditEvent {
         decision: impl Into<String>,
         reason: impl Into<String>,
     ) -> Self {
+        let policy_name: String = policy_name.into();
+        let decision: String = decision.into();
+        let reason: String = reason.into();
+
+        let log = ResilienceLogger::new(&crate::logging::get_active_session());
+        match &event_type {
+            PolicyEventType::ToolAccessDenied | PolicyEventType::HealthCheckFailed => {
+                log.warn(format!(
+                    "Policy audit: {:?} | policy={} decision={} reason={}",
+                    event_type, policy_name, decision, reason
+                ));
+            }
+            _ => {
+                log.info(format!(
+                    "Policy audit: {:?} | policy={} decision={} reason={}",
+                    event_type, policy_name, decision, reason
+                ));
+            }
+        }
+
         Self {
             timestamp: Utc::now().to_rfc3339(),
             correlation_id,
             session_id,
             event_type,
-            policy_name: policy_name.into(),
-            decision: decision.into(),
-            reason: reason.into(),
+            policy_name,
+            decision,
+            reason,
             resource: None,
             caller: None,
             metadata: None,

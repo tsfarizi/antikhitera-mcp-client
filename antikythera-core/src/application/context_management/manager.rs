@@ -20,6 +20,7 @@
 /// ```
 use super::policy::{ContextPolicy, SummarizationFn, TruncationStrategy};
 use crate::domain::types::ChatMessage;
+use crate::logging::ResilienceLogger;
 use std::sync::{Arc, Mutex};
 
 /// Runtime context manager for session-level message management.
@@ -32,6 +33,7 @@ use std::sync::{Arc, Mutex};
 pub struct RuntimeContextManager {
     policy: Arc<Mutex<ContextPolicy>>,
     summarization_callback: Arc<Mutex<Option<SummarizationFn>>>,
+    log: ResilienceLogger,
 }
 
 impl RuntimeContextManager {
@@ -40,6 +42,7 @@ impl RuntimeContextManager {
         Self {
             policy: Arc::new(Mutex::new(policy)),
             summarization_callback: Arc::new(Mutex::new(None)),
+            log: ResilienceLogger::new("default"),
         }
     }
 
@@ -49,10 +52,15 @@ impl RuntimeContextManager {
     ///
     /// Returns an error if the internal mutex is poisoned.
     pub fn set_policy(&self, policy: ContextPolicy) -> Result<(), String> {
+        self.log.info("Context policy updated");
         *self
             .policy
             .lock()
-            .map_err(|e| format!("policy lock poisoned: {}", e))? = policy;
+            .map_err(|e| {
+                self.log
+                    .error(format!("Policy lock poisoned | error={}", e));
+                format!("policy lock poisoned: {}", e)
+            })? = policy;
         Ok(())
     }
 
@@ -70,6 +78,7 @@ impl RuntimeContextManager {
 
     /// Register a summarization callback for the Summarize truncation strategy.
     pub fn set_summarization_callback(&self, callback: SummarizationFn) {
+        self.log.info("Summarization callback registered");
         if let Ok(mut guard) = self.summarization_callback.lock() {
             *guard = Some(callback);
         }
@@ -92,6 +101,12 @@ impl RuntimeContextManager {
             .lock()
             .map_err(|e| format!("policy lock poisoned: {}", e))?;
 
+        self.log.debug(format!(
+            "Applying context policy | messages={} max_history={}",
+            messages.len(),
+            policy.max_history_messages
+        ));
+
         // Separate system and non-system messages (cloned)
         let (mut system_msgs, mut non_system_msgs): (Vec<_>, Vec<_>) = messages
             .iter()
@@ -110,6 +125,11 @@ impl RuntimeContextManager {
                     let skip_count = non_system_msgs
                         .len()
                         .saturating_sub(policy.max_history_messages);
+                    self.log.debug(format!(
+                        "Truncating messages | strategy=KeepNewest skipped={} kept={}",
+                        skip_count,
+                        non_system_msgs.len().saturating_sub(skip_count)
+                    ));
                     non_system_msgs = non_system_msgs.into_iter().skip(skip_count).collect();
                 }
                 TruncationStrategy::KeepBalanced { head_ratio } => {
@@ -118,14 +138,19 @@ impl RuntimeContextManager {
                     let tail_count = policy.max_history_messages.saturating_sub(head_count);
                     let tail_start = non_system_msgs.len().saturating_sub(tail_count);
 
+                    self.log.debug(format!(
+                        "Truncating messages | strategy=KeepBalanced head={} tail={}",
+                        head_count, tail_count
+                    ));
+
                     let head: Vec<_> = non_system_msgs.iter().take(head_count).cloned().collect();
                     let tail: Vec<_> = non_system_msgs.iter().skip(tail_start).cloned().collect();
 
                     non_system_msgs = [head, tail].concat();
                 }
                 TruncationStrategy::Summarize => {
-                    // Placeholder: would invoke summarization callback
-                    // For now, fall back to KeepNewest
+                    self.log
+                        .debug("Truncating messages | strategy=Summarize (fallback)");
                     let skip_count = non_system_msgs
                         .len()
                         .saturating_sub(policy.max_history_messages);
@@ -139,6 +164,8 @@ impl RuntimeContextManager {
 
         // Apply token budget if configured
         if let Some(budget) = policy.token_budget {
+            self.log
+                .debug(format!("Applying token budget | budget={}", budget));
             while Self::estimate_tokens(&result) > budget
                 && result.len() > policy.min_system_messages
             {
@@ -150,6 +177,12 @@ impl RuntimeContextManager {
                 }
             }
         }
+
+        self.log.debug(format!(
+            "Token budget applied | final_tokens={} messages={}",
+            Self::estimate_tokens(&result),
+            result.len()
+        ));
 
         Ok(result)
     }
@@ -168,6 +201,7 @@ impl Clone for RuntimeContextManager {
         Self {
             policy: Arc::clone(&self.policy),
             summarization_callback: Arc::clone(&self.summarization_callback),
+            log: self.log.clone(),
         }
     }
 }

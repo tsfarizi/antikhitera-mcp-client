@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 // ============================================================================
 
 /// Thread-safe log buffer
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LogBuffer {
     entries: Arc<Mutex<Vec<LogEntry>>>,
     sequence: Arc<Mutex<u64>>,
@@ -16,7 +16,7 @@ pub struct LogBuffer {
 }
 
 /// Main logger
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Logger {
     session_id: String,
     buffer: LogBuffer,

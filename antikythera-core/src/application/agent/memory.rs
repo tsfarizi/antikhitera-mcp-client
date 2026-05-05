@@ -28,6 +28,8 @@ use postcard::{from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::logging::AgentLogger;
+
 /// Current schema version for state serialization
 pub const STATE_SCHEMA_VERSION: u32 = 1;
 
@@ -93,12 +95,24 @@ impl AgentStateSnapshot {
 
     /// Serialize to Postcard binary format
     pub fn to_postcard(&self) -> Result<Vec<u8>, MemoryError> {
+        let log = AgentLogger::new(&crate::logging::get_active_session());
+        log.debug(format!(
+            "Saving state | agent_id={} context_id={}",
+            self.agent_id, self.context_id
+        ));
         to_allocvec(self).map_err(|e| MemoryError::Serialization(e.to_string()))
     }
 
     /// Deserialize from Postcard binary format
     pub fn from_postcard(bytes: &[u8]) -> Result<Self, MemoryError> {
-        from_bytes(bytes).map_err(|e| MemoryError::Serialization(e.to_string()))
+        let state: Self =
+            from_bytes(bytes).map_err(|e| MemoryError::Serialization(e.to_string()))?;
+        let log = AgentLogger::new(&crate::logging::get_active_session());
+        log.debug(format!(
+            "Loading state | agent_id={} context_id={}",
+            state.agent_id, state.context_id
+        ));
+        Ok(state)
     }
 }
 

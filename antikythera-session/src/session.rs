@@ -1,6 +1,36 @@
 //! Session and Message Types
 
+use antikythera_log::{Logger, LogLevel};
 use serde::{Deserialize, Serialize};
+
+struct SessionLog {
+    logger: Logger,
+}
+
+#[allow(dead_code)]
+impl SessionLog {
+    fn new(session_id: &str) -> Self {
+        Self {
+            logger: Logger::new(session_id),
+        }
+    }
+    fn info(&self, msg: &str) {
+        self.logger
+            .log_with_source(LogLevel::Info, "session", msg);
+    }
+    fn debug(&self, msg: &str) {
+        self.logger
+            .log_with_source(LogLevel::Debug, "session", msg);
+    }
+    fn warn(&self, msg: &str) {
+        self.logger
+            .log_with_source(LogLevel::Warn, "session", msg);
+    }
+    fn error(&self, msg: &str) {
+        self.logger
+            .log_with_source(LogLevel::Error, "session", msg);
+    }
+}
 
 // ============================================================================
 // Message Role
@@ -345,12 +375,20 @@ impl Message {
 
     /// Serialize to JSON
     pub fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string(self).map_err(|e| format!("Serialize error: {}", e))
+        serde_json::to_string(self).map_err(|e| {
+            let log = Logger::new("message");
+            log.log_with_source(LogLevel::Error, "session", format!("Serialize error: {}", e));
+            format!("Serialize error: {}", e)
+        })
     }
 
     /// Deserialize from JSON
     pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| format!("Deserialize error: {}", e))
+        serde_json::from_str(json).map_err(|e| {
+            let log = Logger::new("message");
+            log.log_with_source(LogLevel::Error, "session", format!("Deserialize error: {}", e));
+            format!("Deserialize error: {}", e)
+        })
     }
 }
 
@@ -389,8 +427,11 @@ impl Session {
     /// Create a new session
     pub fn new(user_id: impl Into<String>, model: impl Into<String>) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
+        let id = uuid::Uuid::new_v4().to_string();
+        let log = SessionLog::new(&id);
+        log.info(&format!("Session created | id={}", id));
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id,
             user_id: user_id.into(),
             model: model.into(),
             title: None,
@@ -406,6 +447,12 @@ impl Session {
 
     /// Add a message
     pub fn add_message(&mut self, message: Message) {
+        let log = SessionLog::new(&self.id);
+        log.debug(&format!(
+            "Message added | role={:?} | total_messages={}",
+            message.role,
+            self.messages.len() + 1
+        ));
         self.updated_at = chrono::Utc::now().to_rfc3339();
         self.messages.push(message);
     }
@@ -440,6 +487,8 @@ impl Session {
 
     /// Clear all messages
     pub fn clear_messages(&mut self) {
+        let log = SessionLog::new(&self.id);
+        log.debug("History cleared");
         self.messages.clear();
         self.total_steps = 0;
         self.tools_used.clear();

@@ -52,6 +52,7 @@ use super::task::{
 };
 use crate::application::client::McpClient;
 use crate::application::model_provider::ModelProvider;
+use crate::logging::OrchestratorLogger;
 use runtime::{ExecuteTaskRuntime, execute_task};
 
 /// Coordinates multiple agents across a shared [`McpClient`].
@@ -100,6 +101,7 @@ pub struct MultiAgentOrchestrator<P: ModelProvider> {
     default_retry_condition: RetryCondition,
     /// Ordered guardrails evaluated around task execution.
     guardrails: GuardrailChain,
+    log: OrchestratorLogger,
 }
 
 impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
@@ -119,6 +121,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             concurrency_sem: None,
             default_retry_condition: RetryCondition::Always,
             guardrails: GuardrailChain::new(),
+            log: OrchestratorLogger::new("default"),
         }
     }
 
@@ -135,7 +138,10 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
     ///
     /// Profiles with duplicate IDs silently replace the previous entry.
     pub fn register_agent(mut self, profile: AgentProfile) -> Self {
+        let id = profile.id.clone();
+        let role = profile.role.clone();
         self.registry.register(profile);
+        self.log.debug(format!("Agent registered | id={} role={}", id, role));
         self
     }
 
@@ -221,6 +227,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
     /// Cancellation is *cooperative* — tasks check the token between retry
     /// iterations, not mid-step.
     pub fn cancel(&self) {
+        self.log.warn("Orchestrator cancellation triggered");
         self.cancel_token.cancel();
     }
 
@@ -259,6 +266,10 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         // ---- budget guard -----------------------------------------------
         let dispatch_count = self.budget.record_task_dispatch();
         if self.budget.is_task_budget_exhausted() {
+            self.log.warn(format!(
+                "Task budget exhausted | dispatched={}",
+                dispatch_count
+            ));
             let meta = TaskExecutionMetadata {
                 budget_exhausted: true,
                 execution_mode: Some(self.execution_mode().to_string()),
@@ -279,6 +290,11 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         }
 
         if self.budget.is_step_budget_exhausted() {
+            self.log.warn(format!(
+                "Step budget exhausted | consumed={} max={}",
+                self.budget.consumed_steps(),
+                self.budget.max_total_steps.unwrap_or(0)
+            ));
             let meta = TaskExecutionMetadata {
                 budget_exhausted: true,
                 execution_mode: Some(self.execution_mode().to_string()),
@@ -305,6 +321,10 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         let profile = match self.router.route(&task, &profiles) {
             Some(p) => p.clone(),
             None => {
+                self.log.error(format!(
+                    "No agent available | task={}",
+                    task.task_id
+                ));
                 return TaskResult::failure(
                     task.task_id.clone(),
                     task.agent_id.clone().unwrap_or_default(),
@@ -334,6 +354,11 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
         };
         let concurrency_wait_ms = concurrency_wait_start.elapsed().as_millis() as u64;
 
+        self.log.info(format!(
+            "Task dispatched | task={} agent={} router={}",
+            task.task_id, profile.id, self.router.name()
+        ));
+
         let result = execute_task(
             self.client.clone(),
             task,
@@ -348,6 +373,11 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             },
         )
         .await;
+
+        self.log.info(format!(
+            "Task execution finished | task_id={} agent={} success={} steps={}",
+            result.task_id, result.agent_id, result.success, result.steps_used
+        ));
 
         // ---- record steps consumed -----------------------------------------
         self.budget.record_steps(result.steps_used);
@@ -365,6 +395,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
     /// modes, and in submission order for `Sequential` and `Concurrent` modes.
     pub async fn dispatch_many(&self, tasks: Vec<AgentTask>) -> Vec<TaskResult> {
         if tasks.is_empty() {
+            self.log.debug("dispatch_many called with empty task list");
             return Vec::new();
         }
 
@@ -394,6 +425,12 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
                 (task, profile, routing_decision)
             })
             .collect();
+
+        self.log.info(format!(
+            "Dispatching {} tasks | mode={}",
+            prepared.len(),
+            execution_mode
+        ));
 
         let client = self.client.clone();
         let cancel_token = self.cancel_token.clone();
@@ -502,6 +539,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
     /// not executed and the partial results are returned.
     pub async fn pipeline(&self, tasks: Vec<AgentTask>) -> PipelineResult {
         if tasks.is_empty() {
+            self.log.debug("pipeline called with empty task list");
             return PipelineResult::from_results(Vec::new());
         }
 
@@ -518,13 +556,21 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             }
 
             let result = self.dispatch(task).await;
+            let task_id = result.task_id.clone();
+            self.log.info(format!(
+                "Pipeline step | task={} success={}",
+                task_id, result.success
+            ));
             let success = result.success;
             let output_str = result.output.to_string();
 
             results.push(result);
 
             if !success {
-                // Short-circuit on failure
+                self.log.warn(format!(
+                    "Pipeline short-circuited | failed_task={}",
+                    task_id
+                ));
                 break;
             }
 

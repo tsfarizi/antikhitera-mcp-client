@@ -10,6 +10,7 @@ use crypto::CryptoProvider;
 pub use error::SecretManagerError;
 pub use storage::{SecretRotationPolicy, SecretStorage, StoredSecret};
 
+use crate::logging::SecurityLogger;
 use crate::security::config::{SecretMetadata, SecretsConfig};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -18,6 +19,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// Secret manager for secure storage and rotation
 pub struct SecretManager {
     config: SecretsConfig,
+    log: SecurityLogger,
     storage: Arc<Mutex<SecretStorage>>,
     rotation_task: Option<std::thread::JoinHandle<()>>,
 }
@@ -61,6 +63,7 @@ impl SecretManager {
 
         Ok(Self {
             config,
+            log: SecurityLogger::new("default"),
             storage,
             rotation_task,
         })
@@ -73,6 +76,7 @@ impl SecretManager {
     /// Store a secret
     pub fn store_secret(&self, id: &str, value: &str) -> Result<(), SecretManagerError> {
         if !self.config.enabled {
+            self.log.secret_error(id, "secrets management is disabled");
             return Err(SecretManagerError::InvalidConfig(
                 "Secrets management is disabled".to_string(),
             ));
@@ -105,6 +109,7 @@ impl SecretManager {
             entry.remove(0);
         }
 
+        self.log.secret_stored(id);
         Ok(())
     }
 
@@ -118,16 +123,23 @@ impl SecretManager {
 
         let entry = secrets
             .get(id)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "secret not found");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
 
         // Get the latest active version
         let latest = entry
             .iter()
             .filter(|s| s.metadata.active)
             .max_by_key(|s| s.metadata.version)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "no active version found");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
 
         if latest.metadata.is_expired() {
+            self.log.secret_error(id, "secret expired");
             return Err(SecretManagerError::SecretExpired(id.to_string()));
         }
 
@@ -137,6 +149,7 @@ impl SecretManager {
             latest.value.clone()
         };
 
+        self.log.secret_retrieved(id);
         Ok(value)
     }
 
@@ -150,7 +163,10 @@ impl SecretManager {
 
         let entry = secrets
             .get_mut(id)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "secret not found for rotation");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
 
         // Deactivate old versions
         for secret in entry.iter_mut() {
@@ -181,6 +197,7 @@ impl SecretManager {
             entry.remove(0);
         }
 
+        self.log.secret_rotated(id);
         Ok(())
     }
 
@@ -194,13 +211,19 @@ impl SecretManager {
 
         let entry = secrets
             .get(id)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "secret not found for rotation check");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
 
         let latest = entry
             .iter()
             .filter(|s| s.metadata.active)
             .max_by_key(|s| s.metadata.version)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "no active version for rotation check");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
 
         Ok(latest
             .metadata
@@ -217,7 +240,11 @@ impl SecretManager {
 
         secrets
             .remove(id)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "secret not found for deletion");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
+        self.log.secret_deleted(id);
         Ok(())
     }
 
@@ -242,13 +269,19 @@ impl SecretManager {
 
         let entry = secrets
             .get(id)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "secret not found for metadata");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
 
         let latest = entry
             .iter()
             .filter(|s| s.metadata.active)
             .max_by_key(|s| s.metadata.version)
-            .ok_or_else(|| SecretManagerError::SecretNotFound(id.to_string()))?;
+            .ok_or_else(|| {
+                self.log.secret_error(id, "no active version for metadata");
+                SecretManagerError::SecretNotFound(id.to_string())
+            })?;
 
         Ok(latest.metadata.clone())
     }

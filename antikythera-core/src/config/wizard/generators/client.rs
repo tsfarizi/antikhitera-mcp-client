@@ -6,6 +6,7 @@
 //! - `[server]` - REST settings (CORS, docs)
 
 use crate::constants::CONFIG_PATH;
+use crate::logging::ConfigLogger;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
@@ -18,6 +19,8 @@ pub fn generate(
     api_key_env: &str,
     models: &[(String, String)],
 ) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
+
     let models_toml: String = models
         .iter()
         .map(|(name, display)| {
@@ -28,6 +31,8 @@ pub fn generate(
         })
         .collect::<Vec<String>>()
         .join(",\n");
+
+    log.debug(format!("Rendering client config template | provider={}", provider_id));
 
     let config_content = format!(
         r#"# MCP Client Configuration
@@ -54,18 +59,31 @@ models = [
         models_toml = models_toml,
     );
 
-    fs::create_dir_all("config")?;
-    fs::write(CONFIG_PATH, config_content)?;
+    fs::create_dir_all("config").map_err(|e| {
+        log.error(format!("Failed to create config directory | path=config error={}", e));
+        e
+    })?;
+    log.info(format!("Writing config | path={}", CONFIG_PATH));
+    fs::write(CONFIG_PATH, config_content).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", CONFIG_PATH, e));
+        e
+    })?;
 
+    log.info(format!("Config generated successfully | path={}", CONFIG_PATH));
     Ok(())
 }
 
 /// Generate the .env file with API keys
 pub fn generate_env(api_key_env: &str, api_key: &str) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let env_path = Path::new(".env");
 
     let content = if env_path.exists() {
-        let existing = fs::read_to_string(env_path)?;
+        log.info(format!("Reading existing .env | path={}", env_path.display()));
+        let existing = fs::read_to_string(env_path).map_err(|e| {
+            log.error(format!("Failed to read .env | path={} error={}", env_path.display(), e));
+            e
+        })?;
         if existing.contains(&format!("{}=", api_key_env)) {
             existing
                 .lines()
@@ -90,7 +108,11 @@ pub fn generate_env(api_key_env: &str, api_key: &str) -> Result<(), Box<dyn Erro
         format!("{}={}\n", api_key_env, api_key)
     };
 
-    fs::write(env_path, content)?;
+    log.info(format!("Writing .env | path={}", env_path.display()));
+    fs::write(env_path, content).map_err(|e| {
+        log.error(format!("Failed to write .env | path={} error={}", env_path.display(), e));
+        e
+    })?;
 
     Ok(())
 }
@@ -102,8 +124,14 @@ pub fn add_provider(
     endpoint: &str,
     api_key_env: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     let mut new_provider = format!(
         r#"
 
@@ -118,7 +146,11 @@ endpoint = "{}""#,
         new_provider.push_str(&format!("\napi_key = \"{}\"", key));
     }
     let updated = format!("{}\n{}", content.trim_end(), new_provider);
-    fs::write(config_path, updated)?;
+    log.info(format!("Writing config with new provider | provider={} path={}", provider_id, config_path.display()));
+    fs::write(config_path, updated).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     Ok(())
 }
@@ -129,8 +161,14 @@ pub fn update_provider(
     new_endpoint: &str,
     new_api_key_env: &str,
 ) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     let mut lines: Vec<String> = content.lines().map(String::from).collect();
     let mut in_target_provider = false;
 
@@ -152,7 +190,11 @@ pub fn update_provider(
         }
     }
 
-    fs::write(config_path, lines.join("\n"))?;
+    log.info(format!("Writing updated provider | provider={} path={}", provider_id, config_path.display()));
+    fs::write(config_path, lines.join("\n")).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     Ok(())
 }
 
@@ -162,8 +204,14 @@ pub fn add_model_to_provider(
     model_name: &str,
     display_name: &str,
 ) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     let new_model = format!(
         "    {{ name = \"{}\", display_name = \"{}\" }}",
         model_name, display_name
@@ -194,7 +242,11 @@ pub fn add_model_to_provider(
         result.push('\n');
     }
 
-    fs::write(config_path, result)?;
+    log.info(format!("Writing config with new model | model={} provider={} path={}", model_name, provider_id, config_path.display()));
+    fs::write(config_path, result).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     Ok(())
 }
 
@@ -203,8 +255,14 @@ pub fn remove_model_from_provider(
     provider_id: &str,
     model_name: &str,
 ) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     let mut result = String::new();
     let mut in_target_provider = false;
@@ -232,19 +290,29 @@ pub fn remove_model_from_provider(
         result.push('\n');
     }
 
-    fs::write(config_path, result)?;
+    log.info(format!("Writing config after removing model | model={} provider={} path={}", model_name, provider_id, config_path.display()));
+    fs::write(config_path, result).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     Ok(())
 }
 
 /// Add a server to the config
 pub fn add_server(name: &str, command: &str, args: &[String]) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
 
     if !config_path.exists() {
+        log.error(format!("Config file not found | path={}", config_path.display()));
         return Err("Config file not found. Run setup wizard first.".into());
     }
 
-    let mut content = fs::read_to_string(config_path)?;
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let mut content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     let args_toml = if args.is_empty() {
         String::new()
@@ -268,7 +336,11 @@ command = "{}"{}"#,
     );
 
     content.push_str(&server_block);
-    fs::write(config_path, content)?;
+    log.info(format!("Writing config with new server | server={} path={}", name, config_path.display()));
+    fs::write(config_path, content).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     Ok(())
 }
@@ -279,13 +351,19 @@ pub fn add_http_server(
     url: &str,
     headers: &std::collections::HashMap<String, String>,
 ) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
 
     if !config_path.exists() {
+        log.error(format!("Config file not found | path={}", config_path.display()));
         return Err("Config file not found. Run setup wizard first.".into());
     }
 
-    let mut content = fs::read_to_string(config_path)?;
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let mut content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     let headers_toml = if headers.is_empty() {
         String::new()
@@ -307,15 +385,25 @@ url = "{}"{}"#,
     );
 
     content.push_str(&server_block);
-    fs::write(config_path, content)?;
+    log.info(format!("Writing config with new HTTP server | server={} path={}", name, config_path.display()));
+    fs::write(config_path, content).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     Ok(())
 }
 
 /// Remove a server from the config
 pub fn remove_server(server_name: &str) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     let mut result = String::new();
     let mut skip_section = false;
@@ -347,14 +435,24 @@ pub fn remove_server(server_name: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    fs::write(config_path, result.trim_end())?;
+    log.info(format!("Writing config after removing server | server={} path={}", server_name, config_path.display()));
+    fs::write(config_path, result.trim_end()).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     Ok(())
 }
 
 /// Get current CORS origins from config
 pub fn get_cors_origins() -> Result<Vec<String>, Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     let mut origins = Vec::new();
     let mut in_cors_array = false;
@@ -401,12 +499,19 @@ pub fn get_cors_origins() -> Result<Vec<String>, Box<dyn Error>> {
 
 /// Add a CORS origin to the config
 pub fn add_cors_origin(origin: &str) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     // Check if origin already exists
     let existing = get_cors_origins()?;
     if existing.iter().any(|o| o == origin) {
+        log.error(format!("Origin already exists | origin={}", origin));
         return Err(format!("Origin '{}' already exists", origin).into());
     }
 
@@ -463,9 +568,17 @@ pub fn add_cors_origin(origin: &str) -> Result<(), Box<dyn Error>> {
             }
         }
 
-        fs::write(config_path, final_result.trim_end())?;
+        log.info(format!("Writing config with new CORS origin | origin={} path={}", origin, config_path.display()));
+        fs::write(config_path, final_result.trim_end()).map_err(|e| {
+            log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+            e
+        })?;
     } else {
-        fs::write(config_path, result.trim_end())?;
+        log.info(format!("Writing config with new CORS origin | origin={} path={}", origin, config_path.display()));
+        fs::write(config_path, result.trim_end()).map_err(|e| {
+            log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+            e
+        })?;
     }
 
     Ok(())
@@ -473,8 +586,14 @@ pub fn add_cors_origin(origin: &str) -> Result<(), Box<dyn Error>> {
 
 /// Remove a CORS origin from the config
 pub fn remove_cors_origin(origin: &str) -> Result<(), Box<dyn Error>> {
+    let log = ConfigLogger::new("config");
     let config_path = Path::new(CONFIG_PATH);
-    let content = fs::read_to_string(config_path)?;
+
+    log.info(format!("Reading config | path={}", config_path.display()));
+    let content = fs::read_to_string(config_path).map_err(|e| {
+        log.error(format!("Failed to read config | path={} error={}", config_path.display(), e));
+        e
+    })?;
 
     let mut result = String::new();
     let mut in_cors_array = false;
@@ -511,9 +630,14 @@ pub fn remove_cors_origin(origin: &str) -> Result<(), Box<dyn Error>> {
     }
 
     if !removed {
+        log.error(format!("CORS origin not found | origin={}", origin));
         return Err(format!("Origin '{}' not found", origin).into());
     }
 
-    fs::write(config_path, result.trim_end())?;
+    log.info(format!("Writing config after removing CORS origin | origin={} path={}", origin, config_path.display()));
+    fs::write(config_path, result.trim_end()).map_err(|e| {
+        log.error(format!("Failed to write config | path={} error={}", config_path.display(), e));
+        e
+    })?;
     Ok(())
 }

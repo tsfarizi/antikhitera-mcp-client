@@ -3,6 +3,10 @@
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "multi-agent")]
 use std::sync::{LazyLock, Mutex};
+#[cfg(feature = "multi-agent")]
+use crate::sdk_logging::get_sdk_logger;
+#[cfg(feature = "multi-agent")]
+use antikythera_log::LogLevel;
 
 /// SDK-level orchestrator configuration options.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -154,6 +158,10 @@ pub fn with_hardening_runtime<T>(
 ) -> Result<T, String> {
     let mut guard = HARDENING_RUNTIME
         .lock()
-        .map_err(|_| "hardening runtime lock poisoned".to_string())?;
+        .map_err(|_| {
+            get_sdk_logger("multi_agent").log_with_source(LogLevel::Error, "orchestrator", "Lock poisoned");
+            "hardening runtime lock poisoned".to_string()
+        })?;
+    get_sdk_logger("multi_agent").log_with_source(LogLevel::Debug, "orchestrator", "Orchestrator operation");
     f(&mut guard)
 }

@@ -3,6 +3,7 @@
 //! Configurable rate limiting with multiple time windows and burst allowance.
 
 use super::config::RateLimitConfig;
+use crate::logging::SecurityLogger;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -10,6 +11,7 @@ use std::time::{Duration, Instant};
 /// Rate limiter with configurable parameters
 pub struct RateLimiter {
     config: RateLimitConfig,
+    log: SecurityLogger,
     session_limits: Arc<Mutex<HashMap<String, SessionLimits>>>,
     cleanup_task: Option<std::thread::JoinHandle<()>>,
 }
@@ -127,6 +129,7 @@ impl RateLimiter {
 
         Self {
             config,
+            log: SecurityLogger::new("default"),
             session_limits,
             cleanup_task,
         }
@@ -148,6 +151,7 @@ impl RateLimiter {
         if limits.len() as u32 >= self.config.max_concurrent_sessions
             && !limits.contains_key(session_id)
         {
+            self.log.rate_limit_exceeded(session_id, "too many concurrent sessions");
             return Err(RateLimitError::TooManyConcurrentSessions {
                 max: self.config.max_concurrent_sessions,
                 current: limits.len() as u32,
@@ -179,10 +183,20 @@ impl RateLimiter {
         session.last_activity = Instant::now();
 
         // Check all time windows
-        session.minute_window.check()?;
-        session.hour_window.check()?;
-        session.day_window.check()?;
+        if let Err(e) = session.minute_window.check() {
+            self.log.rate_limit_exceeded(session_id, &e.to_string());
+            return Err(e);
+        }
+        if let Err(e) = session.hour_window.check() {
+            self.log.rate_limit_exceeded(session_id, &e.to_string());
+            return Err(e);
+        }
+        if let Err(e) = session.day_window.check() {
+            self.log.rate_limit_exceeded(session_id, &e.to_string());
+            return Err(e);
+        }
 
+        self.log.rate_limit_check(session_id, true);
         Ok(())
     }
 
@@ -240,6 +254,7 @@ impl RateLimiter {
     /// Update configuration
     pub fn update_config(&mut self, config: RateLimitConfig) {
         let cleanup_interval_secs = config.cleanup_interval_secs;
+        self.log.info(format!("Rate limiter config updated | enabled={}", config.enabled));
         self.config = config;
 
         // Restart cleanup task if enabled
