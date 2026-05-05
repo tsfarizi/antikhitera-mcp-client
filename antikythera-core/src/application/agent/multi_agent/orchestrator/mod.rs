@@ -121,7 +121,7 @@ impl<P: ModelProvider + 'static> MultiAgentOrchestrator<P> {
             concurrency_sem: None,
             default_retry_condition: RetryCondition::Always,
             guardrails: GuardrailChain::new(),
-            log: OrchestratorLogger::new("default"),
+            log: OrchestratorLogger::new(&crate::logging::get_active_session()),
         }
     }
 

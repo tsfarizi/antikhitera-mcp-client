@@ -13,7 +13,7 @@ use crate::sdk_logging::get_sdk_logger;
 use antikythera_log::LogLevel;
 
 fn server_log(level: LogLevel, message: &str) {
-    get_sdk_logger("mcp_servers").log_with_source(level, "mcp_servers", message);
+    get_sdk_logger("tui").log_with_source(level, "mcp_servers", message);
 }
 
 // ============================================================================

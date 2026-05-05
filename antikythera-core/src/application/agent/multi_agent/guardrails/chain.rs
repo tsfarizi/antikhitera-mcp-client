@@ -146,7 +146,7 @@ impl GuardrailChain {
     pub fn new() -> Self {
         Self {
             guardrails: Vec::new(),
-            log: OrchestratorLogger::new("default"),
+            log: OrchestratorLogger::new(&crate::logging::get_active_session()),
         }
     }
 

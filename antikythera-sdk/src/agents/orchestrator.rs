@@ -159,9 +159,9 @@ pub fn with_hardening_runtime<T>(
     let mut guard = HARDENING_RUNTIME
         .lock()
         .map_err(|_| {
-            get_sdk_logger("multi_agent").log_with_source(LogLevel::Error, "orchestrator", "Lock poisoned");
+            get_sdk_logger("tui").log_with_source(LogLevel::Error, "orchestrator", "Lock poisoned");
             "hardening runtime lock poisoned".to_string()
         })?;
-    get_sdk_logger("multi_agent").log_with_source(LogLevel::Debug, "orchestrator", "Orchestrator operation");
+    get_sdk_logger("tui").log_with_source(LogLevel::Debug, "orchestrator", "Orchestrator operation");
     f(&mut guard)
 }

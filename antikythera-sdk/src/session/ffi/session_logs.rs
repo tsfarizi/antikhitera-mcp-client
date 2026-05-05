@@ -7,6 +7,7 @@ use std::os::raw::c_char;
 use super::helpers::*;
 use antikythera_core::logging::get_latest_logs;
 use antikythera_log::{BatchLogExport, SessionLogExport};
+use crate::sdk_logging::get_latest_sdk_logs;
 
 /// Get logs for a specific session
 ///
@@ -18,9 +19,12 @@ pub fn mcp_session_get_logs(session_id: *const c_char) -> *mut c_char {
         Err(e) => return error_response(&e),
     };
 
-    // Get logs from core logging system
-    let logs = get_latest_logs(&id_str, 1000);
-    serialize_result(&logs)
+    // Get logs from both core and SDK logging systems
+    let mut core_logs = get_latest_logs(&id_str, 1000);
+    let sdk_logs = get_latest_sdk_logs(&id_str, 1000);
+    core_logs.extend(sdk_logs);
+    core_logs.sort_by_key(|e| e.sequence);
+    serialize_result(&core_logs)
 }
 
 /// Export session logs to Postcard binary (hex encoded)
@@ -33,8 +37,11 @@ pub fn mcp_session_export_logs(session_id: *const c_char) -> *mut c_char {
         Err(e) => return error_response(&e),
     };
 
-    // Get logs for this session
-    let logs = get_latest_logs(&id_str, 10000);
+    // Get logs from both core and SDK logging systems
+    let mut logs = get_latest_logs(&id_str, 10000);
+    let sdk_logs = get_latest_sdk_logs(&id_str, 10000);
+    logs.extend(sdk_logs);
+    logs.sort_by_key(|e| e.sequence);
 
     // Create session log export
     let export = SessionLogExport::from_logs(&id_str, logs);

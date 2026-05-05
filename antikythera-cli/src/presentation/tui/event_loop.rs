@@ -985,6 +985,7 @@ fn apply_chat_result(app: &mut ChatApp, result: ChatResult) {
         result.content.len(),
     ));
     app.session_id = Some(result.session_id.clone());
+    antikythera_core::set_active_session(&result.session_id);
     app.status = format!(
         "Respons diterima dari {}/{}.",
         result.provider, result.model
@@ -1022,6 +1023,7 @@ fn apply_agent_outcome(app: &mut ChatApp, outcome: AgentOutcome) {
         outcome.response.to_string().len(),
     ));
     app.session_id = Some(outcome.session_id.clone());
+    antikythera_core::set_active_session(&outcome.session_id);
     app.status = format!("Agent selesai dengan {} langkah tool.", outcome.steps.len());
     let response_text = format_agent_response(&outcome.response);
     app.push_message(UiMessage::new(
@@ -1361,6 +1363,7 @@ fn apply_runtime_selection(
     app.provider = app.runtime_config.default_provider.clone();
     app.model = app.runtime_config.model.clone();
     app.session_id = None;
+    antikythera_core::set_active_session("tui");
     // Provider/model changed — start a fresh history session next turn.
     app.current_history_session = None;
 

@@ -129,7 +129,7 @@ impl RateLimiter {
 
         Self {
             config,
-            log: SecurityLogger::new("default"),
+            log: SecurityLogger::new(&crate::logging::get_active_session()),
             session_limits,
             cleanup_task,
         }

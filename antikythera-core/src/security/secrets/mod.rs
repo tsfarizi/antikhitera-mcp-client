@@ -63,7 +63,7 @@ impl SecretManager {
 
         Ok(Self {
             config,
-            log: SecurityLogger::new("default"),
+            log: SecurityLogger::new(&crate::logging::get_active_session()),
             storage,
             rotation_task,
         })

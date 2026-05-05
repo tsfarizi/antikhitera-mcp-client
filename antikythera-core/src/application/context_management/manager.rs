@@ -42,7 +42,7 @@ impl RuntimeContextManager {
         Self {
             policy: Arc::new(Mutex::new(policy)),
             summarization_callback: Arc::new(Mutex::new(None)),
-            log: ResilienceLogger::new("default"),
+            log: ResilienceLogger::new(&crate::logging::get_active_session()),
         }
     }
 

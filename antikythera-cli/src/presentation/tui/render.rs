@@ -423,6 +423,7 @@ fn resolve_log_line_style(line: &str) -> Style {
         || line.contains("][orchestrator]")
         || line.contains("][stdio]")
         || line.contains("][wasm]")
+        || line.contains("][security]")
     {
         return Style::default().fg(Color::Gray);
     }
