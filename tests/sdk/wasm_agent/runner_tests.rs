@@ -1,4 +1,4 @@
-﻿//! Centralized tests for the WASM agent runner.
+//! Centralized tests for the WASM agent runner.
 //!
 //! Covers: session lifecycle, commit flows (plain text + structured tool call),
 //! streaming commit, telemetry counters, global context-policy update,
@@ -6,9 +6,8 @@
 
 use antikythera_sdk::wasm_agent::runner::{
     AgentRunnerRuntime, append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events,
-    get_state, get_telemetry_snapshot, get_tools_prompt, hydrate_session, init, new_session_id,
-    prepare_user_turn, register_tools, report_session_restore_progress, set_context_policy,
-    sweep_idle_sessions,
+    get_state, get_telemetry_snapshot, get_tools_prompt, init, new_session_id, prepare_user_turn,
+    register_tools, set_context_policy, sweep_idle_sessions,
 };
 
 // Split by concern to keep file size manageable and improve readability.

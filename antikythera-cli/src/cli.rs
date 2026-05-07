@@ -72,8 +72,6 @@ pub struct Cli {
 pub enum RunMode {
     /// Interactive TUI mode
     Stdio,
-    /// Configuration wizard/setup menu
-    Setup,
     /// Multi-agent orchestrator test harness
     #[value(name = "multi-agent")]
     MultiAgent,

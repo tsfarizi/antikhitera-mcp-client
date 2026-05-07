@@ -129,9 +129,10 @@ fn timeout_guardrail_rejects_timeout_above_limit() {
 #[test]
 fn budget_guardrail_allows_task_within_limit() {
     let task = AgentTask::new("work").with_budget_steps(6);
-    let result = BudgetGuardrail::new()
-        .with_max_task_steps(8)
-        .pre_check(&task, &profile(), &context());
+    let result =
+        BudgetGuardrail::new()
+            .with_max_task_steps(8)
+            .pre_check(&task, &profile(), &context());
     assert!(result.is_ok());
 }
 

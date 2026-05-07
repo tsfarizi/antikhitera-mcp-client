@@ -340,4 +340,3 @@ impl McpTransport for HttpTransport {
         *self.inner.session_endpoint.lock().await = None;
     }
 }
-

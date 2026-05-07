@@ -86,6 +86,19 @@ pub enum RetryConditionOption {
 }
 
 #[cfg(feature = "multi-agent")]
+impl From<RetryConditionOption>
+    for antikythera_core::application::agent::multi_agent::RetryCondition
+{
+    fn from(value: RetryConditionOption) -> Self {
+        match value {
+            RetryConditionOption::Always => Self::Always,
+            RetryConditionOption::OnTransient => Self::OnTransient,
+            RetryConditionOption::Never => Self::Never,
+        }
+    }
+}
+
+#[cfg(feature = "multi-agent")]
 impl OrchestratorOptions {
     pub fn default_task_retry_policy(
         &self,

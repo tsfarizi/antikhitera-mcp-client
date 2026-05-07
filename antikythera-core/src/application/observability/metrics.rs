@@ -203,5 +203,3 @@ pub fn percentile(sorted_samples: &[f64], q: f64) -> f64 {
     let index = ((sorted_samples.len() - 1) as f64 * q).round() as usize;
     sorted_samples[index]
 }
-
-

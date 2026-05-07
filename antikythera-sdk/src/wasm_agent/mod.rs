@@ -49,8 +49,8 @@ pub use processor::{
 
 pub use runner::{
     AgentRunnerError, AgentRunnerRuntime, append_llm_chunk, commit_llm_response, commit_llm_stream,
-    drain_events, get_slo_snapshot, get_state, get_telemetry_snapshot, get_tools_prompt,
-    hydrate_session, init, new_session_id, prepare_user_turn,
-    process_llm_response_for_session, process_tool_result_for_session, register_tools,
-    report_session_restore_progress, reset_session, set_context_policy, sweep_idle_sessions,
+    drain_events, get_slo_snapshot, get_state, get_telemetry_snapshot, get_tools_prompt, init,
+    new_session_id, prepare_user_turn, process_llm_response_for_session,
+    process_tool_result_for_session, register_tools, reset_session, set_context_policy,
+    sweep_idle_sessions,
 };

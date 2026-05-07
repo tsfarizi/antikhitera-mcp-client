@@ -177,5 +177,3 @@ impl ResilienceManager {
         serde_json::to_string(&pruned).map_err(|e| e.to_string())
     }
 }
-
-

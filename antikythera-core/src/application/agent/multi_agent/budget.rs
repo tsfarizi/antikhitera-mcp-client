@@ -185,4 +185,3 @@ pub struct BudgetSnapshot {
     pub consumed_steps: usize,
     pub dispatched_tasks: usize,
 }
-

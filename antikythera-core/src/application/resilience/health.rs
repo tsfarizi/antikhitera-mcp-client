@@ -222,5 +222,3 @@ impl HealthTracker {
         serde_json::to_string(&snapshot).unwrap_or_else(|_| "[]".to_string())
     }
 }
-
-

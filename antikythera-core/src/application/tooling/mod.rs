@@ -1,9 +1,13 @@
 mod envelope;
 mod error;
 mod interface;
+#[cfg(feature = "native-transport")]
+mod jsonrpc_client;
 mod manager;
 #[cfg(feature = "native-transport")]
 mod process;
+#[cfg(feature = "native-transport")]
+mod tool_catalogue;
 pub mod transport;
 
 pub use envelope::{
@@ -17,7 +21,7 @@ pub use interface::{
 };
 pub use manager::ServerManager;
 #[cfg(feature = "native-transport")]
-pub use process::spawn_and_list_tools;
+pub use tool_catalogue::spawn_and_list_tools;
 pub use transport::{
     BuiltinTransport, HttpTransport, HttpTransportConfig, McpTransport, TransportMode,
 };

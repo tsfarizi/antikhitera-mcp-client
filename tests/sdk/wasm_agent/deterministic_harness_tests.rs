@@ -1,5 +1,5 @@
 ﻿use antikythera_sdk::wasm_agent::runner::{
-    append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events, hydrate_session, init,
+    append_llm_chunk, commit_llm_response, commit_llm_stream, drain_events, init,
     prepare_user_turn, process_tool_result_for_session, sweep_idle_sessions,
 };
 

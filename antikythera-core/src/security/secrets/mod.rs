@@ -358,5 +358,3 @@ impl Drop for SecretManager {
         self.rotation_task.take();
     }
 }
-
-

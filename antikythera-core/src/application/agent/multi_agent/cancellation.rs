@@ -87,4 +87,3 @@ impl From<&CancellationToken> for CancellationSnapshot {
         }
     }
 }
-

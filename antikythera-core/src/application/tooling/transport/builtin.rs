@@ -561,5 +561,3 @@ impl McpTransport for BuiltinTransport {
         log.debug("builtin transport disconnected");
     }
 }
-
-

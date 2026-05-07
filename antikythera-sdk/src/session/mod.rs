@@ -1,109 +1,12 @@
 //! Session Management Module
 //!
-//! Wraps antikythera-session for SDK usage with FFI bindings.
+//! Wraps antikythera-session for SDK usage.
 //! Integrates with antikythera-log for session-specific logging.
 
-mod ffi;
-
-// Re-export FFI functions
-pub use ffi::{
-    mcp_batch_export,
-    mcp_batch_import,
-    mcp_session_add_message,
-    mcp_session_batch_export_logs,
-    mcp_session_batch_import_logs,
-    mcp_session_clear,
-    // Session management
-    mcp_session_create,
-    mcp_session_delete,
-    mcp_session_export,
-    // Session log integration
-    mcp_session_export_logs,
-    mcp_session_get,
-    mcp_session_get_history,
-    mcp_session_get_logs,
-    mcp_session_import,
-    mcp_session_import_logs,
-    mcp_session_list,
+// Re-export session types from antikythera-session
+pub use antikythera_session::{
+    BatchExport, Message, MessageRole, Session, SessionExport, SessionSummary,
 };
 
-// Re-export session types from antikythera-session
-pub use antikythera_session::{BatchExport, Session, SessionExport, SessionSummary};
-
-/// Message types for session
-pub use antikythera_session::Message;
-pub use antikythera_session::MessageRole;
-
-/// Session log export types from antikythera-log
+// Session log export types from antikythera-log
 pub use antikythera_log::{BatchLogExport, SessionLogExport};
-
-/// Thread-safe session manager for SDK usage
-pub struct SdkSessionManager {
-    inner: antikythera_session::SessionManager,
-}
-
-impl SdkSessionManager {
-    pub fn new() -> Self {
-        Self {
-            inner: antikythera_session::SessionManager::new(),
-        }
-    }
-
-    pub fn create_session(&self, user_id: &str, model: &str) -> Result<String, String> {
-        self.inner
-            .create_session(user_id, model)
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn get_session(&self, session_id: &str) -> Result<Option<Session>, String> {
-        self.inner
-            .get_session(session_id)
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn list_sessions(&self) -> Result<Vec<SessionSummary>, String> {
-        self.inner.list_sessions().map_err(|e| e.to_string())
-    }
-
-    pub fn add_message(&self, session_id: &str, message: Message) -> Result<(), String> {
-        self.inner
-            .add_message(session_id, message)
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn get_chat_history(&self, session_id: &str) -> Result<Vec<Message>, String> {
-        self.inner
-            .get_chat_history(session_id)
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn delete_session(&self, session_id: &str) -> Result<(), String> {
-        self.inner
-            .delete_session(session_id)
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn clear_session(&self, session_id: &str) -> Result<(), String> {
-        self.inner
-            .clear_session(session_id)
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn import_session(&self, session: Session) -> Result<(), String> {
-        self.inner
-            .import_session(session)
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn import_sessions(&self, sessions: Vec<Session>) -> Result<usize, String> {
-        self.inner
-            .import_sessions(sessions)
-            .map_err(|e| e.to_string())
-    }
-}
-
-impl Default for SdkSessionManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}

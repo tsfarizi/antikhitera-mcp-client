@@ -54,8 +54,6 @@ pub struct PromptsConfig {
     pub tool_result_instruction: Option<String>,
     /// Base autonomous assistant rules and JSON constraints
     pub agent_instructions: Option<String>,
-    /// Rules for late-binding UI hydration
-    pub ui_instructions: Option<String>,
     /// Instructions for language detection and adherence
     pub language_instructions: Option<String>,
     /// User-facing error message for interaction limits
@@ -96,11 +94,6 @@ impl PromptsConfig {
     /// Default agent instructions
     pub fn default_agent_instructions() -> &'static str {
         "You are an autonomous assistant that can call tools to solve user requests.\nAll responses must be valid JSON without commentary or code fences.\nWhen you need to invoke a single tool, respond with: {\"action\":\"call_tool\",\"tool\":\"tool_name\",\"input\":{...}}.\nWhen you need to invoke multiple tools simultaneously, respond with: {\"action\":\"call_tools\",\"tools\":[{\"name\":\"tool1\",\"input\":{...}}, {\"name\":\"tool2\",\"input\":{...}}]}.\nTo obtain the list of available tools, use: {\"action\":\"call_tool\",\"tool\":\"list_tools\",\"input\":{}}.\nWhen you are ready to give the final answer to the user, respond with: {\"action\":\"final\",\"response\":{\"content\":\"...\", \"data\":\"step_N\"}} where 'step_N' refers to the index of a tool call result.\nIf your response includes data from tool calls, put the reference to the tool result in a 'data' field with the value 'step_N' where N is the step number.\nFor example: {\"action\":\"final\",\"response\":{\"content\":\"Here are the latest posts\",\"data\":\"step_0\"}}.\nIMPORTANT: Always return JSON for final responses, never plain text. If you want to include data from a tool call, reference it using the 'data' field with the appropriate step index.\nCRITICAL: Do not repeat or summarize the content of tool results in the 'content' field. Simply mention that the data exists and reference it using the 'data' field. The system will automatically embed the actual data from the tool result.\nABSOLUTELY CRITICAL: Your final response must be a JSON object with 'content' and 'data' fields. Do not return a string as the value of the 'response' field. The 'response' field must contain an object, not a string."
-    }
-
-    /// Default UI instructions
-    pub fn default_ui_instructions() -> &'static str {
-        "DATA FIELD REPLACEMENT:\nIf your response includes data from tool calls, put the reference to the tool result in a 'data' field with the value 'step_N' where N is the step number.\nThe system will automatically replace 'step_N' with the actual JSON data from the tool call result.\nFor example: {\"action\":\"final\",\"response\":{\"content\":\"Analysis complete\",\"data\":\"step_0\"}} where 'step_0' will be replaced with the actual data from the first tool call."
     }
 
     /// Default language instructions
@@ -156,13 +149,6 @@ impl PromptsConfig {
         self.agent_instructions
             .as_deref()
             .unwrap_or(Self::default_agent_instructions())
-    }
-
-    /// Get UI instructions with fallback to default
-    pub fn ui_instructions(&self) -> &str {
-        self.ui_instructions
-            .as_deref()
-            .unwrap_or(Self::default_ui_instructions())
     }
 
     /// Get language instructions with fallback to default

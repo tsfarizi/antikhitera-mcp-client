@@ -1,16 +1,16 @@
-﻿// Server validation tests - validating server configuration
+// Server validation tests - validating server configuration
 //
 // Tests that verify configuration references are valid.
 // These tests gracefully skip if config files don't exist.
 
-use antikythera_core::application::discovery::{
-    load_server, scan_folder, DiscoveredServer, DiscoveryError, DiscoverySummary, LoadStatus,
-    StartupDiscoveryResult, DEFAULT_SERVERS_FOLDER,
-};
 use antikythera_core::application::discovery::loader::create_server_config;
 use antikythera_core::application::discovery::scanner::{extract_server_name, is_executable};
-use antikythera_core::config::server::{RawServer, ServerConfig};
+use antikythera_core::application::discovery::{
+    DEFAULT_SERVERS_FOLDER, DiscoveredServer, DiscoveryError, DiscoverySummary, LoadStatus,
+    StartupDiscoveryResult, load_server, scan_folder,
+};
 use antikythera_core::config::AppConfig;
+use antikythera_core::config::server::{RawServer, ServerConfig};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};

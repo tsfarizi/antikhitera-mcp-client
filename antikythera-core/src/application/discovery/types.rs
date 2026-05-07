@@ -154,4 +154,3 @@ pub enum DiscoveryError {
     #[error("No executable files found in servers folder")]
     NoExecutables,
 }
-

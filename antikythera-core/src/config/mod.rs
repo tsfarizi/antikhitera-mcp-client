@@ -29,9 +29,6 @@ pub mod wizard;
 /// Unified Postcard-based configuration
 pub mod postcard_config;
 
-/// WASM Agent Configuration (minimal, no provider info)
-pub mod wasm_config;
-
 pub use crate::constants::{CONFIG_PATH, ENV_PATH};
 
 pub use app::{AppConfig, DocServerConfig, PromptsConfig};

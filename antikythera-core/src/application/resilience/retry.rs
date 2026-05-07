@@ -79,5 +79,3 @@ where
 {
     with_retry_if(policy, f, |_| true).await
 }
-
-

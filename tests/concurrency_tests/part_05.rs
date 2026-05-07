@@ -2,7 +2,6 @@
 async fn test_high_concurrency_execution() {
     let file_config = AppConfig::default();
 
-    // Load providers from the postcard binary config (CLI layer owns provider definitions).
     let providers = load_app_config(None)
         .map(|pc| providers_from_postcard(&pc.providers))
         .unwrap_or_default();
@@ -19,32 +18,30 @@ async fn test_high_concurrency_execution() {
             return;
         }
     };
-    let service = Arc::new(ChatService::new(client));
 
     let mut tasks = vec![];
     let concurrency_spawns = 15;
 
     let start_time = Instant::now();
     for i in 0..concurrency_spawns {
-        let svc = service.clone();
+        let c = client.clone();
 
-        // This prompt specifically instructs the model to utilize parallel dispatch JSON logic
         let prompt = format!(
-            "Execute a massive search. I need you to invoke exactly 3 tools simultaneously. Use your tools via the `call_tools` array response. Session variant: {}",
+            "Execute a massive search. Session variant: {}",
             i
         );
 
         let handle = task::spawn(async move {
-            let res = svc
-                .process_request(
+            let res = c
+                .chat(ChatRequest {
                     prompt,
-                    vec![],
-                    None,
-                    Some("high-concurrency-shared-session".to_string()),
-                    true, // agent enabled
-                    Some(1),
-                    true, // debug mode
-                )
+                    attachments: vec![],
+                    system_prompt: None,
+                    session_id: Some("high-concurrency-shared-session".to_string()),
+                    raw_mode: false,
+                    bypass_template: false,
+                    force_json: true,
+                })
                 .await;
 
             res
@@ -55,7 +52,7 @@ async fn test_high_concurrency_execution() {
     let mut success_count = 0;
     for handle in tasks {
         let result = handle.await.expect("Task panicked during execution");
-        if let Ok(_) = result {
+        if result.is_ok() {
             success_count += 1;
         }
     }

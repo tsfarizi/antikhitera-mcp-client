@@ -78,4 +78,3 @@ pub fn validate_tool_result_envelope(env: &ToolResultEnvelope) -> Result<(), Env
         _ => Ok(()),
     }
 }
-

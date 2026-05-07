@@ -131,7 +131,6 @@ fn convert_to_app_config(pc: &postcard_config::PostcardAppConfig) -> super::AppC
             json_retry_message: opt_nonempty(&pc.prompts.json_retry_message),
             tool_result_instruction: opt_nonempty(&pc.prompts.tool_result_instruction),
             agent_instructions: opt_nonempty(&pc.prompts.agent_instructions),
-            ui_instructions: opt_nonempty(&pc.prompts.ui_instructions),
             language_instructions: opt_nonempty(&pc.prompts.language_instructions),
             agent_max_steps_error: opt_nonempty(&pc.prompts.agent_max_steps_error),
             no_tools_guidance: opt_nonempty(&pc.prompts.no_tools_guidance),
@@ -198,7 +197,6 @@ fn convert_to_postcard_config(config: &super::AppConfig) -> postcard_config::Pos
                 .agent_instructions
                 .clone()
                 .unwrap_or_default(),
-            ui_instructions: config.prompts.ui_instructions.clone().unwrap_or_default(),
             language_instructions: config
                 .prompts
                 .language_instructions

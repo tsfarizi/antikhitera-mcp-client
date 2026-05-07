@@ -27,7 +27,7 @@ use crate::config::{AppConfig, PromptsConfig, ServerConfig, ToolConfig};
 use crate::domain::types::MessagePart;
 use crate::domain::types::{ChatMessage, MessageRole};
 use crate::infrastructure::model::{
-    HostModelResponse, ModelError, ModelParams, ModelProvider, ModelRequest, ModelResponse,
+    ModelError, ModelParams, ModelProvider, ModelRequest, ModelResponse,
 };
 use crate::logging::ChatLogger;
 use serde::{Deserialize, Serialize};
@@ -269,30 +269,6 @@ impl<P: ModelProvider> McpClient<P> {
         }
     }
 
-    /// Construct a client with a custom session capacity limit.
-    ///
-    /// Use this when you need finer control over memory usage, e.g. in
-    /// single-session embedded deployments (`max_sessions = 1`) or high-
-    /// throughput services that need a larger LRU pool.
-    pub fn with_session_limit(provider: P, config: ClientConfig, max_sessions: usize) -> Self {
-        let server_manager = Arc::new(ServerManager::new(config.servers.clone()));
-        for (name, transport) in &config.builtin_transports {
-            server_manager.register_builtin_transport(name, transport.clone());
-        }
-        let bridge: Arc<dyn ToolServerInterface> = server_manager;
-        Self {
-            provider,
-            config,
-            sessions: Mutex::new(SessionStore::new(max_sessions.max(1))),
-            server_bridge: bridge,
-        }
-    }
-
-    /// Return the active [`ClientConfig`].
-    pub fn config(&self) -> &ClientConfig {
-        &self.config
-    }
-
     /// Return the list of registered tool configurations.
     pub fn tools(&self) -> &[ToolConfig] {
         &self.config.tools
@@ -505,26 +481,7 @@ impl<P: ModelProvider> McpClient<P> {
         })
     }
 
-    /// Convert a host-provided [`HostModelResponse`] to [`ModelResponse`] then
-    /// delegate to [`complete_chat`].
-    ///
-    /// This is the preferred path when the embedding host owns the LLM API call
-    /// (WASM component or custom transport).
-    pub async fn complete_chat_from_host(
-        &self,
-        prepared: PreparedChatTurn,
-        response: HostModelResponse,
-    ) -> Result<ChatResult, McpError> {
-        let provider = prepared.provider.clone();
-        let model_response = response.into_model_response(&provider)?;
-        self.complete_chat(prepared, model_response).await
-    }
-
     /// Single-method convenience: [`prepare_chat`] → provider dispatch → [`complete_chat`].
-    ///
-    /// Use this in native CLI mode where `McpClient` owns the provider.  For
-    /// WASM or host-delegating scenarios, call [`prepare_chat`] and
-    /// [`complete_chat_from_host`] separately.
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResult, McpError> {
         let prepared = self.prepare_chat(request).await;
 
@@ -679,11 +636,6 @@ impl<P: ModelProvider> McpClient<P> {
         result
     }
 
-    /// Access the underlying session manager.
-    pub async fn session_manager(&self) -> antikythera_session::SessionManager {
-        self.sessions.lock().await.manager().clone()
-    }
-
     /// Update session stats based on agent execution outcome.
     pub async fn record_agent_outcome(
         &self,
@@ -702,4 +654,3 @@ impl<P: ModelProvider> McpClient<P> {
 fn new_session_id() -> String {
     Uuid::new_v4().to_string()
 }
-

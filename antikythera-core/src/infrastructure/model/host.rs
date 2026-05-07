@@ -92,4 +92,3 @@ impl ModelClient for HostModelClient {
         response.into_model_response(&self.provider_id)
     }
 }
-

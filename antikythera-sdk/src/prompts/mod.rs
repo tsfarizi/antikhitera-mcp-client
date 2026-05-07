@@ -115,7 +115,6 @@ pub fn mcp_get_all_prompts() -> *mut c_char {
                 "json_retry_message": config.prompts.json_retry_message,
                 "tool_result_instruction": config.prompts.tool_result_instruction,
                 "agent_instructions": config.prompts.agent_instructions,
-                "ui_instructions": config.prompts.ui_instructions,
                 "language_instructions": config.prompts.language_instructions,
                 "agent_max_steps_error": config.prompts.agent_max_steps_error,
                 "no_tools_guidance": config.prompts.no_tools_guidance

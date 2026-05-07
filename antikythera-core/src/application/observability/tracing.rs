@@ -216,5 +216,3 @@ impl ObservabilityHook for InMemoryObservabilityHook {
         }
     }
 }
-
-

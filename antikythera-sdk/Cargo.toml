@@ -20,32 +20,15 @@ package = "antikythera:mcp-framework"
 [package.metadata.component.dependencies]
 
 [features]
-# Default build: native Rust with single-agent support.
-# Browser WASM (`wasm`) and server-side WASM component (`component`) are
-# explicit opt-in lanes and must not be enabled implicitly by default.
 default = ["single-agent"]
 
-# Shared runtime surface for SDK features that depend on core/session crates.
-# Model API calls are host-owned, so `sdk-core` intentionally does not enable
-# any direct HTTP provider path in `antikythera-core`.
 sdk-core = ["dep:antikythera-core", "dep:antikythera-session"]
-
-
 
 # Server-side WASM Component Model support (wasm32-wasip1 WASI).
 # This is the primary WASM target: the .wasm binary is hosted by a native
 # process (Rust/Python/Go/etc.) that embeds wasmtime and calls exports via FFI.
 # Host imports (call_llm_sync, etc.) are declared in wit/antikythera.wit.
 component = []
-
-# Compatibility alias for CI jobs that still use `--features wasm`.
-# Keep this minimal and independent from `component` because many jobs target
-# `wasm32-unknown-unknown`, while component builds use `wasm32-wasip1`.
-wasm = []
-
-
-
-
 
 # Agent modes - these control what antikythera-core includes
 single-agent = ["sdk-core", "antikythera-core/native-transport"]

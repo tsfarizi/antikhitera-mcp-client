@@ -24,10 +24,6 @@ path = "security/secrets_tests.rs"
 name = "security_config_tests"
 path = "security/config_tests.rs"
 
-[[test]]
-name = "security_ffi_tests"
-path = "security_ffi/tests.rs"
-
 # ============================================================================
 # Log Module Tests
 # ============================================================================
@@ -103,14 +99,6 @@ path = "multi_agent/guardrails_tests.rs"
 [[test]]
 name = "hook_tests"
 path = "hooks/hook_tests.rs"
-
-[[test]]
-name = "streaming_tests"
-path = "streaming/streaming_tests.rs"
-
-[[test]]
-name = "comprehensive_streaming_tests"
-path = "streaming/comprehensive_streaming_tests.rs"
 
 # ============================================================================
 # Resilience Module Tests

@@ -1,4 +1,4 @@
-//! FSM-Driven Agent Runner with Stateless Resumption
+//! FSM-Driven Agent Runner with State Persistence
 //!
 //! This module provides a reactive, FSM-controlled agent execution flow
 //! with automatic state persistence and resumption capabilities.
@@ -6,13 +6,12 @@
 //! ## Features
 //!
 //! - **Pause & Resume**: Automatic state serialization on wait states
-//! - **Contextual Rehydration**: Resume execution from any checkpoint
 //! - **Error Recovery**: Formal retry policy with exponential backoff
 //! - **Stateless Execution**: Compatible with Cloud Run and ephemeral environments
 
 use super::directive::AgentDirective;
 use super::errors::AgentError;
-use super::memory::{AgentStateSnapshot, MemoryProvider};
+use super::memory::MemoryProvider;
 use super::models::{AgentOptions, AgentOutcome, AgentStep};
 use super::runtime::ToolRuntime;
 use super::runtime::json_retry::MAX_JSON_RETRIES;
@@ -30,9 +29,9 @@ const MAX_TRANSIENT_RETRIES: u32 = 3;
 
 /// Agent runner with FSM-driven execution and stateless resumption
 pub struct FsmAgent<P: ModelProvider> {
-    client: Arc<McpClient<P>>,
-    runtime: ToolRuntime,
-    memory: Arc<dyn MemoryProvider>,
+    pub(super) client: Arc<McpClient<P>>,
+    pub(super) runtime: ToolRuntime,
+    pub(super) memory: Arc<dyn MemoryProvider>,
 }
 
 impl<P: ModelProvider> FsmAgent<P> {
@@ -64,96 +63,22 @@ impl<P: ModelProvider> FsmAgent<P> {
             context_id
         ));
 
-        // Try to resume from existing state
-        let state = if let Some(snapshot) = self.memory.load_state(&context_id).await? {
-            log.info(format!(
-                "Resuming agent from saved state | context_id={}",
-                context_id
-            ));
-            self.rehydrate_from_snapshot(snapshot)?
-        } else {
-            // Start fresh
-            log.info(format!(
-                "Starting new agent execution | context_id={}",
-                context_id
-            ));
-            // Extract system_prompt before moving options
-            let system_prompt = options.system_prompt.take();
-            let init_options = AgentOptions {
-                system_prompt,
-                ..options.clone()
-            };
-            self.initialize_state(context_id.clone(), init_options)?
+        // Start fresh
+        log.info(format!(
+            "Starting new agent execution | context_id={}",
+            context_id
+        ));
+        let system_prompt = options.system_prompt.take();
+        let init_options = AgentOptions {
+            system_prompt,
+            ..options.clone()
         };
+        let state = self.initialize_state(context_id.clone(), init_options)?;
 
         // Execute FSM loop
         let outcome = self.execute_fsm_loop(state, prompt, options).await?;
 
         // Save final state
-        self.save_state(&outcome).await?;
-
-        Ok(outcome)
-    }
-
-    /// Resume agent execution from a specific context ID.
-    ///
-    /// Restores the persisted FSM state and continues execution.  If
-    /// `new_input` is supplied it is injected as a [`Event::ContextReceived`]
-    /// transition before the loop resumes, allowing callers to provide
-    /// additional context to a paused agent.
-    ///
-    /// The `options` parameter carries session metadata (session_id,
-    /// system_prompt, max_steps) that must be forwarded to
-    /// `execute_fsm_loop` so the resumed agent runs with the same
-    /// configuration as the original invocation.
-    pub async fn resume(
-        &self,
-        context_id: &str,
-        new_input: Option<String>,
-        options: AgentOptions,
-    ) -> Result<AgentOutcome, AgentError> {
-        let log = AgentLogger::new(context_id);
-        log.info(format!(
-            "Resuming agent execution | context_id={}",
-            context_id
-        ));
-
-        let snapshot = self
-            .memory
-            .load_state(&context_id.to_string())
-            .await?
-            .ok_or_else(|| {
-                AgentError::InvalidResponse(format!("Context {} not found", context_id))
-            })?;
-
-        let mut state = self.rehydrate_from_snapshot(snapshot)?;
-
-        // Inject new input as context if provided
-        if let Some(input) = &new_input {
-            state = state.transition(Event::ContextReceived {
-                context: input.clone(),
-            });
-        }
-
-        // When new_input is None the continuation prompt is empty.  The FSM
-        // loop handles this correctly for states that set next_prompt
-        // internally (e.g. ExecutingTool sets it from the tool result).
-        // States that require a user-supplied prompt (ParsingDirective reached
-        // from a resumed snapshot) will surface an explicit error instead of
-        // silently sending an empty message to the model.
-        let continuation_prompt = new_input.unwrap_or_else(|| {
-            log.warn(format!(
-                "Resuming FSM agent without new user input; \
-                 FSM state must supply next_prompt internally | context_id={}",
-                context_id
-            ));
-            String::new()
-        });
-
-        let outcome = self
-            .execute_fsm_loop(state, continuation_prompt, options)
-            .await?;
-
         self.save_state(&outcome).await?;
 
         Ok(outcome)
@@ -171,48 +96,6 @@ impl<P: ModelProvider> FsmAgent<P> {
         state = state.transition(Event::PromptReceived {
             prompt: options.system_prompt.unwrap_or_default(),
         });
-
-        Ok(state)
-    }
-
-    /// Rehydrate FSM state from snapshot
-    fn rehydrate_from_snapshot(
-        &self,
-        snapshot: AgentStateSnapshot,
-    ) -> Result<AgentState, AgentError> {
-        // Parse FSM state from string representation
-        let state = match snapshot.fsm_state.as_str() {
-            "Idle" => AgentState::Idle,
-            "ParsingDirective" => AgentState::ParsingDirective,
-            "ExecutingTool" => {
-                // Extract tool info from context vars
-                let tool_id = snapshot
-                    .context_vars
-                    .get("current_tool")
-                    .cloned()
-                    .unwrap_or_default();
-                AgentState::ExecutingTool {
-                    tool_id,
-                    input: snapshot
-                        .tool_cache
-                        .values()
-                        .next()
-                        .cloned()
-                        .unwrap_or_default(),
-                }
-            }
-            "WaitingForContext" => AgentState::WaitingForContext,
-            "RecoveringError" => {
-                let error = snapshot.metadata.last_error.clone().unwrap_or_default();
-                let retry_count = snapshot.metadata.steps_executed.min(3) as u8;
-                AgentState::RecoveringError { error, retry_count }
-            }
-            "FinalizingResponse" => AgentState::FinalizingResponse,
-            "Terminated" => AgentState::Terminated {
-                reason: TerminationReason::Success,
-            },
-            _ => AgentState::Idle,
-        };
 
         Ok(state)
     }
@@ -599,127 +482,5 @@ impl<P: ModelProvider> FsmAgent<P> {
                 }
             }
         }
-    }
-
-    /// Handle terminal state and return outcome
-    fn handle_terminal_state(
-        &self,
-        state: AgentState,
-        session_id: Option<String>,
-        logs: Vec<String>,
-        steps: Vec<AgentStep>,
-    ) -> Result<AgentOutcome, AgentError> {
-        let log = AgentLogger::new(
-            session_id
-                .as_deref()
-                .unwrap_or(&crate::logging::get_active_session()),
-        );
-        match state {
-            // ⭐ NEW: Handle FinalMessage state with JSON response formatting
-            AgentState::FinalMessage {
-                content,
-                data,
-                metadata,
-            } => {
-                log.info("Agent reached FinalMessage state with structured response");
-
-                // Build structured JSON response
-                let mut response_obj = serde_json::Map::new();
-                response_obj.insert(
-                    "content".to_string(),
-                    serde_json::Value::String(content.clone()),
-                );
-
-                if let Some(data_value) = data {
-                    response_obj.insert("data".to_string(), data_value);
-                }
-
-                if let Some(metadata_value) = metadata {
-                    response_obj.insert("metadata".to_string(), metadata_value);
-                }
-
-                let structured_response = Value::Object(response_obj);
-
-                Ok(AgentOutcome {
-                    logs,
-                    session_id: session_id.unwrap_or_default(),
-                    response: structured_response,
-                    steps,
-                })
-            }
-            AgentState::Terminated { reason } => match reason {
-                TerminationReason::Success if !steps.is_empty() => {
-                    let last_step = steps.last().expect(
-                        "AgentState Terminated::Success with empty steps — invariant violation",
-                    );
-                    Ok(AgentOutcome {
-                        logs,
-                        session_id: session_id.unwrap_or_default(),
-                        response: Value::String(last_step.message.clone().unwrap_or_default()),
-                        steps,
-                    })
-                }
-                TerminationReason::Error { message } => Err(AgentError::InvalidResponse(message)),
-                TerminationReason::MaxStepsExceeded => Err(AgentError::MaxStepsExceeded),
-                TerminationReason::Timeout => Err(AgentError::Timeout),
-                TerminationReason::Cancelled => {
-                    Err(AgentError::InvalidResponse("Cancelled".into()))
-                }
-                _ => Err(AgentError::InvalidResponse("Unknown termination".into())),
-            },
-            _ => Err(AgentError::InvalidResponse(
-                "Unexpected terminal state".into(),
-            )),
-        }
-    }
-
-    /// Save intermediate state during execution
-    async fn save_intermediate_state(
-        &self,
-        session_id: &Option<String>,
-        logs: &[String],
-        steps: &[AgentStep],
-        state_name: &str,
-    ) -> Result<(), AgentError> {
-        let context_id = session_id
-            .clone()
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
-        let mut snapshot = AgentStateSnapshot::new(context_id.clone(), "agent".into());
-        snapshot.fsm_state = state_name.to_string();
-        snapshot.history = logs
-            .iter()
-            .map(|log| antikythera_session::Message::system(log.clone()))
-            .collect();
-        snapshot.metadata.steps_executed = steps.len() as u32;
-
-        self.memory
-            .save_state(snapshot)
-            .await
-            .map_err(|e| AgentError::InvalidResponse(format!("State persistence failed: {}", e)))?;
-
-        let log = AgentLogger::new(&context_id);
-        log.debug(format!("Intermediate state saved: {}", state_name));
-        Ok(())
-    }
-
-    /// Save final state
-    async fn save_state(&self, outcome: &AgentOutcome) -> Result<(), AgentError> {
-        let mut snapshot = AgentStateSnapshot::new(outcome.session_id.clone(), "agent".into());
-        snapshot.fsm_state = "Terminated".to_string();
-        snapshot.history = outcome
-            .logs
-            .iter()
-            .map(|log| antikythera_session::Message::system(log.clone()))
-            .collect();
-        snapshot.metadata.steps_executed = outcome.steps.len() as u32;
-
-        self.memory.save_state(snapshot).await.map_err(|e| {
-            AgentError::InvalidResponse(format!("Final state persistence failed: {}", e))
-        })?;
-
-        let log = AgentLogger::new(&outcome.session_id);
-        log.info("Final agent state saved");
-        Ok(())
     }
 }

@@ -157,5 +157,3 @@ pub fn prune_messages(messages: &[ChatMessage], policy: &ContextWindowPolicy) ->
     result.extend(selected.into_iter().cloned());
     result
 }
-
-

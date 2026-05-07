@@ -251,4 +251,3 @@ pub fn print_discovery_summary(result: &StartupDiscoveryResult) {
     );
     antikythera_log::cli_print!();
 }
-

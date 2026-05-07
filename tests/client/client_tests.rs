@@ -1,6 +1,8 @@
 use antikythera_core::application::client::{ChatRequest, ClientConfig, McpClient};
-use antikythera_core::infrastructure::model::{HostModelResponse, ModelError, ModelProvider, ModelRequest, ModelResponse};
 use antikythera_core::domain::types::MessagePart;
+use antikythera_core::infrastructure::model::{
+    ModelError, ModelProvider, ModelRequest, ModelResponse,
+};
 use async_trait::async_trait;
 
 struct MockProvider {
@@ -79,16 +81,16 @@ async fn prepare_and_complete_chat_preserve_session_history() {
 }
 
 #[tokio::test]
-async fn complete_chat_from_host_accepts_plain_text_and_preserves_attachments() {
+async fn chat_preserves_attachments_through_session() {
     let client = McpClient::new(
         MockProvider {
-            response: "unused".to_string(),
+            response: "berhasil".to_string(),
         },
         ClientConfig::new("host", "gpt-host"),
     );
 
-    let prepared = client
-        .prepare_chat(ChatRequest {
+    let result = client
+        .chat(ChatRequest {
             prompt: "lihat lampiran".to_string(),
             attachments: vec![MessagePart::file("a.txt", "text/plain", "ZGF0YQ==")],
             system_prompt: None,
@@ -97,13 +99,6 @@ async fn complete_chat_from_host_accepts_plain_text_and_preserves_attachments() 
             bypass_template: false,
             force_json: false,
         })
-        .await;
-
-    let result = client
-        .complete_chat_from_host(
-            prepared,
-            HostModelResponse::from_text("berhasil", Some("sess-attach".to_string())),
-        )
         .await
         .unwrap();
 

@@ -137,5 +137,3 @@ impl TelemetryEvent {
         attrs
     }
 }
-
-

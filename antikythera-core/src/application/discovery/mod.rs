@@ -100,4 +100,3 @@ pub use types::{DiscoveredServer, DiscoveryError, DiscoverySummary, LoadStatus};
 
 /// Default folder name for MCP server binaries.
 pub const DEFAULT_SERVERS_FOLDER: &str = "servers";
-

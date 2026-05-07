@@ -11,9 +11,8 @@ use antikythera_sdk::{
     AgentRunnerError, AgentState, PromptVariables, SloSnapshot, StreamEvent, TelemetrySnapshot,
     ToolRegistry, append_llm_chunk, build_llm_messages, build_system_prompt, commit_llm_response,
     commit_llm_stream, drain_events, get_agent_state, get_slo_snapshot, get_telemetry_snapshot,
-    get_tools_prompt, init_agent_runner, prepare_user_turn, register_tools,
-    report_session_restore_progress, reset_agent_session, set_context_policy, sweep_idle_sessions,
-    validate_json_schema, validate_tool_call,
+    get_tools_prompt, init_agent_runner, prepare_user_turn, register_tools, reset_agent_session,
+    set_context_policy, sweep_idle_sessions, validate_json_schema, validate_tool_call,
 };
 use serde::{Deserialize, Serialize};
 
@@ -131,20 +130,6 @@ pub fn run_wasm_stream_probe(
         prepare_user_turn(&prepare_json).map_err(map_ffi_err("prepare_user_turn"))?;
     let prepared_turn: serde_json::Value =
         serde_json::from_str(&prepared_json).map_err(CliError::Serialization)?;
-
-    ffi_calls.push("report_session_restore_progress".to_string());
-    let restore_progress_payload = serde_json::json!({
-        "stage": "cli_probe",
-        "progress": 1.0,
-        "message": "Session active in memory"
-    })
-    .to_string();
-    let progress_reported = report_session_restore_progress(&session_id, &restore_progress_payload)
-        .map_err(map_ffi_err("report_session_restore_progress"))?;
-    capability_probes.insert(
-        "restore_progress_reported".to_string(),
-        serde_json::json!(progress_reported),
-    );
 
     let commit_result_json = if stream_enabled {
         let chunks = split_into_chunks(llm_payload, 3);

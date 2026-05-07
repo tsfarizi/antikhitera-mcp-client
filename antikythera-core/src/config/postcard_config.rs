@@ -25,7 +25,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // Import security configuration types
 use crate::security::config::SecurityConfig;
@@ -141,7 +141,6 @@ pub struct PromptsConfig {
     pub json_retry_message: String,
     pub tool_result_instruction: String,
     pub agent_instructions: String,
-    pub ui_instructions: String,
     pub language_instructions: String,
     pub agent_max_steps_error: String,
     pub no_tools_guidance: String,
@@ -158,7 +157,6 @@ impl Default for PromptsConfig {
             json_retry_message: "System Error: Invalid JSON format returned. Please output ONLY the raw JSON object for the tool call or final response. Do not use Markdown blocks or explanations.".to_string(),
             tool_result_instruction: "Tool execution complete. Process this result and respond with a VALID JSON object.".to_string(),
             agent_instructions: "You are an autonomous assistant that can call tools to solve user requests.".to_string(),
-            ui_instructions: "Follow UI hydration rules for data display.".to_string(),
             language_instructions: "Detect the user's language automatically and answer using that same language.".to_string(),
             agent_max_steps_error: "agent exceeded the maximum number of tool interactions".to_string(),
             no_tools_guidance: "No additional tools are currently configured.".to_string(),
@@ -260,43 +258,4 @@ pub fn save_config(config: &PostcardAppConfig, path: Option<&Path>) -> Result<()
         .map_err(|e| format!("Failed to write config file: {}", e))?;
 
     Ok(())
-}
-
-/// Initialize default configuration and save to file
-pub fn init_default_config(path: Option<&Path>) -> Result<PostcardAppConfig, String> {
-    let config = PostcardAppConfig::default();
-    save_config(&config, path)?;
-    Ok(config)
-}
-
-/// Get configuration size in bytes
-pub fn config_size(path: Option<&Path>) -> Result<usize, String> {
-    let config_path = path.unwrap_or(Path::new(CONFIG_PATH));
-
-    if !config_path.exists() {
-        return Err(format!("Config file not found: {}", config_path.display()));
-    }
-
-    std::fs::metadata(config_path)
-        .map_err(|e| format!("Failed to read config metadata: {}", e))
-        .map(|m| m.len() as usize)
-}
-
-// ============================================================================
-// Path Helpers
-// ============================================================================
-
-/// Get the current working directory (config is stored at project root)
-pub fn config_dir() -> PathBuf {
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-}
-
-/// Get the environment file path
-pub fn env_path() -> PathBuf {
-    PathBuf::from(".env")
-}
-
-/// Check if config file exists
-pub fn config_exists() -> bool {
-    Path::new(CONFIG_PATH).exists()
 }

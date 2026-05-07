@@ -115,5 +115,3 @@ pub struct ResilienceConfig {
     pub retry: RetryPolicy,
     pub timeout: TimeoutPolicy,
 }
-
-

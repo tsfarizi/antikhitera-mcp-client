@@ -70,4 +70,3 @@ pub fn resolve_log_line_style(line: &str) -> Style {
     // core:* or unknown
     Style::default().fg(Color::Gray)
 }
-

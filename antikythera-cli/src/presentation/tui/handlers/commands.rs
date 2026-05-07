@@ -364,10 +364,6 @@ pub(crate) fn reconfigure_runtime(
                 .agent_instructions
                 .clone()
                 .unwrap_or(defaults.agent_instructions),
-            ui_instructions: r
-                .ui_instructions
-                .clone()
-                .unwrap_or(defaults.ui_instructions),
             language_instructions: r
                 .language_instructions
                 .clone()
@@ -425,4 +421,3 @@ pub fn find_provider<'a>(
         .iter()
         .find(|provider| provider.id.eq_ignore_ascii_case(needle))
 }
-

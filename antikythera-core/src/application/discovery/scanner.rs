@@ -205,4 +205,3 @@ pub fn is_executable(path: &Path) -> bool {
 pub fn is_executable(_path: &Path) -> bool {
     false
 }
-

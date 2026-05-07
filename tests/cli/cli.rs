@@ -3,12 +3,7 @@ use clap::Parser;
 
 #[test]
 fn run_mode_all_variants_are_distinct() {
-    let modes = [
-        RunMode::Stdio,
-        RunMode::Setup,
-        RunMode::MultiAgent,
-        RunMode::WasmHarness,
-    ];
+    let modes = [RunMode::Stdio, RunMode::MultiAgent, RunMode::WasmHarness];
     for (i, a) in modes.iter().enumerate() {
         for (j, b) in modes.iter().enumerate() {
             if i == j {

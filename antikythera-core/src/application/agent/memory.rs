@@ -186,4 +186,3 @@ pub enum MemoryError {
     #[error("Configuration error: {0}")]
     Configuration(String),
 }
-

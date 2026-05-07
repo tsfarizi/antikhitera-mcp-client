@@ -250,5 +250,3 @@ impl TelemetryHook for InMemoryTelemetryHook {
         Ok(())
     }
 }
-
-

@@ -7,7 +7,6 @@
 //! | Mode | Description |
 //! |:-----|:------------|
 //! | `stdio` (default) | Interactive ratatui TUI chat session |
-//! | `setup` | Configuration wizard for providers and servers |
 //! | `multi-agent` | Multi-agent orchestrator harness |
 //! | `wasm-harness` | Host-FFI WASM probe for runtime/session/tool validation |
 //!
@@ -104,12 +103,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match mode {
         RunMode::Stdio => {
             tui::run_chat_app(runtime_config, providers).await?;
-        }
-        RunMode::Setup => {
-            cli_eprint!(
-                "Setup mode requires the wizard feature. \
-                 Run `antikythera-config init` to create a default config."
-            );
         }
         RunMode::MultiAgent => {
             let client = build_runtime_client(

@@ -58,22 +58,20 @@ pub(super) enum PromptField {
     JsonRetryMessage = 3,
     ToolResultInstr = 4,
     AgentInstructions = 5,
-    UiInstructions = 6,
-    LanguageInstructions = 7,
-    AgentMaxStepsError = 8,
-    NoToolsGuidance = 9,
+    LanguageInstructions = 6,
+    AgentMaxStepsError = 7,
+    NoToolsGuidance = 8,
 }
 
 impl PromptField {
-    pub(super) const COUNT: usize = 10;
-    pub(super) const ALL: [PromptField; 10] = [
+    pub(super) const COUNT: usize = 9;
+    pub(super) const ALL: [PromptField; 9] = [
         PromptField::Template,
         PromptField::ToolGuidance,
         PromptField::FallbackGuidance,
         PromptField::JsonRetryMessage,
         PromptField::ToolResultInstr,
         PromptField::AgentInstructions,
-        PromptField::UiInstructions,
         PromptField::LanguageInstructions,
         PromptField::AgentMaxStepsError,
         PromptField::NoToolsGuidance,
@@ -87,7 +85,6 @@ impl PromptField {
             Self::JsonRetryMessage => "JSON Retry Msg",
             Self::ToolResultInstr => "Tool Result Instr",
             Self::AgentInstructions => "Agent Instructions",
-            Self::UiInstructions => "UI Instructions",
             Self::LanguageInstructions => "Language Instr",
             Self::AgentMaxStepsError => "Max Steps Error",
             Self::NoToolsGuidance => "No Tools Guidance",
@@ -102,7 +99,6 @@ impl PromptField {
             Self::JsonRetryMessage => p.json_retry_message().to_string(),
             Self::ToolResultInstr => p.tool_result_instruction().to_string(),
             Self::AgentInstructions => p.agent_instructions().to_string(),
-            Self::UiInstructions => p.ui_instructions().to_string(),
             Self::LanguageInstructions => p.language_instructions().to_string(),
             Self::AgentMaxStepsError => p.agent_max_steps_error().to_string(),
             Self::NoToolsGuidance => p.no_tools_guidance().to_string(),
@@ -118,7 +114,6 @@ impl PromptField {
             Self::JsonRetryMessage => p.json_retry_message = v,
             Self::ToolResultInstr => p.tool_result_instruction = v,
             Self::AgentInstructions => p.agent_instructions = v,
-            Self::UiInstructions => p.ui_instructions = v,
             Self::LanguageInstructions => p.language_instructions = v,
             Self::AgentMaxStepsError => p.agent_max_steps_error = v,
             Self::NoToolsGuidance => p.no_tools_guidance = v,
@@ -256,7 +251,7 @@ pub(super) const SLASH_COMMANDS: [(&str, &str); 11] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum UiTone {
+pub(crate) enum UiTone {
     User,
     Assistant,
     System,
@@ -264,7 +259,7 @@ pub(super) enum UiTone {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct UiMessage {
+pub(crate) struct UiMessage {
     pub(super) title: String,
     pub(super) body: String,
     pub(super) tone: UiTone,

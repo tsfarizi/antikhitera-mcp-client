@@ -224,4 +224,3 @@ pub async fn scan_and_load(
     let summary = load_all(&mut servers).await;
     Ok((servers, summary))
 }
-

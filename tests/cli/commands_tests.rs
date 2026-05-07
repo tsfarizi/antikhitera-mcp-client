@@ -1,8 +1,8 @@
+use antikythera_cli::infrastructure::llm::ModelProviderConfig;
+use antikythera_cli::infrastructure::llm::types::ModelInfo;
 use antikythera_cli::presentation::tui::handlers::commands::{
     find_provider, render_config_snapshot, render_provider_catalog, resolve_provider_selection,
 };
-use antikythera_cli::infrastructure::llm::types::ModelInfo;
-use antikythera_cli::infrastructure::llm::ModelProviderConfig;
 use antikythera_core::application::client::ClientConfigSnapshot;
 
 fn make_provider(id: &str, models: &[&str]) -> ModelProviderConfig {
@@ -62,8 +62,7 @@ fn resolve_existing_provider_with_provided_model() {
 #[test]
 fn resolve_uses_current_model_when_provider_same_and_no_model_input() {
     let providers = vec![make_provider("gemini", &["gemini-pro", "gemini-flash"])];
-    let result =
-        resolve_provider_selection(&providers, "gemini", "gemini-flash", "gemini", None);
+    let result = resolve_provider_selection(&providers, "gemini", "gemini-flash", "gemini", None);
     assert_eq!(
         result,
         Ok(("gemini".to_string(), "gemini-flash".to_string()))
@@ -80,8 +79,7 @@ fn resolve_falls_back_to_first_model() {
 #[test]
 fn resolve_errors_on_unknown_provider() {
     let providers = vec![make_provider("gemini", &["gemini-pro"])];
-    let result =
-        resolve_provider_selection(&providers, "gemini", "gemini-pro", "unknown", None);
+    let result = resolve_provider_selection(&providers, "gemini", "gemini-pro", "unknown", None);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("unknown"));
 }

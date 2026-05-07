@@ -67,4 +67,3 @@ pub fn parse_step_output(output: &Value) -> ParsedOutput {
 
     parsed
 }
-

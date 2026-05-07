@@ -1,6 +1,6 @@
 ﻿#[test]
 #[serial_test::serial]
-fn timeout_mode_is_deterministic_via_sweep_and_hydrate() {
+fn timeout_mode_is_deterministic_via_sweep() {
     let session_id = init(
         &serde_json::json!({
             "session_id": "timeout-replay-session",
@@ -29,26 +29,12 @@ fn timeout_mode_is_deterministic_via_sweep_and_hydrate() {
 
     let events: serde_json::Value =
         serde_json::from_str(&drain_events("timeout-replay-session").unwrap()).unwrap();
-    let state_json = events
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|event| event["kind"] == "session_archived")
-        .and_then(|event| event["payload"]["state_json"].as_str())
-        .unwrap()
-        .to_string();
-
-    hydrate_session("timeout-replay-session", &state_json).unwrap();
-    let prepared_again = prepare_user_turn(
-        &serde_json::json!({
-            "prompt": "after timeout",
-            "session_id": "timeout-replay-session",
-            "correlation_id": "trace-timeout"
-        })
-        .to_string(),
-    )
-    .unwrap();
-    let final_commit = commit_llm_response(&prepared_again, "restored and running").unwrap();
-    let final_v: serde_json::Value = serde_json::from_str(&final_commit).unwrap();
-    assert_eq!(final_v["action"], "final");
+    assert!(
+        events
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "session_archived"),
+        "session_archived event should be emitted after timeout sweep"
+    );
 }

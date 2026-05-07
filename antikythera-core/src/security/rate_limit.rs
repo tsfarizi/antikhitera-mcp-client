@@ -280,5 +280,3 @@ pub struct SessionUsage {
     pub requests_per_day: u32,
     pub last_activity: Instant,
 }
-
-

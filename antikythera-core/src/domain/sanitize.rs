@@ -82,4 +82,3 @@ fn is_emoji(c: char) -> bool {
         0x200D                // Zero Width Joiner
     )
 }
-
