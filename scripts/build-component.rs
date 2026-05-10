@@ -58,37 +58,79 @@ fn generate_wit() {
         YELLOW, RESET, BLUE
     );
 
-    let sdk_src = project_root().join("antikythera-sdk").join("src");
+    let wit_dir = project_root().join("wit");
+    let wit_file = wit_dir.join("antikythera.wit");
 
-    let component_rs = {
-        let flat_file = sdk_src.join("component.rs");
-        if flat_file.exists() {
-            flat_file
-        } else {
-            let module_file = sdk_src.join("component").join("mod.rs");
-            if module_file.exists() {
-                module_file
-            } else {
-                eprintln!(
-                    "{}✗ component source not found. Checked: {} and {}{}",
-                    RED,
-                    flat_file.display(),
-                    module_file.display(),
+    // The WIT file is manually curated and checked into the repository.
+    // Auto-generation from Rust source is best-effort; the checked-in file
+    // is the source of truth for the WASM component interface.
+    if wit_file.exists() {
+        match fs::read_to_string(&wit_file) {
+            Ok(content) if !content.trim().is_empty() => {
+                println!(
+                    "{}✓ WIT file already exists: {}{}",
+                    GREEN,
+                    wit_file.display(),
                     RESET
                 );
-                exit(1);
+                println!(
+                    "{}  (using checked-in WIT — auto-generation skipped){}",
+                    BLUE, RESET
+                );
+                // Validate it has a world definition
+                if content.contains("world antikythera-mcp") {
+                    println!("\n{}WIT validation passed{}\n", GREEN, RESET);
+                    return;
+                }
             }
+            _ => {}
+        }
+    }
+
+    // Fallback: auto-generate from Rust source (best-effort)
+    let sdk_src = project_root().join("antikythera-sdk").join("src");
+
+    let wasm_agent_dir = {
+        let module_dir = sdk_src.join("wasm_agent");
+        if module_dir.exists() && module_dir.is_dir() && module_dir.join("mod.rs").exists() {
+            module_dir
+        } else if sdk_src.join("component.rs").exists() {
+            sdk_src.clone()
+        } else if sdk_src.join("component").join("mod.rs").exists() {
+            sdk_src.join("component")
+        } else {
+            eprintln!(
+                "{}✗ component source not found and no WIT file exists.{}",
+                RED, RESET
+            );
+            exit(1);
         }
     };
 
-    // Parse and generate WIT
-    match wit_from_rust::generate(&component_rs) {
-        Ok(wit_content) => {
-            // Generate WIT di parent folder (project root)
-            let wit_dir = project_root().join("wit");
-            fs::create_dir_all(&wit_dir).expect("Failed to create wit directory");
+    // Collect all .rs files in the wasm_agent directory for struct/trait parsing
+    let mut source_files: Vec<PathBuf> = Vec::new();
+    if let Ok(entries) = fs::read_dir(&wasm_agent_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "rs").unwrap_or(false) {
+                source_files.push(path);
+            }
+        }
+    }
+    if source_files.is_empty() {
+        eprintln!(
+            "{}✗ No .rs files found in {}{}",
+            RED,
+            wasm_agent_dir.display(),
+            RESET
+        );
+        exit(1);
+    }
 
-            let wit_file = wit_dir.join("antikythera.wit");
+    // Parse and generate WIT
+    match wit_from_rust::generate(&source_files) {
+        Ok(wit_content) => {
+            fs::create_dir_all(&wit_dir).expect("Failed to create wit directory");
             fs::write(&wit_file, &wit_content).expect("Failed to write WIT file");
 
             println!("{}✓ WIT generated: {}{}", GREEN, wit_file.display(), RESET);
@@ -197,36 +239,54 @@ fn build_component() {
 
 mod wit_from_rust {
     use std::fs;
-    use std::path::Path;
+    use std::path::PathBuf;
 
-    pub fn generate(component_rs: &Path) -> Result<String, String> {
-        let content =
-            fs::read_to_string(component_rs).map_err(|e| format!("Failed to read file: {}", e))?;
+    pub fn generate(source_files: &[PathBuf]) -> Result<String, String> {
+        let mut combined_content = String::new();
+        for path in source_files {
+            let content = fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+            combined_content.push_str(&content);
+            combined_content.push('\n');
+        }
 
         let mut wit = String::new();
         wit.push_str("package antikythera:mcp-framework@1.0.0;\n\n");
 
         // Parse structs first
-        let structs = parse_structs(&content)?;
+        let structs = parse_structs(&combined_content)?;
         wit.push_str(&structs);
 
         // Parse traits
-        let traits = parse_traits(&content)?;
+        let traits = parse_traits(&combined_content)?;
         wit.push_str(&traits);
 
-        // Parse FFI functions from ffi.rs
-        let ffi_rs_path = component_rs
+        // Parse FFI functions from ffi_helpers.rs (or legacy ffi.rs)
+        let src_dir = source_files
+            .first()
+            .ok_or("No source files provided")?
             .parent()
-            .ok_or("Failed to get parent directory")?
-            .join("ffi.rs");
+            .ok_or("Failed to get parent directory")?;
+        let parent_dir = src_dir.parent().unwrap_or(src_dir);
 
-        let ffi_funcs = if ffi_rs_path.exists() {
-            let ffi_content = fs::read_to_string(&ffi_rs_path)
-                .map_err(|e| format!("Failed to read ffi.rs: {}", e))?;
-            parse_ffi_functions(&ffi_content)?
-        } else {
-            String::new()
-        };
+        let ffi_sources = [
+            parent_dir.join("ffi_helpers.rs"),
+            src_dir.join("ffi_helpers.rs"),
+            parent_dir.join("ffi.rs"),
+            src_dir.join("ffi.rs"),
+        ];
+
+        let ffi_funcs = ffi_sources
+            .iter()
+            .find_map(|path| {
+                if path.exists() {
+                    let ffi_content = fs::read_to_string(path).ok()?;
+                    parse_ffi_functions(&ffi_content).ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
 
         if !ffi_funcs.is_empty() {
             wit.push_str("/// FFI interface for external language bindings\n");

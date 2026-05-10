@@ -2,16 +2,33 @@
 
 use antikythera_log::{LogLevel, Logger};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, LazyLock, Mutex};
+
+// ============================================================================
+// Global Session Logger Registry
+// ============================================================================
+
+static SESSION_LOGGERS: LazyLock<Mutex<std::collections::HashMap<String, Arc<Logger>>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+pub(crate) fn get_session_logger(session_id: &str) -> Arc<Logger> {
+    SESSION_LOGGERS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(session_id.to_string())
+        .or_insert_with(|| Arc::new(Logger::new(session_id)))
+        .clone()
+}
 
 struct SessionLog {
-    logger: Logger,
+    logger: Arc<Logger>,
 }
 
 #[allow(dead_code)]
 impl SessionLog {
     fn new(session_id: &str) -> Self {
         Self {
-            logger: Logger::new(session_id),
+            logger: get_session_logger(session_id),
         }
     }
     fn info(&self, msg: &str) {
