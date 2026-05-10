@@ -134,23 +134,23 @@ mcp_security_init_validator();
 // Validate input
 char* result = mcp_security_validate_input("user input");
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 
 // Validate URL
 char* result = mcp_security_validate_url("https://api.example.com");
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 
 // Get configuration
 char* config = mcp_security_get_validation_config();
 // Process config...
-mcp_security_free_string(config);
+mcp_free_string(config);
 
 // Set configuration
 char* new_config = "{\"max_input_size_bytes\": 5242880, ...}";
 char* result = mcp_security_set_validation_config(new_config);
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 ```
 
 ## Rate Limiting
@@ -226,28 +226,28 @@ mcp_security_init_rate_limiter();
 // Check rate limit
 char* result = mcp_security_check_rate_limit("session-id");
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 
 // Get usage
 char* usage = mcp_security_get_usage("session-id");
 // Process usage...
-mcp_security_free_string(usage);
+mcp_free_string(usage);
 
 // Reset session
 char* result = mcp_security_reset_session("session-id");
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 
 // Get configuration
 char* config = mcp_security_get_rate_limit_config();
 // Process config...
-mcp_security_free_string(config);
+mcp_free_string(config);
 
 // Set configuration
 char* new_config = "{\"requests_per_minute\": 100, ...}";
 char* result = mcp_security_set_rate_limit_config(new_config);
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 ```
 
 ## Secrets Management
@@ -337,43 +337,43 @@ mcp_security_init_secret_manager();
 // Store a secret
 char* result = mcp_security_store_secret("api-key", "sk-1234567890");
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 
 // Retrieve a secret
 char* secret = mcp_security_get_secret("api-key");
 // Process secret...
-mcp_security_free_string(secret);
+mcp_free_string(secret);
 
 // Rotate a secret
 char* result = mcp_security_rotate_secret("api-key", "sk-0987654321");
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 
 // List secrets
 char* secrets = mcp_security_list_secrets();
 // Process secrets...
-mcp_security_free_string(secrets);
+mcp_free_string(secrets);
 
 // Get metadata
 char* metadata = mcp_security_get_secret_metadata("api-key");
 // Process metadata...
-mcp_security_free_string(metadata);
+mcp_free_string(metadata);
 
 // Delete a secret
 char* result = mcp_security_delete_secret("api-key");
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 
 // Get configuration
 char* config = mcp_security_get_secrets_config();
 // Process config...
-mcp_security_free_string(config);
+mcp_free_string(config);
 
 // Set configuration
 char* new_config = "{\"auto_rotate\": true, ...}";
 char* result = mcp_security_set_secrets_config(new_config);
 // Process result...
-mcp_security_free_string(result);
+mcp_free_string(result);
 ```
 
 ## Security Best Practices

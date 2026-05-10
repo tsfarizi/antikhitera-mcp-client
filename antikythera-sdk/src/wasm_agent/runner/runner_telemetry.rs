@@ -66,7 +66,7 @@ impl AgentRunnerRuntime {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
         runtime.touch(now_unix_ms());
-        super::wasm_log("tui", LogLevel::Debug, "Telemetry snapshot");
+        super::wasm_log(session_id, LogLevel::Debug, "Telemetry snapshot");
         runtime.emit_event(
             StreamEventKind::Telemetry,
             runtime.telemetry.correlation_id.clone(),
@@ -84,7 +84,7 @@ impl AgentRunnerRuntime {
             .get(session_id)
             .ok_or_else(|| AgentRunnerError::SessionNotFound(session_id.to_string()))?;
 
-        super::wasm_log("tui", LogLevel::Debug, "SLO snapshot");
+        super::wasm_log(session_id, LogLevel::Debug, "SLO snapshot");
 
         let commits = runtime.telemetry.counters.llm_commits as f64;
         let tool_results = runtime.telemetry.counters.tool_results as f64;

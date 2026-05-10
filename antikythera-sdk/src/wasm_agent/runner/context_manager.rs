@@ -55,8 +55,8 @@ impl AgentRunnerRuntime {
                     .collect();
             }
             TruncationStrategy::KeepBalanced => {
-                let keep_head = retain / 3;
-                let keep_tail = retain.saturating_sub(keep_head);
+                let keep_head = (retain / 3).max(1);
+                let keep_tail = retain.saturating_sub(keep_head).max(1);
                 let head_iter = state.message_history.iter().take(keep_head).cloned();
                 let tail_iter = state
                     .message_history
@@ -69,7 +69,7 @@ impl AgentRunnerRuntime {
 
         state.rolling_summary = Some(summary.clone());
         super::wasm_log(
-            "tui",
+            &state.session_id,
             LogLevel::Debug,
             &format!(
                 "Context summary: {} source messages summarized, {} retained",

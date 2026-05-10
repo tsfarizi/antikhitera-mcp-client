@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 // ============================================================================
 
 /// Errors that can occur during session manager operations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionManagerError {
     LockPoisoned(String),
     SessionNotFound(String),

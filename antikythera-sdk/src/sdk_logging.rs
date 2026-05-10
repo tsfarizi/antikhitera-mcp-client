@@ -117,6 +117,7 @@ impl ConfigFfiLogger {
 }
 
 /// Security FFI module logger
+#[allow(dead_code)]
 pub struct SecurityFfiLogger {
     logger: Arc<Logger>,
 }

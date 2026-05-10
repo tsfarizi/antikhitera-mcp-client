@@ -2,28 +2,10 @@
 //!
 //! Provides FFI bindings for managing prompt templates via Postcard config.
 
-use antikythera_core::config::postcard_config;
-use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
-fn to_c_string(s: &str) -> *mut c_char {
-    match CString::new(s) {
-        Ok(cstr) => cstr.into_raw(),
-        Err(_) => std::ptr::null_mut(),
-    }
-}
-
-fn from_c_string(ptr: *const c_char) -> Result<String, String> {
-    if ptr.is_null() {
-        return Err("Null pointer".to_string());
-    }
-    unsafe {
-        CStr::from_ptr(ptr)
-            .to_str()
-            .map(|s| s.to_string())
-            .map_err(|e| format!("Invalid UTF-8: {}", e))
-    }
-}
+use crate::ffi_helpers::{from_c_string, to_c_string};
+use antikythera_core::config::postcard_config;
 
 fn load_config() -> Result<postcard_config::PostcardAppConfig, String> {
     postcard_config::load_config(None)

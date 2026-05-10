@@ -160,7 +160,7 @@ impl AgentRunnerRuntime {
         correlation_id: Option<String>,
     ) -> Result<bool, AgentRunnerError> {
         wasm_log(
-            "tui",
+            session_id,
             LogLevel::Info,
             &format!("Session archived: {reason}"),
         );
@@ -224,7 +224,7 @@ impl AgentRunnerRuntime {
         }
         if archived > 0 {
             wasm_log(
-                "tui",
+                "runtime",
                 LogLevel::Info,
                 &format!("Idle sweep archived {archived} sessions"),
             );
@@ -270,7 +270,7 @@ impl AgentRunnerRuntime {
 
         if archived > 0 {
             wasm_log(
-                "tui",
+                "runtime",
                 LogLevel::Info,
                 &format!("Capacity pressure archived {archived} sessions"),
             );
@@ -298,7 +298,11 @@ impl AgentRunnerRuntime {
     fn register_tools(&mut self, tools_json: &str) -> Result<u32, AgentRunnerError> {
         self.known_tools = ToolRegistry::from_json(tools_json)?;
         let count = self.known_tools.len();
-        wasm_log("tui", LogLevel::Info, &format!("{count} tools registered"));
+        wasm_log(
+            "runtime",
+            LogLevel::Info,
+            &format!("{count} tools registered"),
+        );
         Ok(count as u32)
     }
 
@@ -335,7 +339,7 @@ impl AgentRunnerRuntime {
         let mut config = self.default_config.clone();
         config.session_id = session_id.clone();
         self.sessions.entry(session_id.clone()).or_insert_with(|| {
-            wasm_log("tui", LogLevel::Info, "Session created");
+            wasm_log("runtime", LogLevel::Info, "Session created");
             SessionRuntime::new(config)
         });
 
@@ -349,7 +353,7 @@ impl AgentRunnerRuntime {
             AgentRunnerError::ConfigurationFailed(format!("Invalid context-policy-json: {e}"))
         })?;
         self.default_config.context_policy = input.policy;
-        wasm_log("tui", LogLevel::Debug, "Context policy updated");
+        wasm_log("runtime", LogLevel::Debug, "Context policy updated");
         Ok(true)
     }
 
@@ -366,7 +370,7 @@ impl AgentRunnerRuntime {
         let tool_block_snapshot = self.known_tools.to_prompt_block();
 
         let session_id = input.session_id.clone().unwrap_or_else(new_session_id);
-        wasm_log("tui", LogLevel::Info, "Preparing user turn");
+        wasm_log(&session_id, LogLevel::Info, "Preparing user turn");
 
         if !self.sessions.contains_key(&session_id)
             && self.archived_sessions.contains_key(&session_id)
@@ -399,7 +403,7 @@ impl AgentRunnerRuntime {
                 }),
             );
             wasm_log(
-                "tui",
+                &session_id,
                 LogLevel::Warn,
                 "Session archived, restore required before turn",
             );
@@ -507,7 +511,11 @@ impl AgentRunnerRuntime {
             AgentRunnerError::ValidationFailed(format!("Invalid prepared-turn-json: {e}"))
         })?;
 
-        wasm_log("tui", LogLevel::Debug, "Committing LLM response");
+        wasm_log(
+            &prepared.session_id,
+            LogLevel::Debug,
+            "Committing LLM response",
+        );
 
         // Snapshot the registry before the mutable session borrow to avoid borrow conflict.
         let registry_snapshot = self.known_tools.clone();
@@ -567,7 +575,7 @@ impl AgentRunnerRuntime {
                 // Validate the tool call against the registered registry (no-op if empty).
                 if let Err(validation_err) = validate_tool_call(&registry_snapshot, &tool, &input) {
                     wasm_log(
-                        "tui",
+                        &prepared.session_id,
                         LogLevel::Error,
                         &format!("Tool validation failed for '{tool}': {validation_err}"),
                     );
@@ -615,7 +623,7 @@ impl AgentRunnerRuntime {
         };
 
         wasm_log(
-            "tui",
+            &prepared.session_id,
             LogLevel::Debug,
             &format!("LLM response committed: action={}", result.action),
         );
@@ -642,7 +650,7 @@ impl AgentRunnerRuntime {
         let _ = self.sweep_idle_sessions(now_unix_ms())?;
         let runtime = self.ensure_session(session_id);
         runtime.touch(now_unix_ms());
-        wasm_log("tui", LogLevel::Debug, "Processing LLM response");
+        wasm_log(session_id, LogLevel::Debug, "Processing LLM response");
         let action = process_llm_response(&mut runtime.state, llm_response_json)?;
         serde_json::to_string(&action)
             .map_err(|e| AgentRunnerError::Internal(format!("Failed to encode action: {e}")))
@@ -658,7 +666,7 @@ impl AgentRunnerRuntime {
             .map_err(|e| AgentRunnerError::ToolFailed(format!("Invalid tool-result-json: {e}")))?;
 
         wasm_log(
-            "tui",
+            session_id,
             LogLevel::Debug,
             &format!("Processing tool result for '{}'", input.tool_name),
         );
@@ -680,7 +688,7 @@ impl AgentRunnerRuntime {
         if !input.success {
             runtime.telemetry.counters.tool_errors += 1;
             wasm_log(
-                "tui",
+                session_id,
                 LogLevel::Error,
                 &format!(
                     "Tool '{}' failed: {}",
@@ -735,7 +743,7 @@ fn with_runtime<T>(
     f: impl FnOnce(&mut AgentRunnerRuntime) -> Result<T, AgentRunnerError>,
 ) -> Result<T, AgentRunnerError> {
     let mut guard = runtime().lock().map_err(|_| {
-        wasm_log("tui", LogLevel::Error, "Runtime lock poisoned");
+        wasm_log("runtime", LogLevel::Error, "Runtime lock poisoned");
         AgentRunnerError::Internal("AgentRunner runtime lock poisoned".to_string())
     })?;
     f(&mut guard)
@@ -817,7 +825,7 @@ pub fn get_state(session_id: &str) -> Result<String, AgentRunnerError> {
         let Some(state) = rt.sessions.get(session_id) else {
             if rt.archived_sessions.contains_key(session_id) {
                 wasm_log(
-                    "tui",
+                    session_id,
                     LogLevel::Warn,
                     "get_state called on archived session",
                 );
@@ -825,7 +833,7 @@ pub fn get_state(session_id: &str) -> Result<String, AgentRunnerError> {
                     "Session '{session_id}' is archived in host storage"
                 )));
             }
-            wasm_log("tui", LogLevel::Error, "get_state: session not found");
+            wasm_log(session_id, LogLevel::Error, "get_state: session not found");
             return Err(AgentRunnerError::SessionNotFound(session_id.to_string()));
         };
         state.state.to_json().map_err(AgentRunnerError::from)

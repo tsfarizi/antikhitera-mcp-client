@@ -97,7 +97,7 @@ pub(crate) fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
 ///
 /// The pointer must be a valid pointer to a C string allocated by Rust using `into_raw`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mcp_security_free_string(ptr: *mut c_char) {
+pub unsafe extern "C" fn mcp_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
         unsafe {
             let _ = CString::from_raw(ptr);

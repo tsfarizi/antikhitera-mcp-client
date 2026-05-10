@@ -276,7 +276,7 @@ async fn run_multi_agent(
 #[cfg(not(feature = "multi-agent"))]
 async fn run_multi_agent(
     _cli: Cli,
-    _client: Arc<McpClient<impl antikythera_core::infrastructure::model::ModelProvider + 'static>>,
+    _client: Arc<McpClient<DynamicModelProvider>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     Err("multi-agent feature is not enabled in this build.\n\
          Rebuild with: cargo build --features multi-agent"

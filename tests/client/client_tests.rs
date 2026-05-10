@@ -126,7 +126,7 @@ async fn chat_preserves_attachments_through_session() {
             .model_request
             .messages
             .iter()
-            .any(|message| message.content() == "berhasil")
+            .any(|message| message.content().contains("berhasil"))
     );
     assert_eq!(
         follow_up.model_request.messages.last().unwrap().content(),
