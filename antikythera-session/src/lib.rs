@@ -114,9 +114,7 @@ mod tests {
         let manager = SessionManager::new();
         let id = manager.create_session("user-1", "gpt-4").unwrap();
 
-        manager
-            .add_message(&id, Message::user("hello"))
-            .unwrap();
+        manager.add_message(&id, Message::user("hello")).unwrap();
         manager
             .add_message(&id, Message::assistant("hi there"))
             .unwrap();
