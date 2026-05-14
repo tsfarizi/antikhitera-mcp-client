@@ -35,20 +35,9 @@ antikythera-core/src/security/
     └── storage.rs
 ```
 
-### SDK Module (`antikythera-sdk`)
+### FFI Interface
 
-FFI bindings are provided in the `antikythera-sdk` crate under the `security_ffi` module:
-
-```
-antikythera-sdk/src/security_ffi/
-├── mod.rs
-├── helpers.rs
-├── validation.rs
-├── rate_limit.rs
-└── secrets.rs
-```
-
-All security FFI functions use the `ffi_handler!` macro defined in `antikythera-sdk/src/ffi_helpers.rs` for consistent error handling and C string memory management.
+The SDK provides FFI bindings that re-export security types from the core security module (`antikythera-core/src/security/`). All security FFI functions provide consistent error handling and C string memory management.
 
 ## Input Validation
 
@@ -481,7 +470,7 @@ Comprehensive unit tests are provided for all security modules:
 cargo test -p antikythera-core security
 
 # Run FFI tests
-cargo test -p antikythera-sdk security_ffi
+cargo test -p antikythera-core security
 ```
 
 ### Test Files

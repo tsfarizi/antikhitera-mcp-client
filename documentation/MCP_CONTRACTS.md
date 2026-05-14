@@ -1,4 +1,4 @@
-﻿# MCP Contracts (v1.0.0)
+﻿# MCP Contracts (v1.0.10)
 
 This document defines the active tool-calling contract surfaces.
 

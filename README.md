@@ -1,4 +1,4 @@
-﻿# Antikythera MCP Framework v1.0.9
+﻿# Antikythera MCP Framework v1.0.10
 
 Antikythera MCP Framework is a Rust workspace for building MCP-capable agent runtimes, host-integrated orchestration flows, and portable WASM agent components.
 
@@ -72,5 +72,5 @@ cargo clippy --workspace --lib --bins -- -D warnings -D deprecated
 
 ## Version
 
-- Workspace release: `1.0.9`
-- Documentation baseline: `1.0.9`
+- Workspace release: `1.0.10`
+- Documentation baseline: `1.0.10`

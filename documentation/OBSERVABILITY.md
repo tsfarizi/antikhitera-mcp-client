@@ -1,4 +1,4 @@
-﻿# Observability (v1.0.0)
+﻿# Observability (v1.0.10)
 
 This document describes the active observability model used by runtime and host integrations.
 

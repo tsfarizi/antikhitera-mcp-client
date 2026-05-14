@@ -1,4 +1,4 @@
-﻿# Testing (v1.0.0)
+﻿# Testing (v1.0.10)
 
 This document describes the active test strategy for the workspace.
 

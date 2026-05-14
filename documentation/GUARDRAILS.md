@@ -1,4 +1,4 @@
-﻿# Multi-Agent Guardrails (v1.0.0)
+﻿# Multi-Agent Guardrails (v1.0.10)
 
 This document describes the active guardrail chain used by multi-agent orchestration.
 

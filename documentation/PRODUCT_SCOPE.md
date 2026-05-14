@@ -65,11 +65,15 @@ The WASM component handles agent reasoning, session continuity, history shaping,
 
 | Flag | Purpose | Status |
 |:-----|:--------|:-------|
+| `sdk-core` | Re-exports core types (Agent, McpClient, AppConfig) | Stable |
+| `single-agent` | Single-agent support | Stable |
 | `multi-agent` | Multi-agent orchestration runtime | Stable |
 | `component` | Server-side WASM component bindings | Active development |
+| `wasm-sandbox` | WASM sandbox support | Active development |
 | `wasm-runtime` | Wasmtime host for running WASM agents | Active development |
 | `wizard` | Configuration wizard in CLI | Stable |
 | `native-transport` | STDIO and HTTP MCP transport | Stable |
+| `full` | Enables all features | Stable |
 
 ## Related documents
 

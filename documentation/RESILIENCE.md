@@ -1,4 +1,4 @@
-﻿# Runtime Resilience (v1.0.0)
+﻿# Runtime Resilience (v1.0.10)
 
 This document describes active resilience controls in runtime execution.
 

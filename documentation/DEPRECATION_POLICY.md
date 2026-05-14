@@ -1,4 +1,4 @@
-﻿# Deprecation Policy (v1.0.0)
+﻿# Deprecation Policy (v1.0.10)
 
 This policy defines current deprecation handling for public APIs.
 

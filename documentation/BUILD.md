@@ -23,7 +23,7 @@ flowchart TD
 
 ## Prerequisites
 
-- Rust 1.75+
+- Rust 1.85+
 - `cargo-component` for component builds
 - Optional: `wasm-tools` for inspecting the generated component
 - Optional: `task` for the helpers in `Taskfile.yml`
@@ -200,7 +200,6 @@ The repository includes `Taskfile.yml` for common flows.
 |:--------|:--------|
 | `native-transport` | OS process and stdio transport support |
 | `wasm-runtime` | Sandboxed WASM execution support |
-| `cache` | Postcard-based configuration cache |
 | `wizard` | Interactive setup and wizard-related dependencies |
 | `multi-agent` | Multi-agent orchestration support |
 | `full` | Enables the full capability set |
@@ -209,13 +208,12 @@ The repository includes `Taskfile.yml` for common flows.
 
 | Feature | Purpose |
 |:--------|:--------|
-| `wasm` | WASM bindings via WIT (server-side, wasm32-wasip1) |
-| `component` | WASM Component Model support |
-| `wasm-config` | WASM configuration binary format support |
+| `sdk-core` | Re-exports core types (Agent, McpClient, AppConfig, etc.) |
+| `component` | WASM agent types, processor, and runner |
 | `single-agent` | Single-agent support |
-| `multi-agent` | Multi-agent support |
+| `multi-agent` | Multi-agent orchestration support |
 | `wasm-sandbox` | WASM sandbox support |
-| `full` | Broad feature bundle for the SDK/core stack |
+| `full` | Enables all features |
 
 ## Notes
 
